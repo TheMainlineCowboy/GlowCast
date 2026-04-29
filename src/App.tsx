@@ -1,0 +1,372 @@
+import { useMemo, useState } from "react";
+import { ImagePlus, Sparkles, ScanLine, Download, Plus, Trash2 } from "lucide-react";
+
+type Zone = {
+  id: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  included: boolean;
+};
+
+type Effect = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+const effects: Effect[] = [
+  {
+    id: "haunt",
+    name: "Haunted Windows",
+    description: "Ghostly pulses, lightning flashes, and eerie glow"
+  },
+  {
+    id: "snow",
+    name: "Snowfall",
+    description: "Soft falling snow for holiday mapping"
+  },
+  {
+    id: "neon",
+    name: "Neon Glow",
+    description: "Business sign or party-style electric glow"
+  },
+  {
+    id: "fire",
+    name: "Fire Glow",
+    description: "Warm flame movement for dramatic projection"
+  },
+  {
+    id: "grid",
+    name: "Alignment Grid",
+    description: "Useful for lining up the projector"
+  }
+];
+
+export default function App() {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [selectedZoneId, setSelectedZoneId] = useState<number | null>(null);
+  const [activeEffect, setActiveEffect] = useState("haunt");
+  const [invertMode, setInvertMode] = useState(false);
+
+  const selectedZone = useMemo(
+    () => zones.find((zone) => zone.id === selectedZoneId) ?? null,
+    [zones, selectedZoneId]
+  );
+
+  const activeEffectClass = `effect-${activeEffect}`;
+
+  function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    const nextUrl = URL.createObjectURL(file);
+    setImageUrl(nextUrl);
+    setZones([]);
+    setSelectedZoneId(null);
+  }
+
+  function addZone() {
+    const nextId = Date.now();
+
+    const newZone: Zone = {
+      id: nextId,
+      x: 18,
+      y: 18,
+      width: 24,
+      height: 22,
+      included: true
+    };
+
+    setZones((current) => [...current, newZone]);
+    setSelectedZoneId(nextId);
+  }
+
+  function addDummyAiZones() {
+    const aiZones: Zone[] = [
+      {
+        id: Date.now() + 1,
+        x: 12,
+        y: 20,
+        width: 18,
+        height: 24,
+        included: true
+      },
+      {
+        id: Date.now() + 2,
+        x: 42,
+        y: 18,
+        width: 18,
+        height: 25,
+        included: true
+      },
+      {
+        id: Date.now() + 3,
+        x: 70,
+        y: 24,
+        width: 16,
+        height: 22,
+        included: false
+      }
+    ];
+
+    setZones(aiZones);
+    setSelectedZoneId(aiZones[0].id);
+  }
+
+  function updateSelectedZone(updates: Partial<Zone>) {
+    if (!selectedZoneId) return;
+
+    setZones((current) =>
+      current.map((zone) =>
+        zone.id === selectedZoneId ? { ...zone, ...updates } : zone
+      )
+    );
+  }
+
+  function deleteSelectedZone() {
+    if (!selectedZoneId) return;
+
+    setZones((current) => current.filter((zone) => zone.id !== selectedZoneId));
+    setSelectedZoneId(null);
+  }
+
+  function exportAlignmentGuide() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1920;
+    canvas.height = 1080;
+
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    context.fillStyle = "#020617";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    context.strokeStyle = "#22d3ee";
+    context.lineWidth = 2;
+
+    for (let x = 0; x <= canvas.width; x += 120) {
+      context.beginPath();
+      context.moveTo(x, 0);
+      context.lineTo(x, canvas.height);
+      context.stroke();
+    }
+
+    for (let y = 0; y <= canvas.height; y += 120) {
+      context.beginPath();
+      context.moveTo(0, y);
+      context.lineTo(canvas.width, y);
+      context.stroke();
+    }
+
+    zones.forEach((zone, index) => {
+      const x = (zone.x / 100) * canvas.width;
+      const y = (zone.y / 100) * canvas.height;
+      const width = (zone.width / 100) * canvas.width;
+      const height = (zone.height / 100) * canvas.height;
+
+      context.strokeStyle = zone.included ? "#fef08a" : "#fb7185";
+      context.lineWidth = 8;
+      context.strokeRect(x, y, width, height);
+
+      context.fillStyle = "#ffffff";
+      context.font = "bold 48px Arial";
+      context.fillText(`${index + 1}`, x + 20, y + 60);
+    });
+
+    context.fillStyle = "#ffffff";
+    context.font = "bold 42px Arial";
+    context.fillText("GlowCast Alignment Guide", 40, canvas.height - 50);
+
+    const link = document.createElement("a");
+    link.download = "glowcast-alignment-guide.png";
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  }
+
+  return (
+    <main className="appShell">
+      <section className="heroPanel">
+        <div>
+          <p className="eyebrow">GlowCast Prototype</p>
+          <h1>Projection mapping made stupid simple.</h1>
+          <p className="subtitle">
+            Upload a wall, house, garage, window, storefront, or stage photo.
+            Mark projection zones, choose an effect, then export an alignment guide.
+          </p>
+        </div>
+
+        <label className="uploadButton">
+          <ImagePlus size={20} />
+          Upload Surface Photo
+          <input type="file" accept="image/*" onChange={handleImageUpload} />
+        </label>
+      </section>
+
+      <section className="workspace">
+        <aside className="toolPanel">
+          <div className="panelBlock">
+            <h2>1. Surface Setup</h2>
+            <button className="primary" onClick={addDummyAiZones} disabled={!imageUrl}>
+              <Sparkles size={18} />
+              Dummy AI Detect Areas
+            </button>
+            <button onClick={addZone} disabled={!imageUrl}>
+              <Plus size={18} />
+              Add Manual Zone
+            </button>
+          </div>
+
+          <div className="panelBlock">
+            <h2>2. Projection Logic</h2>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={invertMode}
+                onChange={(event) => setInvertMode(event.target.checked)}
+              />
+              Project around selected areas
+            </label>
+          </div>
+
+          <div className="panelBlock">
+            <h2>3. Effect</h2>
+            <div className="effectList">
+              {effects.map((effect) => (
+                <button
+                  key={effect.id}
+                  className={activeEffect === effect.id ? "activeEffect" : ""}
+                  onClick={() => setActiveEffect(effect.id)}
+                >
+                  {effect.name}
+                  <span>{effect.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="panelBlock">
+            <h2>4. Export</h2>
+            <button className="primary" onClick={exportAlignmentGuide} disabled={!imageUrl}>
+              <Download size={18} />
+              Export Alignment Guide
+            </button>
+          </div>
+        </aside>
+
+        <section className="stageWrap">
+          <div className={`stage ${activeEffectClass} ${invertMode ? "invertMode" : ""}`}>
+            {!imageUrl && (
+              <div className="emptyState">
+                <ScanLine size={48} />
+                <h2>Upload a surface photo to start.</h2>
+                <p>
+                  Start with a house, wall, garage door, window, storefront,
+                  or stage backdrop.
+                </p>
+              </div>
+            )}
+
+            {imageUrl && <img src={imageUrl} alt="Projection surface" />}
+
+            {imageUrl &&
+              zones.map((zone, index) => (
+                <button
+                  key={zone.id}
+                  className={`zone ${zone.included ? "included" : "excluded"} ${
+                    selectedZoneId === zone.id ? "selected" : ""
+                  }`}
+                  style={{
+                    left: `${zone.x}%`,
+                    top: `${zone.y}%`,
+                    width: `${zone.width}%`,
+                    height: `${zone.height}%`
+                  }}
+                  onClick={() => setSelectedZoneId(zone.id)}
+                  title="Select zone"
+                >
+                  <span>{index + 1}</span>
+                </button>
+              ))}
+
+            {imageUrl && <div className="watermark">GlowCast Free Preview</div>}
+          </div>
+
+          {selectedZone && (
+            <div className="zoneEditor">
+              <strong>Zone {zones.findIndex((zone) => zone.id === selectedZone.id) + 1}</strong>
+
+              <label>
+                X
+                <input
+                  type="number"
+                  value={selectedZone.x}
+                  min={0}
+                  max={100}
+                  onChange={(event) =>
+                    updateSelectedZone({ x: Number(event.target.value) })
+                  }
+                />
+              </label>
+
+              <label>
+                Y
+                <input
+                  type="number"
+                  value={selectedZone.y}
+                  min={0}
+                  max={100}
+                  onChange={(event) =>
+                    updateSelectedZone({ y: Number(event.target.value) })
+                  }
+                />
+              </label>
+
+              <label>
+                Width
+                <input
+                  type="number"
+                  value={selectedZone.width}
+                  min={1}
+                  max={100}
+                  onChange={(event) =>
+                    updateSelectedZone({ width: Number(event.target.value) })
+                  }
+                />
+              </label>
+
+              <label>
+                Height
+                <input
+                  type="number"
+                  value={selectedZone.height}
+                  min={1}
+                  max={100}
+                  onChange={(event) =>
+                    updateSelectedZone({ height: Number(event.target.value) })
+                  }
+                />
+              </label>
+
+              <button
+                onClick={() =>
+                  updateSelectedZone({ included: !selectedZone.included })
+                }
+              >
+                {selectedZone.included ? "Included" : "Excluded"}
+              </button>
+
+              <button onClick={deleteSelectedZone}>
+                <Trash2 size={16} />
+                Delete
+              </button>
+            </div>
+          )}
+        </section>
+      </section>
+    </main>
+  );
+}
