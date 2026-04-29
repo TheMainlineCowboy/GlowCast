@@ -40,36 +40,45 @@ export function loadImage(src: string) {
   });
 }
 
-function estimateWallColor(data: Uint8ClampedArray) {
+function estimateWallColor(data: Uint8ClampedArray, width: number, height: number) {
   const buckets = new Map<string, number>();
   let best = "200,200,200";
   let bestCount = 0;
 
-  for (let index = 0; index < data.length; index += 16) {
-    const r = data[index];
-    const g = data[index + 1];
-    const b = data[index + 2];
-    const brightness = (r + g + b) / 3;
-    const sat = saturation(r, g, b);
+  const startX = Math.floor(width * 0.22);
+  const endX = Math.floor(width * 0.78);
+  const startY = Math.floor(height * 0.22);
+  const endY = Math.floor(height * 0.76);
 
-    if (brightness < 75 || brightness > 245 || sat > 0.36) continue;
+  for (let y = startY; y < endY; y += 2) {
+    for (let x = startX; x < endX; x += 2) {
+      const index = (y * width + x) * 4;
+      const r = data[index];
+      const g = data[index + 1];
+      const b = data[index + 2];
+      const brightness = (r + g + b) / 3;
+      const sat = saturation(r, g, b);
+      const green = g - Math.max(r, b) > 12 && sat > 0.16;
 
-    const key = `${Math.round(r / 24) * 24},${Math.round(g / 24) * 24},${Math.round(b / 24) * 24}`;
-    const count = (buckets.get(key) ?? 0) + 1;
-    buckets.set(key, count);
+      if (brightness < 80 || brightness > 240 || sat > 0.32 || green) continue;
 
-    if (count > bestCount) {
-      bestCount = count;
-      best = key;
+      const key = `${Math.round(r / 18) * 18},${Math.round(g / 18) * 18},${Math.round(b / 18) * 18}`;
+      const count = (buckets.get(key) ?? 0) + 1;
+      buckets.set(key, count);
+
+      if (count > bestCount) {
+        bestCount = count;
+        best = key;
+      }
     }
   }
 
   return best.split(",").map(Number);
 }
 
-function boxToZone(box: Box, canvasWidth: number, canvasHeight: number, id: number): Zone {
-  const padX = canvasWidth * 0.01;
-  const padY = canvasHeight * 0.01;
+function boxToZone(box: Box, canvasWidth: number, canvasHeight: number, id: number, pad = 0.01): Zone {
+  const padX = canvasWidth * pad;
+  const padY = canvasHeight * pad;
   const x1 = clamp(((box.minX - padX) / canvasWidth) * 100);
   const y1 = clamp(((box.minY - padY) / canvasHeight) * 100);
   const x2 = clamp(((box.maxX + padX) / canvasWidth) * 100);
@@ -87,55 +96,74 @@ function boxToZone(box: Box, canvasWidth: number, canvasHeight: number, id: numb
   };
 }
 
-function detectSurface(data: Uint8ClampedArray, canvasWidth: number, canvasHeight: number, wallColor: number[]): Zone {
-  let minX = canvasWidth;
-  let minY = canvasHeight;
-  let maxX = 0;
-  let maxY = 0;
-  let count = 0;
+function findWallComponents(data: Uint8ClampedArray, width: number, height: number, wallColor: number[]) {
+  const mask = new Uint8Array(width * height);
+  const xMin = Math.floor(width * 0.08);
+  const xMax = Math.floor(width * 0.92);
+  const yMin = Math.floor(height * 0.18);
+  const yMax = Math.floor(height * 0.82);
 
-  for (let y = Math.floor(canvasHeight * 0.06); y < Math.floor(canvasHeight * 0.9); y += 1) {
-    let rowMin = canvasWidth;
-    let rowMax = 0;
-    let rowCount = 0;
-
-    for (let x = 0; x < canvasWidth; x += 1) {
-      const index = (y * canvasWidth + x) * 4;
+  for (let y = yMin; y < yMax; y += 1) {
+    for (let x = xMin; x < xMax; x += 1) {
+      const index = (y * width + x) * 4;
       const r = data[index];
       const g = data[index + 1];
       const b = data[index + 2];
       const brightness = (r + g + b) / 3;
       const sat = saturation(r, g, b);
-      const green = g - Math.max(r, b) > 14 && sat > 0.16;
-      const wallLike = distance(r, g, b, wallColor) < 44 && brightness > 70 && brightness < 245 && !green;
-
-      if (!wallLike) continue;
-
-      rowCount += 1;
-      rowMin = Math.min(rowMin, x);
-      rowMax = Math.max(rowMax, x);
-    }
-
-    if (rowCount > canvasWidth * 0.18) {
-      minX = Math.min(minX, rowMin);
-      maxX = Math.max(maxX, rowMax);
-      minY = Math.min(minY, y);
-      maxY = Math.max(maxY, y);
-      count += rowCount;
+      const green = g - Math.max(r, b) > 12 && sat > 0.16;
+      const wallLike = distance(r, g, b, wallColor) < 46 && brightness > 75 && brightness < 245 && sat < 0.38 && !green;
+      if (wallLike) mask[y * width + x] = 1;
     }
   }
 
-  if (count < canvasWidth * canvasHeight * 0.04 || minX >= maxX || minY >= maxY) {
-    return { id: -1, x: 0, y: 0, width: 100, height: 100, included: true, label: "projection surface" };
-  }
-
-  return boxToZone({ minX, minY, maxX, maxY, area: count, score: 100, label: "projection surface" }, canvasWidth, canvasHeight, -1);
+  return findComponents(mask, width, height, "projection surface", 1000, {
+    allowLarge: true,
+    allowEdges: false,
+    minArea: width * height * 0.018,
+    maxArea: width * height * 0.42
+  });
 }
 
-function findComponents(mask: Uint8Array, data: Uint8ClampedArray, width: number, height: number, label: string, baseScore: number) {
+function detectSurface(data: Uint8ClampedArray, canvasWidth: number, canvasHeight: number, wallColor: number[]): Zone {
+  const components = findWallComponents(data, canvasWidth, canvasHeight, wallColor)
+    .map((box) => {
+      const centerX = (box.minX + box.maxX) / 2 / canvasWidth;
+      const centerY = (box.minY + box.maxY) / 2 / canvasHeight;
+      const boxWidth = box.maxX - box.minX + 1;
+      const boxHeight = box.maxY - box.minY + 1;
+      let score = box.area;
+      score += (1 - Math.abs(centerX - 0.5)) * 1800;
+      score += (1 - Math.abs(centerY - 0.5)) * 900;
+      if (boxWidth > canvasWidth * 0.3 && boxHeight > canvasHeight * 0.22) score += 1200;
+      if (box.minX < canvasWidth * 0.06 || box.maxX > canvasWidth * 0.94) score -= 2400;
+      if (box.minY < canvasHeight * 0.14 || box.maxY > canvasHeight * 0.86) score -= 1200;
+      return { ...box, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const best = components[0];
+
+  if (!best) {
+    return { id: -1, x: 18, y: 22, width: 64, height: 56, included: true, label: "projection surface" };
+  }
+
+  return boxToZone(best, canvasWidth, canvasHeight, -1, 0.025);
+}
+
+type ComponentOptions = {
+  allowLarge?: boolean;
+  allowEdges?: boolean;
+  minArea?: number;
+  maxArea?: number;
+};
+
+function findComponents(mask: Uint8Array, width: number, height: number, label: string, baseScore: number, options: ComponentOptions = {}) {
   const seen = new Uint8Array(mask.length);
   const boxes: Box[] = [];
   const queue: number[] = [];
+  const minArea = options.minArea ?? 28;
+  const maxArea = options.maxArea ?? width * height * 0.18;
 
   for (let start = 0; start < mask.length; start += 1) {
     if (!mask[start] || seen[start]) continue;
@@ -175,11 +203,10 @@ function findComponents(mask: Uint8Array, data: Uint8ClampedArray, width: number
     const centerX = (minX + maxX) / 2 / width;
     const centerY = (minY + maxY) / 2 / height;
 
-    if (area < 28 || boxWidth < 5 || boxHeight < 5) continue;
-    if (boxArea > width * height * 0.18) continue;
-    if (boxWidth > width * 0.75 || boxHeight > height * 0.7) continue;
-    if (minY < height * 0.06) continue;
-    if (minX < width * 0.01 || maxX > width * 0.99) continue;
+    if (area < minArea || boxWidth < 5 || boxHeight < 5) continue;
+    if (boxArea > maxArea) continue;
+    if (!options.allowLarge && (boxWidth > width * 0.75 || boxHeight > height * 0.7)) continue;
+    if (!options.allowEdges && (minX < width * 0.01 || maxX > width * 0.99)) continue;
     if (label.includes("plant") && centerY < 0.32) continue;
     if (label.includes("window") && (centerY < 0.1 || boxWidth < width * 0.035 || boxHeight < height * 0.05)) continue;
 
@@ -202,6 +229,16 @@ function overlap(a: Box, b: Box) {
   return intersection / Math.max(1, areaA + areaB - intersection);
 }
 
+function insideZone(box: Box, zone: Zone, width: number, height: number) {
+  const zoneX1 = (zone.x / 100) * width;
+  const zoneY1 = (zone.y / 100) * height;
+  const zoneX2 = zoneX1 + (zone.width / 100) * width;
+  const zoneY2 = zoneY1 + (zone.height / 100) * height;
+  const cx = (box.minX + box.maxX) / 2;
+  const cy = (box.minY + box.maxY) / 2;
+  return cx >= zoneX1 && cx <= zoneX2 && cy >= zoneY1 && cy <= zoneY2;
+}
+
 export async function detectSurfaceAndMasks(imageUrl: string) {
   const image = await loadImage(imageUrl);
   const canvas = document.createElement("canvas");
@@ -214,7 +251,7 @@ export async function detectSurfaceAndMasks(imageUrl: string) {
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
   const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
-  const wall = estimateWallColor(data);
+  const wall = estimateWallColor(data, canvas.width, canvas.height);
   const surface = detectSurface(data, canvas.width, canvas.height, wall);
 
   const darkMask = new Uint8Array(canvas.width * canvas.height);
@@ -241,10 +278,12 @@ export async function detectSurfaceAndMasks(imageUrl: string) {
   }
 
   const candidates = [
-    ...findComponents(darkMask, data, canvas.width, canvas.height, "window / dark opening", 1900),
-    ...findComponents(plantMask, data, canvas.width, canvas.height, "plant / landscaping", 1700),
-    ...findComponents(objectMask, data, canvas.width, canvas.height, "avoid object", 400)
-  ].sort((a, b) => b.score - a.score);
+    ...findComponents(darkMask, canvas.width, canvas.height, "window / dark opening", 1900),
+    ...findComponents(plantMask, canvas.width, canvas.height, "plant / landscaping", 1700, { allowEdges: true }),
+    ...findComponents(objectMask, canvas.width, canvas.height, "avoid object", 400)
+  ]
+    .filter((box) => box.label.includes("plant") || insideZone(box, surface, canvas.width, canvas.height))
+    .sort((a, b) => b.score - a.score);
 
   const kept: Box[] = [];
   for (const candidate of candidates) {
