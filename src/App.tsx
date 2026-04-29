@@ -5,7 +5,7 @@ type Zone = { id: number; x: number; y: number; width: number; height: number; i
 type Effect = { id: string; name: string; description: string };
 type DraftZone = { startX: number; startY: number; currentX: number; currentY: number };
 type ImageSize = { width: number; height: number };
-type Box = { minX: number; minY: number; maxX: number; maxY: number; area: number; green: number; dark: number; sat: number };
+type Box = { minX: number; minY: number; maxX: number; maxY: number; area: number; green: number; dark: number; sat: number; score?: number; label?: string };
 
 const effects: Effect[] = [
   { id: "haunt", name: "Haunted Windows", description: "Ghostly pulses, lightning flashes, and eerie glow" },
@@ -57,11 +57,44 @@ function classify(b: Box, w: number, h: number) {
   const centerY = (b.minY + b.maxY) / 2 / h;
   const greenRatio = b.green / Math.max(b.area, 1);
   const darkRatio = b.dark / Math.max(b.area, 1);
-  if (greenRatio > .18 || centerY > .66 && b.sat / Math.max(b.area, 1) > .2) return "plant / landscaping";
+  if (greenRatio > .2 || centerY > .62 && b.sat / Math.max(b.area, 1) > .22) return "plant / landscaping";
+  if (darkRatio > .28 && bw > w * .045 && bh > h * .055) return "window / dark opening";
   if (bh / Math.max(bw, 1) > 1.45 && bh > h * .22 && darkRatio < .55) return "door / tall object";
-  if (darkRatio > .22 && bw > w * .05 && bh > h * .05) return "window / dark opening";
   if (centerY > .72 && bw > w * .12) return "ground object";
   return "mask suggestion";
+}
+
+function edgeTouch(b: Box, w: number, h: number) {
+  return b.minX <= w * .025 || b.maxX >= w * .975 || b.minY <= h * .045 || b.maxY >= h * .975;
+}
+
+function componentBoxes(mask: Uint8Array, data: Uint8ClampedArray, w: number, h: number) {
+  const seen = new Uint8Array(mask.length);
+  const boxes: Box[] = [];
+  const q: number[] = [];
+  for (let i = 0; i < mask.length; i++) {
+    if (!mask[i] || seen[i]) continue;
+    seen[i] = 1; q.length = 0; q.push(i);
+    let minX = w, minY = h, maxX = 0, maxY = 0, area = 0, green = 0, dark = 0, satTotal = 0;
+    while (q.length) {
+      const pnt = q.pop() as number;
+      const x = pnt % w, y = Math.floor(pnt / w), p = pnt * 4;
+      const r = data[p], g = data[p + 1], b = data[p + 2], br = (r + g + b) / 3, s = sat(r, g, b);
+      minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); area++;
+      if (g - Math.max(r, b) > 8 || g > r && g > b && s > .15) green++;
+      if (br < 118) dark++;
+      satTotal += s;
+      for (const n of [pnt - 1, pnt + 1, pnt - w, pnt + w]) {
+        if (n < 0 || n >= mask.length || seen[n] || !mask[n]) continue;
+        if (Math.abs((n % w) - x) > 1) continue;
+        seen[n] = 1; q.push(n);
+      }
+    }
+    const bw = maxX - minX + 1, bh = maxY - minY + 1, boxArea = bw * bh, total = w * h;
+    if (area < 35 || bw < 5 || bh < 5 || boxArea > total * .28 || bw > w * .82 || bh > h * .75) continue;
+    boxes.push({ minX, minY, maxX, maxY, area, green, dark, sat: satTotal });
+  }
+  return boxes;
 }
 
 function mergeBoxes(boxes: Box[], w: number, h: number) {
@@ -71,7 +104,7 @@ function mergeBoxes(boxes: Box[], w: number, h: number) {
     let again = true;
     while (again) {
       again = false;
-      const i = out.findIndex((b) => !(cur.maxX + w * .035 < b.minX || cur.minX - w * .035 > b.maxX || cur.maxY + h * .035 < b.minY || cur.minY - h * .035 > b.maxY));
+      const i = out.findIndex((b) => !(cur.maxX + w * .018 < b.minX || cur.minX - w * .018 > b.maxX || cur.maxY + h * .018 < b.minY || cur.minY - h * .018 > b.maxY));
       if (i >= 0) {
         const b = out.splice(i, 1)[0];
         cur = { minX: Math.min(cur.minX, b.minX), minY: Math.min(cur.minY, b.minY), maxX: Math.max(cur.maxX, b.maxX), maxY: Math.max(cur.maxY, b.maxY), area: cur.area + b.area, green: cur.green + b.green, dark: cur.dark + b.dark, sat: cur.sat + b.sat };
@@ -133,63 +166,71 @@ export default function App() {
     if (!imageUrl) return;
     setDetecting(true);
     setDrawMode(false);
-    setDetectMessage("Scanning photo for windows, plants, doors, and non-wall objects...");
+    setDetectMessage("Scanning photo surface only. Ignoring edge junk and looking for windows/plants/objects...");
     try {
       const img = await loadImage(imageUrl);
       const canvas = document.createElement("canvas");
-      canvas.width = 220;
-      canvas.height = Math.max(80, Math.round(img.naturalHeight * (220 / img.naturalWidth)));
+      canvas.width = 320;
+      canvas.height = Math.max(100, Math.round(img.naturalHeight * (320 / img.naturalWidth)));
       const ctx = canvas.getContext("2d", { willReadFrequently: true });
       if (!ctx) throw new Error("Canvas unavailable");
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const bg = wallColor(data);
-      const mask = new Uint8Array(canvas.width * canvas.height);
-      for (let y = 1; y < canvas.height - 1; y++) for (let x = 1; x < canvas.width - 1; x++) {
+      const objectMask = new Uint8Array(canvas.width * canvas.height);
+      const darkMask = new Uint8Array(canvas.width * canvas.height);
+      const plantMask = new Uint8Array(canvas.width * canvas.height);
+
+      for (let y = 2; y < canvas.height - 2; y++) for (let x = 2; x < canvas.width - 2; x++) {
         const i = (y * canvas.width + x) * 4;
         const r = data[i], g = data[i + 1], b = data[i + 2];
         const br = (r + g + b) / 3;
         const s = sat(r, g, b);
-        const green = g - Math.max(r, b) > 12 && s > .18;
-        const object = dist(r, g, b, bg) > 48 || br < 105 && dist(r, g, b, bg) > 28 || green || s > .45;
-        if (object) mask[y * canvas.width + x] = 1;
+        const d = dist(r, g, b, bg);
+        const green = g - Math.max(r, b) > 10 && s > .16;
+        const dark = br < 118 && d > 20;
+        const object = d > 55 || dark && d > 28 || green || s > .48;
+        const index = y * canvas.width + x;
+        if (object) objectMask[index] = 1;
+        if (dark && y > canvas.height * .08 && y < canvas.height * .88) darkMask[index] = 1;
+        if (green && y > canvas.height * .35) plantMask[index] = 1;
       }
-      const seen = new Uint8Array(mask.length);
-      const boxes: Box[] = [];
-      const q: number[] = [];
-      for (let i = 0; i < mask.length; i++) {
-        if (!mask[i] || seen[i]) continue;
-        seen[i] = 1; q.length = 0; q.push(i);
-        let minX = canvas.width, minY = canvas.height, maxX = 0, maxY = 0, area = 0, green = 0, dark = 0, satTotal = 0;
-        while (q.length) {
-          const pnt = q.pop() as number;
-          const x = pnt % canvas.width, y = Math.floor(pnt / canvas.width), p = pnt * 4;
-          const r = data[p], g = data[p + 1], b = data[p + 2], br = (r + g + b) / 3, s = sat(r, g, b);
-          minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); area++;
-          if (g - Math.max(r, b) > 8 || g > r && g > b && s > .15) green++;
-          if (br < 115) dark++;
-          satTotal += s;
-          for (const n of [pnt - 1, pnt + 1, pnt - canvas.width, pnt + canvas.width]) {
-            if (n < 0 || n >= mask.length || seen[n] || !mask[n]) continue;
-            if (Math.abs((n % canvas.width) - x) > 1) continue;
-            seen[n] = 1; q.push(n);
-          }
-        }
-        const bw = maxX - minX + 1, bh = maxY - minY + 1, boxArea = bw * bh, total = canvas.width * canvas.height;
-        if (area < 45 || bw < 5 || bh < 5 || boxArea > total * .42 || bw > canvas.width * .9 || bh > canvas.height * .85) continue;
-        boxes.push({ minX, minY, maxX, maxY, area, green, dark, sat: satTotal });
-      }
-      const detected = mergeBoxes(boxes, canvas.width, canvas.height).filter((b) => {
-        const bw = b.maxX - b.minX + 1, bh = b.maxY - b.minY + 1, area = bw * bh;
-        return area > 90 && area < canvas.width * canvas.height * .45;
-      }).sort((a, b) => b.area - a.area).slice(0, 8);
+
+      const raw = [...componentBoxes(darkMask, data, canvas.width, canvas.height), ...componentBoxes(plantMask, data, canvas.width, canvas.height), ...componentBoxes(objectMask, data, canvas.width, canvas.height)];
+      const detected = mergeBoxes(raw, canvas.width, canvas.height)
+        .map((b) => {
+          const bw = b.maxX - b.minX + 1, bh = b.maxY - b.minY + 1;
+          const label = classify(b, canvas.width, canvas.height);
+          const centerY = (b.minY + b.maxY) / 2 / canvas.height;
+          const centerX = (b.minX + b.maxX) / 2 / canvas.width;
+          const aspect = bw / Math.max(bh, 1);
+          let score = b.area;
+          if (label.includes("window")) score += 1600;
+          if (label.includes("plant")) score += 1300;
+          if (centerX > .18 && centerX < .82) score += 450;
+          if (centerY > .14 && centerY < .9) score += 300;
+          if (aspect > .45 && aspect < 2.6) score += 300;
+          if (edgeTouch(b, canvas.width, canvas.height)) score -= 2600;
+          if (b.minY < canvas.height * .08) score -= 1200;
+          return { ...b, label, score };
+        })
+        .filter((b) => {
+          const bw = b.maxX - b.minX + 1, bh = b.maxY - b.minY + 1, area = bw * bh;
+          if (area < 110 || area > canvas.width * canvas.height * .22) return false;
+          if (edgeTouch(b, canvas.width, canvas.height) && !b.label?.includes("plant")) return false;
+          if (b.minY < canvas.height * .08) return false;
+          return true;
+        })
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, 8);
+
       const next: Zone[] = detected.map((b, i) => {
         const px = canvas.width * .012, py = canvas.height * .012;
         const x1 = clamp(((b.minX - px) / canvas.width) * 100), y1 = clamp(((b.minY - py) / canvas.height) * 100);
         const x2 = clamp(((b.maxX + px) / canvas.width) * 100), y2 = clamp(((b.maxY + py) / canvas.height) * 100);
-        const areaRatio = ((b.maxX - b.minX) * (b.maxY - b.minY)) / (canvas.width * canvas.height);
-        return { id: Date.now() + i, x: +x1.toFixed(2), y: +y1.toFixed(2), width: +(x2 - x1).toFixed(2), height: +(y2 - y1).toFixed(2), included: true, label: classify(b, canvas.width, canvas.height), confidence: Math.round(clamp(48 + areaRatio * 220 + Math.min(b.area / 25, 35), 50, 94)) };
+        return { id: Date.now() + i, x: +x1.toFixed(2), y: +y1.toFixed(2), width: +(x2 - x1).toFixed(2), height: +(y2 - y1).toFixed(2), included: true, label: b.label ?? "mask suggestion", confidence: Math.round(clamp(55 + ((b.score ?? 0) / 100), 55, 94)) };
       });
+
       setZones(next);
       setSelectedZoneId(next[0]?.id ?? null);
       setDetectMessage(next.length ? `Found ${next.length} suggested mask area${next.length === 1 ? "" : "s"}. Tap a box to include, exclude, resize, or delete it.` : "No strong mask areas found. Try a clearer, straighter photo or draw zones manually.");
