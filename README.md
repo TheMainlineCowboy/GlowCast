@@ -70,3 +70,7 @@ Replace dummy AI detection with real segmentation later, but do not start there.
 First make manual mapping feel great.
 
 Then add AI suggestions.
+
+## v0.3 Focus
+
+The next major focus is real AI-assisted mask detection and true zone-aware effects.
