@@ -65,6 +65,7 @@ export default function App() {
   const [invertMode, setInvertMode] = useState(true);
   const [drawMode, setDrawMode] = useState(false);
   const [projectionOnly, setProjectionOnly] = useState(false);
+  const [projectorMode, setProjectorMode] = useState(false);
   const [draftZone, setDraftZone] = useState<DraftZone | null>(null);
   const [resizeAction, setResizeAction] = useState<ResizeAction | null>(null);
   const [detecting, setDetecting] = useState(false);
@@ -79,6 +80,11 @@ export default function App() {
   const hasProject = Boolean(imageUrl || surfaceZone || zones.length || videoUrl);
 
   useEffect(() => setRecentProjects(getRecentProjects()), []);
+  useEffect(() => {
+    const onFullscreenChange = () => { if (!document.fullscreenElement) setProjectorMode(false); };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
   useEffect(() => {
     if (!hasProject) return;
     const timeout = window.setTimeout(() => {
@@ -254,6 +260,20 @@ export default function App() {
     setSelectedZoneId(id);
   }
 
+  async function openProjectorMode() {
+    if (!hasProject) return;
+    setProjectionOnly(true);
+    setProjectorMode(true);
+    window.setTimeout(() => {
+      document.documentElement.requestFullscreen?.().catch(() => undefined);
+    }, 50);
+  }
+
+  async function closeProjectorMode() {
+    setProjectorMode(false);
+    if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined);
+  }
+
   function exportProjectFile() {
     const project: SavedProject = { id: String(Date.now()), name: `GlowCast Project ${new Date().toLocaleString()}`, savedAt: new Date().toISOString(), imageUrl, imageSize, surfaceZone, zones, activeEffect, invertMode, projectionContent, videoUrl };
     const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
@@ -317,6 +337,17 @@ export default function App() {
     return handles.map((handle) => <i key={handle} className={`resizeHandle handle-${handle}`} onPointerDown={(event) => startResize(event, target, zone, handle)} />);
   }
 
+  if (projectorMode) {
+    return <main className="projectorShell">
+      <button className="projectorExit" onClick={closeProjectorMode}>Exit Projector</button>
+      <div className="projectorCanvas" style={{ aspectRatio: `${imageSize.width} / ${imageSize.height}` }}>
+        {invertMode && <div className="projectionSurface" style={toStyle(projectionArea)}>{renderProjectionLayer("projectorEffect")}</div>}
+        {invertMode && includedZones.map((zone) => <div key={`projector-cutout-${zone.id}`} className="projectorMaskCutout" style={toStyle(zone)} />)}
+        {!invertMode && includedZones.map((zone) => <div key={`projector-fx-${zone.id}`} className="zoneProjection" style={toStyle(zone)}>{renderProjectionLayer("projectorEffect")}</div>)}
+      </div>
+    </main>;
+  }
+
   const stage = <section className="stageWrap">
     <div className={`stage ${projectionOnly ? "projectionOnly" : ""}`}>
       {!imageUrl && !videoUrl && <div className="emptyState"><ScanLine size={48}/><h2>No project loaded yet.</h2><p>Upload a reference photo from the Start page.</p></div>}
@@ -347,6 +378,6 @@ export default function App() {
     {step === "start" && <section className="startPage"><div className="startCard"><h2>Start with a reference photo</h2><p>The photo is only for setup and alignment. The actual projection output will be animation or uploaded video only.</p><label className="uploadButton"><ImagePlus size={20}/>Upload Surface Photo<input type="file" accept="image/*" onChange={handleImageUpload}/></label><button onClick={() => importProjectRef.current?.click()}><FolderOpen size={18}/>Load Project File</button><input ref={importProjectRef} className="hiddenInput" type="file" accept="application/json,.json" onChange={importProjectFile}/></div><div className="startCard"><h2>Recent autosaves</h2>{recentProjects.length === 0 && <p className="helperText">No recent projects saved in this browser yet.</p>}{recentProjects.map((project) => <button key={project.id} onClick={() => loadProject(project)}><FolderOpen size={18}/>{project.name}</button>)}</div></section>}
     {step === "mask" && <section className="workspace"><aside className="toolPanel"><div className="panelBlock"><h2>Surface + Masks</h2><button className="primary" onClick={detectMaskAreas} disabled={!imageUrl || detecting}><Sparkles size={18}/>{detecting ? "Detecting..." : "AI Detect Surface + Masks"}</button><button onClick={() => { setDrawMode((value) => !value); setProjectionOnly(false); }} disabled={!imageUrl}>{drawMode ? <MousePointer2 size={18}/> : <Pencil size={18}/>} {drawMode ? "Drawing Mode On" : "Draw Avoid Zone"}</button><button onClick={addZone} disabled={!imageUrl}><Plus size={18}/>Add Manual Avoid Zone</button><button className="primary" onClick={() => setProjectionOnly((value) => !value)} disabled={!hasProject}>{projectionOnly ? <EyeOff size={18}/> : <Eye size={18}/>} {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}</button><p className="helperText">{drawMode ? "Drag directly on the photo to draw an avoid mask." : detectMessage}</p></div><div className="panelBlock"><h2>Projection Logic</h2><label className="toggle"><input type="checkbox" checked={invertMode} onChange={(event) => setInvertMode(event.target.checked)}/>Project around selected areas</label></div></aside>{stage}</section>}
     {step === "content" && <section className="workspace"><aside className="toolPanel"><div className="panelBlock"><h2>Projection Content</h2><label className="fileButton"><Video size={18}/>Upload Projection Video<input type="file" accept="video/*" onChange={handleVideoUpload}/></label><button onClick={() => setProjectionContent("effect")} className={projectionContent === "effect" ? "activeEffect" : ""}>Use Built-in Animation</button><button onClick={() => setProjectionContent("video")} disabled={!videoUrl} className={projectionContent === "video" ? "activeEffect" : ""}>Fill Surface With Video</button></div><div className="panelBlock"><h2>Built-in Effects</h2><div className="effectList">{effects.map((effect) => <button key={effect.id} className={activeEffect === effect.id ? "activeEffect" : ""} onClick={() => { setActiveEffect(effect.id); setProjectionContent("effect"); }}>{effect.name}<span>{effect.description}</span></button>)}</div></div><button className="primary" onClick={() => setProjectionOnly((value) => !value)}>{projectionOnly ? <EyeOff size={18}/> : <Eye size={18}/>} {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}</button></aside>{stage}</section>}
-    {step === "export" && <section className="workspace"><aside className="toolPanel"><div className="panelBlock"><h2>Export / Projector</h2><button className="primary" onClick={() => setProjectionOnly(true)}><Eye size={18}/>Preview Projection Output</button><button className="primary" onClick={exportAlignmentGuide} disabled={!imageUrl}><Download size={18}/>Export Alignment Template</button><button onClick={exportProjectFile} disabled={!hasProject}><Save size={18}/>Save Project File</button><button onClick={() => importProjectRef.current?.click()}><FolderOpen size={18}/>Load Project File</button><input ref={importProjectRef} className="hiddenInput" type="file" accept="application/json,.json" onChange={importProjectFile}/><p className="helperText">Loop video export and true fullscreen projector mode are the next engine-level steps.</p></div></aside>{stage}</section>}
+    {step === "export" && <section className="workspace"><aside className="toolPanel"><div className="panelBlock"><h2>Export / Projector</h2><button className="primary" onClick={() => setProjectionOnly(true)}><Eye size={18}/>Preview Projection Output</button><button className="primary" onClick={openProjectorMode} disabled={!hasProject}><Eye size={18}/>Open Fullscreen Projector</button><button className="primary" onClick={exportAlignmentGuide} disabled={!imageUrl}><Download size={18}/>Export Alignment Template</button><button onClick={exportProjectFile} disabled={!hasProject}><Save size={18}/>Save Project File</button><button onClick={() => importProjectRef.current?.click()}><FolderOpen size={18}/>Load Project File</button><input ref={importProjectRef} className="hiddenInput" type="file" accept="application/json,.json" onChange={importProjectFile}/><p className="helperText">Fullscreen projector mode shows only animation/video output. The reference photo and setup boxes stay hidden.</p></div></aside>{stage}</section>}
   </main>;
 }
