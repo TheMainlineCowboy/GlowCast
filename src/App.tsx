@@ -69,7 +69,7 @@ export default function App() {
   }, [imageUrl, imageSize, surfaceZone, zones, activeEffect, invertMode, projectionContent, videoUrl, hasProject]);
 
   function loadProject(project: SavedProject) { setImageUrl(project.imageUrl ?? null); setVideoUrl(project.videoUrl ?? null); setImageSize(project.imageSize ?? { width: 16, height: 9 }); setSurfaceZone(project.surfaceZone ?? null); setZones(project.zones ?? []); setSelectedZoneId(project.zones?.[0]?.id ?? null); setActiveEffect(project.activeEffect ?? "snow"); setInvertMode(project.invertMode ?? true); setProjectionContent(project.projectionContent ?? "effect"); setProjectionOnly(false); setStep("mask"); setDetectMessage("Project loaded. Continue editing masks or preview output."); }
-  function getPoint(event: React.PointerEvent<HTMLDivElement>) { const surface = surfaceRef.current; if (!surface) return null; const rect = surface.getBoundingClientRect(); return { x: clamp(((event.clientX - rect.left) / rect.width) * 100), y: clamp(((event.clientY - rect.top) / rect.height) * 100) }; }
+  function getPoint(event: React.PointerEvent<HTMLElement>) { const surface = surfaceRef.current; if (!surface) return null; const rect = surface.getBoundingClientRect(); return { x: clamp(((event.clientX - rect.left) / rect.width) * 100), y: clamp(((event.clientY - rect.top) / rect.height) * 100) }; }
 
   async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) { const file = event.target.files?.[0]; if (!file) return; const dataUrl = await readFileAsDataUrl(file); const image = await loadImage(dataUrl); setImageUrl(dataUrl); setImageSize({ width: image.naturalWidth || 16, height: image.naturalHeight || 9 }); setSurfaceZone(null); setZones([]); setSelectedZoneId(null); setDraftZone(null); setResizeAction(null); setDrawMode(false); setProjectionOnly(false); setStep("mask"); setDetectMessage("Photo loaded. Detect the surface and masks, then clean up manually if needed."); }
   async function handleVideoUpload(event: React.ChangeEvent<HTMLInputElement>) { const file = event.target.files?.[0]; if (!file) return; const dataUrl = await readFileAsDataUrl(file); setVideoUrl(dataUrl); setProjectionContent("video"); setProjectionOnly(true); setDetectMessage("Projection video loaded. Preview output without the reference photo."); }
@@ -99,7 +99,7 @@ export default function App() {
     setZones((current) => current.map((zone) => zone.id === action.id ? { ...zone, x: +x.toFixed(2), y: +y.toFixed(2), width: +width.toFixed(2), height: +height.toFixed(2) } : zone));
   }
 
-  function startResize(event: React.PointerEvent<HTMLDivElement>, zone: Zone, mode: ResizeMode) {
+  function startResize(event: React.PointerEvent<HTMLElement>, zone: Zone, mode: ResizeMode) {
     const point = getPoint(event);
     if (!point) return;
     event.stopPropagation();
