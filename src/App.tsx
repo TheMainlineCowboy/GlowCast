@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ImagePlus, Sparkles, ScanLine, Download, Plus, Trash2, Pencil, MousePointer2, Eye, EyeOff, Video, Save, FolderOpen } from "lucide-react";
+import { ImagePlus, Sparkles, ScanLine, Download, Plus, Trash2, Pencil, MousePointer2, Eye, EyeOff, Video, Save, FolderOpen, ArrowRight } from "lucide-react";
 import { detectSurfaceAndMasks, loadImage, type Zone } from "./detection";
 
 type Effect = { id: string; name: string; description: string };
 type DraftZone = { startX: number; startY: number; currentX: number; currentY: number };
 type ImageSize = { width: number; height: number };
 type ProjectionContent = "effect" | "video";
+type Step = "start" | "mask" | "content" | "export";
 
 type SavedProject = {
   id: string;
@@ -52,16 +53,14 @@ function normalizeDraftZone(draft: DraftZone): Omit<Zone, "id" | "included"> {
 }
 
 function getRecentProjects(): SavedProject[] {
-  try {
-    return JSON.parse(localStorage.getItem(RECENT_PROJECTS_KEY) || "[]") as SavedProject[];
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(RECENT_PROJECTS_KEY) || "[]") as SavedProject[]; } catch { return []; }
 }
 
 export default function App() {
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const importProjectRef = useRef<HTMLInputElement | null>(null);
+  const [step, setStep] = useState<Step>("start");
+  const [recentProjects, setRecentProjects] = useState<SavedProject[]>([]);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [imageSize, setImageSize] = useState<ImageSize>({ width: 16, height: 9 });
@@ -75,7 +74,7 @@ export default function App() {
   const [projectionOnly, setProjectionOnly] = useState(false);
   const [draftZone, setDraftZone] = useState<DraftZone | null>(null);
   const [detecting, setDetecting] = useState(false);
-  const [detectMessage, setDetectMessage] = useState("AI detection suggests a surface and masks. Manual cleanup is still the real safety net.");
+  const [detectMessage, setDetectMessage] = useState("Upload a reference photo to start mapping.");
 
   const selectedZone = useMemo(() => zones.find((zone) => zone.id === selectedZoneId) ?? null, [zones, selectedZoneId]);
   const includedZones = zones.filter((zone) => zone.included);
@@ -84,33 +83,32 @@ export default function App() {
   const projectionArea: Zone = surfaceZone ?? { id: -1, x: 0, y: 0, width: 100, height: 100, included: true, label: "projection surface" };
   const hasProject = Boolean(imageUrl || surfaceZone || zones.length || videoUrl);
 
+  useEffect(() => setRecentProjects(getRecentProjects()), []);
+
   useEffect(() => {
     if (!hasProject) return;
-
     const timeout = window.setTimeout(() => {
-      const project: SavedProject = {
-        id: String(Date.now()),
-        name: `GlowCast Project ${new Date().toLocaleString()}`,
-        savedAt: new Date().toISOString(),
-        imageUrl,
-        imageSize,
-        surfaceZone,
-        zones,
-        activeEffect,
-        invertMode,
-        projectionContent,
-        videoUrl
-      };
+      const project: SavedProject = { id: String(Date.now()), name: `GlowCast Project ${new Date().toLocaleString()}`, savedAt: new Date().toISOString(), imageUrl, imageSize, surfaceZone, zones, activeEffect, invertMode, projectionContent, videoUrl };
       const recent = [project, ...getRecentProjects()].slice(0, 5);
-      try {
-        localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(recent));
-      } catch {
-        // Large video/image projects may exceed browser storage; manual project export still works when possible.
-      }
-    }, 600);
-
+      try { localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(recent)); setRecentProjects(recent); } catch {}
+    }, 700);
     return () => window.clearTimeout(timeout);
   }, [imageUrl, imageSize, surfaceZone, zones, activeEffect, invertMode, projectionContent, videoUrl, hasProject]);
+
+  function loadProject(project: SavedProject) {
+    setImageUrl(project.imageUrl ?? null);
+    setVideoUrl(project.videoUrl ?? null);
+    setImageSize(project.imageSize ?? { width: 16, height: 9 });
+    setSurfaceZone(project.surfaceZone ?? null);
+    setZones(project.zones ?? []);
+    setSelectedZoneId(project.zones?.[0]?.id ?? null);
+    setActiveEffect(project.activeEffect ?? "snow");
+    setInvertMode(project.invertMode ?? true);
+    setProjectionContent(project.projectionContent ?? "effect");
+    setProjectionOnly(false);
+    setStep("mask");
+    setDetectMessage("Project loaded. Continue editing masks or preview output.");
+  }
 
   function getPoint(event: React.PointerEvent<HTMLDivElement>) {
     const surface = surfaceRef.current;
@@ -132,7 +130,8 @@ export default function App() {
     setDraftZone(null);
     setDrawMode(false);
     setProjectionOnly(false);
-    setDetectMessage("Photo loaded. Press AI Detect Surface + Masks, then use Manual Cleanup if needed.");
+    setStep("mask");
+    setDetectMessage("Photo loaded. Detect the surface and masks, then clean up manually if needed.");
   }
 
   async function handleVideoUpload(event: React.ChangeEvent<HTMLInputElement>) {
@@ -141,7 +140,8 @@ export default function App() {
     const dataUrl = await readFileAsDataUrl(file);
     setVideoUrl(dataUrl);
     setProjectionContent("video");
-    setDetectMessage("Projection video loaded. Use Preview Animation Only to see video output without the reference photo.");
+    setProjectionOnly(true);
+    setDetectMessage("Projection video loaded. Preview output without the reference photo.");
   }
 
   async function detectMaskAreas() {
@@ -157,10 +157,8 @@ export default function App() {
       setSelectedZoneId(result.masks[0]?.id ?? null);
       setDetectMessage(`Detected projection surface${result.masks.length ? ` and ${result.masks.length} avoid mask${result.masks.length === 1 ? "" : "s"}` : ""}. Use Manual Cleanup to fix anything wrong.`);
     } catch {
-      setDetectMessage("Detection failed on this image. Draw the surface/masks manually.");
-    } finally {
-      setDetecting(false);
-    }
+      setDetectMessage("Detection failed. Draw the masks manually.");
+    } finally { setDetecting(false); }
   }
 
   function addZone() {
@@ -209,19 +207,7 @@ export default function App() {
   }
 
   function exportProjectFile() {
-    const project: SavedProject = {
-      id: String(Date.now()),
-      name: `GlowCast Project ${new Date().toLocaleString()}`,
-      savedAt: new Date().toISOString(),
-      imageUrl,
-      imageSize,
-      surfaceZone,
-      zones,
-      activeEffect,
-      invertMode,
-      projectionContent,
-      videoUrl
-    };
+    const project: SavedProject = { id: String(Date.now()), name: `GlowCast Project ${new Date().toLocaleString()}`, savedAt: new Date().toISOString(), imageUrl, imageSize, surfaceZone, zones, activeEffect, invertMode, projectionContent, videoUrl };
     const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
     const link = document.createElement("a");
     link.download = "glowcast-project.json";
@@ -233,84 +219,41 @@ export default function App() {
   async function importProjectFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    try {
-      const text = await file.text();
-      const project = JSON.parse(text) as SavedProject;
-      setImageUrl(project.imageUrl ?? null);
-      setVideoUrl(project.videoUrl ?? null);
-      setImageSize(project.imageSize ?? { width: 16, height: 9 });
-      setSurfaceZone(project.surfaceZone ?? null);
-      setZones(project.zones ?? []);
-      setSelectedZoneId(project.zones?.[0]?.id ?? null);
-      setActiveEffect(project.activeEffect ?? "snow");
-      setInvertMode(project.invertMode ?? true);
-      setProjectionContent(project.projectionContent ?? "effect");
-      setProjectionOnly(false);
-      setDetectMessage("Project file loaded. Continue editing or preview animation-only output.");
-    } catch {
-      setDetectMessage("Could not load that project file.");
-    } finally {
-      event.target.value = "";
-    }
+    try { loadProject(JSON.parse(await file.text()) as SavedProject); } catch { setDetectMessage("Could not load that project file."); } finally { event.target.value = ""; }
   }
 
   function exportAlignmentGuide() {
     const canvas = document.createElement("canvas");
-    canvas.width = 1920;
-    canvas.height = 1080;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.fillStyle = "#020617";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = "#22d3ee";
-    ctx.lineWidth = 2;
+    canvas.width = 1920; canvas.height = 1080;
+    const ctx = canvas.getContext("2d"); if (!ctx) return;
+    ctx.fillStyle = "#020617"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "#22d3ee"; ctx.lineWidth = 2;
     for (let x = 0; x <= canvas.width; x += 120) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
     for (let y = 0; y <= canvas.height; y += 120) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
-    ctx.strokeStyle = "#67e8f9";
-    ctx.lineWidth = 10;
+    ctx.strokeStyle = "#67e8f9"; ctx.lineWidth = 10;
     ctx.strokeRect(projectionArea.x / 100 * canvas.width, projectionArea.y / 100 * canvas.height, projectionArea.width / 100 * canvas.width, projectionArea.height / 100 * canvas.height);
     zones.forEach((zone, index) => {
-      const x = zone.x / 100 * canvas.width;
-      const y = zone.y / 100 * canvas.height;
-      const w = zone.width / 100 * canvas.width;
-      const h = zone.height / 100 * canvas.height;
-      ctx.strokeStyle = zone.included ? "#fef08a" : "#fb7185";
-      ctx.lineWidth = 8;
-      ctx.strokeRect(x, y, w, h);
-      ctx.fillStyle = "#fff";
-      ctx.font = "bold 48px Arial";
-      ctx.fillText(`${index + 1}`, x + 20, y + 60);
+      const x = zone.x / 100 * canvas.width; const y = zone.y / 100 * canvas.height; const w = zone.width / 100 * canvas.width; const h = zone.height / 100 * canvas.height;
+      ctx.strokeStyle = zone.included ? "#fef08a" : "#fb7185"; ctx.lineWidth = 8; ctx.strokeRect(x, y, w, h);
+      ctx.fillStyle = "#fff"; ctx.font = "bold 48px Arial"; ctx.fillText(`${index + 1}`, x + 20, y + 60);
     });
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 42px Arial";
-    ctx.fillText("GlowCast Alignment Guide", 40, canvas.height - 50);
-    const link = document.createElement("a");
-    link.download = "glowcast-alignment-guide.png";
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+    ctx.fillStyle = "#fff"; ctx.font = "bold 42px Arial"; ctx.fillText("GlowCast Alignment Guide", 40, canvas.height - 50);
+    const link = document.createElement("a"); link.download = "glowcast-alignment-guide.png"; link.href = canvas.toDataURL("image/png"); link.click();
   }
 
   function renderProjectionLayer(extraClass = "") {
-    if (projectionContent === "video" && videoUrl) {
-      return <video className={`projectionVideo ${extraClass}`} src={videoUrl} autoPlay muted loop playsInline />;
-    }
+    if (projectionContent === "video" && videoUrl) return <video className={`projectionVideo ${extraClass}`} src={videoUrl} autoPlay muted loop playsInline />;
     return <div className={`effectFill ${effectClass} ${extraClass}`} />;
   }
 
+  const stage = <section className="stageWrap"><div className={`stage ${projectionOnly ? "projectionOnly" : ""}`}>{!imageUrl && !videoUrl && <div className="emptyState"><ScanLine size={48}/><h2>No project loaded yet.</h2><p>Upload a reference photo from the Start page.</p></div>}{(imageUrl || videoUrl) && <div ref={surfaceRef} className={`surfaceLayer ${drawMode ? "drawMode" : ""}`} style={{ aspectRatio: `${imageSize.width} / ${imageSize.height}` }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={finishDrawingZone} onPointerCancel={() => setDraftZone(null)}>{imageUrl && <img className="referencePhoto" src={imageUrl} alt="Projection surface" draggable={false}/>} {surfaceZone && !projectionOnly && <div className="projectionBoundary" style={toStyle(surfaceZone)}><b>surface</b></div>}{invertMode && <div className="projectionSurface" style={toStyle(projectionArea)}>{renderProjectionLayer()}</div>} {invertMode && includedZones.map((zone) => <div key={`cutout-${zone.id}`} className="maskCutout" style={{ ...toStyle(zone), backgroundImage: projectionOnly || !imageUrl ? "none" : `url(${imageUrl})`, backgroundSize: `${10000 / zone.width}% ${10000 / zone.height}%`, backgroundPosition: `${zone.x >= 100 - zone.width ? 100 : zone.x / (100 - zone.width) * 100}% ${zone.y >= 100 - zone.height ? 100 : zone.y / (100 - zone.height) * 100}%` }}/>) } {!invertMode && includedZones.map((zone) => <div key={`fx-${zone.id}`} className="zoneProjection" style={toStyle(zone)}>{renderProjectionLayer()}</div>) }{!projectionOnly && zones.map((zone, index) => <button key={zone.id} className={`zone ${zone.included ? "included" : "excluded"} ${selectedZoneId === zone.id ? "selected" : ""}`} style={toStyle(zone)} onClick={(event) => { event.stopPropagation(); setSelectedZoneId(zone.id); setDrawMode(false); }} title={zone.label ?? "Mask zone"}><span>{index + 1}</span></button>)}{draftRect && !projectionOnly && <div className="draftZone" style={toStyle(draftRect)}/>}</div>}</div>{selectedZone && !projectionOnly && <div className="zoneEditor"><strong>Zone {zones.findIndex((zone) => zone.id === selectedZone.id) + 1}</strong><label>X<input type="number" value={selectedZone.x} min={0} max={100} onChange={(event) => updateSelectedZone({ x: Number(event.target.value) })}/></label><label>Y<input type="number" value={selectedZone.y} min={0} max={100} onChange={(event) => updateSelectedZone({ y: Number(event.target.value) })}/></label><label>Width<input type="number" value={selectedZone.width} min={1} max={100} onChange={(event) => updateSelectedZone({ width: Number(event.target.value) })}/></label><label>Height<input type="number" value={selectedZone.height} min={1} max={100} onChange={(event) => updateSelectedZone({ height: Number(event.target.value) })}/></label><button onClick={() => updateSelectedZone({ included: !selectedZone.included })}>{selectedZone.included ? "Included" : "Excluded"}</button><button onClick={deleteSelectedZone}><Trash2 size={16}/>Delete</button></div>}</section>;
+
   return <main className="appShell">
-    <section className="heroPanel">
-      <div><p className="eyebrow">GlowCast MVP Prototype</p><h1>Set up with a photo. Project only the animation.</h1><p className="subtitle">Use the photo as a reference, then preview or play only the masked animation/video output.</p></div>
-      <label className="uploadButton"><ImagePlus size={20}/>Upload Surface Photo<input type="file" accept="image/*" onChange={handleImageUpload}/></label>
-    </section>
-    <section className="workspace">
-      <aside className="toolPanel">
-        <div className="panelBlock"><h2>1. Surface Setup</h2><button className="primary" onClick={detectMaskAreas} disabled={!imageUrl || detecting}><Sparkles size={18}/>{detecting ? "Detecting..." : "AI Detect Surface + Masks"}</button><button onClick={() => { setDrawMode((value) => !value); setProjectionOnly(false); }} disabled={!imageUrl}>{drawMode ? <MousePointer2 size={18}/> : <Pencil size={18}/>} {drawMode ? "Drawing Mode On" : "Draw Avoid Zone"}</button><button onClick={addZone} disabled={!imageUrl}><Plus size={18}/>Add Manual Avoid Zone</button><p className="helperText">{drawMode ? "Drag directly on the photo to draw an avoid mask." : detectMessage}</p></div>
-        <div className="panelBlock"><h2>2. Projection Content</h2><label className="fileButton"><Video size={18}/>Upload Projection Video<input type="file" accept="video/*" onChange={handleVideoUpload}/></label><button onClick={() => setProjectionContent("effect")} className={projectionContent === "effect" ? "activeEffect" : ""}>Use Built-in Animation</button><button onClick={() => setProjectionContent("video")} disabled={!videoUrl} className={projectionContent === "video" ? "activeEffect" : ""}>Fill Surface With Video</button></div>
-        <div className="panelBlock"><h2>3. Projection Logic</h2><button className="primary" onClick={() => setProjectionOnly((value) => !value)} disabled={!imageUrl && !videoUrl}>{projectionOnly ? <EyeOff size={18}/> : <Eye size={18}/>} {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}</button><label className="toggle"><input type="checkbox" checked={invertMode} onChange={(event) => setInvertMode(event.target.checked)}/>Project around selected areas</label><p className="helperText">{invertMode ? "Projection fills the surface and avoids included masks." : "Projection appears only inside included mask zones."}</p></div>
-        <div className="panelBlock"><h2>4. Effect</h2><div className="effectList">{effects.map((effect) => <button key={effect.id} className={activeEffect === effect.id ? "activeEffect" : ""} onClick={() => { setActiveEffect(effect.id); setProjectionContent("effect"); }}>{effect.name}<span>{effect.description}</span></button>)}</div></div>
-        <div className="panelBlock"><h2>5. Save / Export</h2><button className="primary" onClick={exportAlignmentGuide} disabled={!imageUrl}><Download size={18}/>Export Alignment Template</button><button onClick={exportProjectFile} disabled={!hasProject}><Save size={18}/>Save Project File</button><button onClick={() => importProjectRef.current?.click()}><FolderOpen size={18}/>Load Project File</button><input ref={importProjectRef} className="hiddenInput" type="file" accept="application/json,.json" onChange={importProjectFile}/><p className="helperText">Recent projects autosave locally. Video export/fullscreen projection engine comes next.</p></div>
-      </aside>
-      <section className="stageWrap"><div className={`stage ${projectionOnly ? "projectionOnly" : ""}`}>{!imageUrl && !videoUrl && <div className="emptyState"><ScanLine size={48}/><h2>Upload a surface photo to start.</h2><p>The photo is only for setup. Final output is animation/video only.</p></div>}{(imageUrl || videoUrl) && <div ref={surfaceRef} className={`surfaceLayer ${drawMode ? "drawMode" : ""}`} style={{ aspectRatio: `${imageSize.width} / ${imageSize.height}` }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={finishDrawingZone} onPointerCancel={() => setDraftZone(null)}>{imageUrl && <img className="referencePhoto" src={imageUrl} alt="Projection surface" draggable={false}/>} {surfaceZone && !projectionOnly && <div className="projectionBoundary" style={toStyle(surfaceZone)}><b>surface</b></div>}{invertMode && <div className="projectionSurface" style={toStyle(projectionArea)}>{renderProjectionLayer()}</div>} {invertMode && includedZones.map((zone) => <div key={`cutout-${zone.id}`} className="maskCutout" style={{ ...toStyle(zone), backgroundImage: projectionOnly || !imageUrl ? "none" : `url(${imageUrl})`, backgroundSize: `${10000 / zone.width}% ${10000 / zone.height}%`, backgroundPosition: `${zone.x >= 100 - zone.width ? 100 : zone.x / (100 - zone.width) * 100}% ${zone.y >= 100 - zone.height ? 100 : zone.y / (100 - zone.height) * 100}%` }}/>) } {!invertMode && includedZones.map((zone) => <div key={`fx-${zone.id}`} className="zoneProjection" style={toStyle(zone)}>{renderProjectionLayer()}</div>) }{!projectionOnly && zones.map((zone, index) => <button key={zone.id} className={`zone ${zone.included ? "included" : "excluded"} ${selectedZoneId === zone.id ? "selected" : ""}`} style={toStyle(zone)} onClick={(event) => { event.stopPropagation(); setSelectedZoneId(zone.id); setDrawMode(false); }} title={zone.label ?? "Mask zone"}><span>{index + 1}</span></button>)}{draftRect && !projectionOnly && <div className="draftZone" style={toStyle(draftRect)}/>}</div>}</div>{selectedZone && !projectionOnly && <div className="zoneEditor"><strong>Zone {zones.findIndex((zone) => zone.id === selectedZone.id) + 1}</strong><label>X<input type="number" value={selectedZone.x} min={0} max={100} onChange={(event) => updateSelectedZone({ x: Number(event.target.value) })}/></label><label>Y<input type="number" value={selectedZone.y} min={0} max={100} onChange={(event) => updateSelectedZone({ y: Number(event.target.value) })}/></label><label>Width<input type="number" value={selectedZone.width} min={1} max={100} onChange={(event) => updateSelectedZone({ width: Number(event.target.value) })}/></label><label>Height<input type="number" value={selectedZone.height} min={1} max={100} onChange={(event) => updateSelectedZone({ height: Number(event.target.value) })}/></label><button onClick={() => updateSelectedZone({ included: !selectedZone.included })}>{selectedZone.included ? "Included" : "Excluded"}</button><button onClick={deleteSelectedZone}><Trash2 size={16}/>Delete</button></div>}</section>
-    </section>
+    <section className="heroPanel"><div><p className="eyebrow">GlowCast MVP Prototype</p><h1>{step === "start" ? "Start a projection map." : step === "mask" ? "Mask and edit the surface." : step === "content" ? "Choose what projects." : "Export or play it."}</h1><p className="subtitle">Reference photos stay in setup. Projection preview shows only animation or video through your masks.</p></div><label className="uploadButton"><ImagePlus size={20}/>Upload Surface Photo<input type="file" accept="image/*" onChange={handleImageUpload}/></label></section>
+    <nav className="stepNav"><button className={step === "start" ? "activeStep" : ""} onClick={() => setStep("start")}>1 Start</button><button className={step === "mask" ? "activeStep" : ""} onClick={() => setStep("mask")} disabled={!hasProject}>2 Mask & Edit</button><button className={step === "content" ? "activeStep" : ""} onClick={() => setStep("content")} disabled={!hasProject}>3 Content</button><button className={step === "export" ? "activeStep" : ""} onClick={() => setStep("export")} disabled={!hasProject}>4 Export</button></nav>
+    {step === "start" && <section className="startPage"><div className="startCard"><h2>Start with a reference photo</h2><p>The photo is only for setup and alignment. The actual projection output will be animation or uploaded video only.</p><label className="uploadButton"><ImagePlus size={20}/>Upload Surface Photo<input type="file" accept="image/*" onChange={handleImageUpload}/></label><button onClick={() => importProjectRef.current?.click()}><FolderOpen size={18}/>Load Project File</button><input ref={importProjectRef} className="hiddenInput" type="file" accept="application/json,.json" onChange={importProjectFile}/></div><div className="startCard"><h2>Recent autosaves</h2>{recentProjects.length === 0 && <p className="helperText">No recent projects saved in this browser yet.</p>}{recentProjects.map((project) => <button key={project.id} onClick={() => loadProject(project)}><FolderOpen size={18}/>{project.name}</button>)}</div></section>}
+    {step === "mask" && <section className="workspace"><aside className="toolPanel"><div className="panelBlock"><h2>Surface + Masks</h2><button className="primary" onClick={detectMaskAreas} disabled={!imageUrl || detecting}><Sparkles size={18}/>{detecting ? "Detecting..." : "AI Detect Surface + Masks"}</button><button onClick={() => { setDrawMode((value) => !value); setProjectionOnly(false); }} disabled={!imageUrl}>{drawMode ? <MousePointer2 size={18}/> : <Pencil size={18}/>} {drawMode ? "Drawing Mode On" : "Draw Avoid Zone"}</button><button onClick={addZone} disabled={!imageUrl}><Plus size={18}/>Add Manual Avoid Zone</button><button className="primary" onClick={() => setProjectionOnly((value) => !value)} disabled={!hasProject}>{projectionOnly ? <EyeOff size={18}/> : <Eye size={18}/>} {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}</button><p className="helperText">{drawMode ? "Drag directly on the photo to draw an avoid mask." : detectMessage}</p></div><div className="panelBlock"><h2>Projection Logic</h2><label className="toggle"><input type="checkbox" checked={invertMode} onChange={(event) => setInvertMode(event.target.checked)}/>Project around selected areas</label></div></aside>{stage}</section>}
+    {step === "content" && <section className="workspace"><aside className="toolPanel"><div className="panelBlock"><h2>Projection Content</h2><label className="fileButton"><Video size={18}/>Upload Projection Video<input type="file" accept="video/*" onChange={handleVideoUpload}/></label><button onClick={() => setProjectionContent("effect")} className={projectionContent === "effect" ? "activeEffect" : ""}>Use Built-in Animation</button><button onClick={() => setProjectionContent("video")} disabled={!videoUrl} className={projectionContent === "video" ? "activeEffect" : ""}>Fill Surface With Video</button></div><div className="panelBlock"><h2>Built-in Effects</h2><div className="effectList">{effects.map((effect) => <button key={effect.id} className={activeEffect === effect.id ? "activeEffect" : ""} onClick={() => { setActiveEffect(effect.id); setProjectionContent("effect"); }}>{effect.name}<span>{effect.description}</span></button>)}</div></div><button className="primary" onClick={() => setProjectionOnly((value) => !value)}>{projectionOnly ? <EyeOff size={18}/> : <Eye size={18}/>} {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}</button></aside>{stage}</section>}
+    {step === "export" && <section className="workspace"><aside className="toolPanel"><div className="panelBlock"><h2>Export / Projector</h2><button className="primary" onClick={() => setProjectionOnly(true)}><Eye size={18}/>Preview Projection Output</button><button className="primary" onClick={exportAlignmentGuide} disabled={!imageUrl}><Download size={18}/>Export Alignment Template</button><button onClick={exportProjectFile} disabled={!hasProject}><Save size={18}/>Save Project File</button><button onClick={() => importProjectRef.current?.click()}><FolderOpen size={18}/>Load Project File</button><input ref={importProjectRef} className="hiddenInput" type="file" accept="application/json,.json" onChange={importProjectFile}/><p className="helperText">Loop video export and true fullscreen projector mode are the next engine-level steps.</p></div></aside>{stage}</section>}
   </main>;
 }
