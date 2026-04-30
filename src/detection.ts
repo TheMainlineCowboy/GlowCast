@@ -20,6 +20,7 @@ type Box = {
 };
 
 const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min, value));
+const boxArea = (box: Box) => Math.max(1, (box.maxX - box.minX) * (box.maxY - box.minY));
 
 function saturation(r: number, g: number, b: number) {
   const max = Math.max(r, g, b) / 255;
@@ -191,11 +192,11 @@ function findComponents(mask: Uint8Array, width: number, height: number, label: 
     }
     const boxWidth = maxX - minX + 1;
     const boxHeight = maxY - minY + 1;
-    const boxArea = boxWidth * boxHeight;
+    const areaOfBox = boxWidth * boxHeight;
     const centerX = (minX + maxX) / 2 / width;
     const centerY = (minY + maxY) / 2 / height;
     if (area < minArea || boxWidth < 5 || boxHeight < 5) continue;
-    if (boxArea > maxArea) continue;
+    if (areaOfBox > maxArea) continue;
     if (!options.allowLarge && (boxWidth > width * 0.75 || boxHeight > height * 0.7)) continue;
     if (!options.allowEdges && (minX < width * 0.01 || maxX > width * 0.99)) continue;
     if (label.includes("plant") && centerY < 0.32) continue;
@@ -212,26 +213,25 @@ function overlap(a: Box, b: Box) {
   const x = Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX));
   const y = Math.max(0, Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY));
   const intersection = x * y;
-  const areaA = Math.max(1, (a.maxX - a.minX) * (a.maxY - a.minY));
-  const areaB = Math.max(1, (b.maxX - b.minX) * (b.maxY - b.minY));
-  return intersection / Math.max(1, areaA + areaB - intersection);
+  return intersection / Math.max(1, boxArea(a) + boxArea(b) - intersection);
 }
 
-function containsBox(parent: Box, child: Box) {
-  return parent.minX <= child.minX && parent.minY <= child.minY && parent.maxX >= child.maxX && parent.maxY >= child.maxY;
+function containedRatio(parent: Box, child: Box) {
+  const x = Math.max(0, Math.min(parent.maxX, child.maxX) - Math.max(parent.minX, child.minX));
+  const y = Math.max(0, Math.min(parent.maxY, child.maxY) - Math.max(parent.minY, child.minY));
+  return (x * y) / boxArea(child);
 }
 
 function removeParentBoxes(boxes: Box[]) {
   return boxes.filter((box) => {
-    const boxArea = Math.max(1, (box.maxX - box.minX) * (box.maxY - box.minY));
-    const children = boxes.filter((candidate) => {
-      if (candidate === box) return false;
-      const candidateArea = Math.max(1, (candidate.maxX - candidate.minX) * (candidate.maxY - candidate.minY));
-      return candidateArea < boxArea * 0.62 && containsBox(box, candidate);
-    });
+    const area = boxArea(box);
+    const children = boxes.filter((candidate) => candidate !== box && boxArea(candidate) < area * 0.72 && containedRatio(box, candidate) > 0.82);
+    const windowChildren = children.filter((child) => child.label.includes("window"));
+    if (windowChildren.length >= 2 && area > windowChildren.reduce((sum, child) => sum + boxArea(child), 0) * 1.25) return false;
+    if (box.label.includes("avoid object") && children.length >= 2) return false;
     if (children.length < 2) return true;
-    const childAreaTotal = children.reduce((sum, child) => sum + Math.max(1, (child.maxX - child.minX) * (child.maxY - child.minY)), 0);
-    return childAreaTotal < boxArea * 0.24;
+    const childAreaTotal = children.reduce((sum, child) => sum + boxArea(child), 0);
+    return childAreaTotal < area * 0.45;
   });
 }
 
@@ -243,10 +243,19 @@ function nearbySameObject(a: Box, b: Box, width: number, height: number) {
   const centerAY = (a.minY + a.maxY) / 2;
   const centerBX = (b.minX + b.maxX) / 2;
   const centerBY = (b.minY + b.maxY) / 2;
-  const closeCenters = Math.abs(centerAX - centerBX) < width * 0.11 && Math.abs(centerAY - centerBY) < height * 0.16;
-  if (a.label.includes("window")) return closeCenters || (gapX < width * 0.035 && gapY < height * 0.08);
-  if (a.label.includes("plant")) return closeCenters || (gapX < width * 0.055 && gapY < height * 0.08);
-  return overlap(a, b) > 0.18;
+
+  if (a.label.includes("window")) {
+    const closeFragments = Math.abs(centerAX - centerBX) < width * 0.045 && Math.abs(centerAY - centerBY) < height * 0.07;
+    const touchingFragments = gapX < width * 0.014 && gapY < height * 0.03;
+    return overlap(a, b) > 0.08 || (closeFragments && touchingFragments);
+  }
+
+  if (a.label.includes("plant")) {
+    const closeCenters = Math.abs(centerAX - centerBX) < width * 0.08 && Math.abs(centerAY - centerBY) < height * 0.11;
+    return closeCenters || (gapX < width * 0.045 && gapY < height * 0.07);
+  }
+
+  return overlap(a, b) > 0.22;
 }
 
 function mergeNearbyBoxes(boxes: Box[], width: number, height: number) {
@@ -284,6 +293,30 @@ function insideZone(box: Box, zone: Zone, width: number, height: number) {
   const cx = (box.minX + box.maxX) / 2;
   const cy = (box.minY + box.maxY) / 2;
   return cx >= zoneX1 && cx <= zoneX2 && cy >= zoneY1 && cy <= zoneY2;
+}
+
+function preferSpecificBoxes(boxes: Box[]) {
+  const specificFirst = [...boxes].sort((a, b) => {
+    const aSpecific = a.label.includes("window") || a.label.includes("plant") ? 1 : 0;
+    const bSpecific = b.label.includes("window") || b.label.includes("plant") ? 1 : 0;
+    if (aSpecific !== bSpecific) return bSpecific - aSpecific;
+    if (Math.abs(boxArea(a) - boxArea(b)) > 250) return boxArea(a) - boxArea(b);
+    return b.score - a.score;
+  });
+
+  const kept: Box[] = [];
+  for (const candidate of specificFirst) {
+    const candidateArea = boxArea(candidate);
+    const blocked = kept.some((existing) => {
+      const existingArea = boxArea(existing);
+      if (overlap(existing, candidate) > 0.34) return true;
+      if (containedRatio(existing, candidate) > 0.82 && existingArea <= candidateArea * 1.25) return true;
+      return false;
+    });
+    if (!blocked) kept.push(candidate);
+    if (kept.length >= 8) break;
+  }
+  return kept.sort((a, b) => b.score - a.score);
 }
 
 export async function detectSurfaceAndMasks(imageUrl: string) {
@@ -324,12 +357,10 @@ export async function detectSurfaceAndMasks(imageUrl: string) {
   ]
     .filter((box) => box.label.includes("plant") || insideZone(box, surface, canvas.width, canvas.height))
     .sort((a, b) => b.score - a.score);
-  const candidates = removeParentBoxes(mergeNearbyBoxes(rawCandidates, canvas.width, canvas.height)).sort((a, b) => b.score - a.score);
-  const kept: Box[] = [];
-  for (const candidate of candidates) {
-    if (kept.some((existing) => overlap(existing, candidate) > 0.28 || containsBox(existing, candidate))) continue;
-    kept.push(candidate);
-    if (kept.length >= 8) break;
-  }
+
+  const merged = mergeNearbyBoxes(removeParentBoxes(rawCandidates), canvas.width, canvas.height);
+  const candidates = removeParentBoxes(merged);
+  const kept = preferSpecificBoxes(candidates);
+
   return { surface, masks: kept.map((box, index) => boxToZone(box, canvas.width, canvas.height, Date.now() + index)) };
 }
