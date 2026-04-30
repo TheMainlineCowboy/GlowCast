@@ -2,30 +2,70 @@
    Overrides the baseline effect CSS after styles.css loads.
    Goals: subtle projector-friendly motion, no obvious jump cuts, no cartoon lightning lines. */
 
+:root {
+  --snow-density: 1.35;
+  --rain-density: .65;
+  --rain-speed: 1.2s;
+}
+
 .effectFill {
   filter: saturate(1.08) contrast(1.04);
   will-change: transform, opacity, background-position, filter;
 }
 
-/* SNOW: use tile-size multiples for seamless looping. No visible reset. */
+.effectQuickControls {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(148,163,184,.22);
+  border-radius: 16px;
+  background: rgba(2,6,23,.45);
+}
+.effectQuickControls strong {
+  display: block;
+  margin-bottom: 10px;
+  color: #f8fafc;
+}
+.effectControlSlider {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+.effectControlSlider input {
+  width: 100%;
+  accent-color: #67e8f9;
+}
+
+/* SNOW: heavier default, seamless tile movement, no visible reset. */
 .effectFill.effect-snow {
-  opacity: .9;
+  opacity: calc(.72 + (.12 * var(--snow-density)));
   background:
-    radial-gradient(circle, rgba(255,255,255,.92) 0 1px, transparent 1.8px),
-    radial-gradient(circle, rgba(230,245,255,.82) 0 1.2px, transparent 2px),
-    radial-gradient(circle, rgba(255,255,255,.55) 0 .9px, transparent 1.7px),
-    linear-gradient(180deg, rgba(130,180,230,.08), rgba(255,255,255,.03) 55%, rgba(255,255,255,.13));
-  background-size: 48px 48px, 96px 96px, 144px 144px, 100% 100%;
-  background-position: 0 0, 0 0, 0 0, 0 0;
+    radial-gradient(circle, rgba(255,255,255,.98) 0 1.25px, transparent 1.9px),
+    radial-gradient(circle, rgba(235,248,255,.90) 0 1.45px, transparent 2.15px),
+    radial-gradient(circle, rgba(255,255,255,.68) 0 1.05px, transparent 1.8px),
+    radial-gradient(circle, rgba(255,255,255,.42) 0 .8px, transparent 1.55px),
+    linear-gradient(180deg, rgba(130,180,230,.10), rgba(255,255,255,.04) 55%, rgba(255,255,255,.15));
+  background-size:
+    calc(46px / var(--snow-density)) calc(46px / var(--snow-density)),
+    calc(82px / var(--snow-density)) calc(82px / var(--snow-density)),
+    calc(130px / var(--snow-density)) calc(130px / var(--snow-density)),
+    calc(180px / var(--snow-density)) calc(180px / var(--snow-density)),
+    100% 100%;
+  background-position: 0 0, 0 0, 0 0, 0 0, 0 0;
   animation: snowLoopSoft 12s linear infinite, snowLightBreath 9s ease-in-out infinite alternate;
 }
 .effectFill.effect-snow::after {
   background:
-    radial-gradient(circle, rgba(255,255,255,.85) 0 1px, transparent 1.8px),
-    radial-gradient(circle, rgba(255,255,255,.55) 0 1.4px, transparent 2.2px);
-  background-size: 64px 64px, 128px 128px;
-  background-position: 0 0, 0 0;
-  opacity: .72;
+    radial-gradient(circle, rgba(255,255,255,.92) 0 1.15px, transparent 1.9px),
+    radial-gradient(circle, rgba(255,255,255,.62) 0 1.55px, transparent 2.3px),
+    radial-gradient(circle, rgba(210,235,255,.44) 0 .85px, transparent 1.5px);
+  background-size:
+    calc(60px / var(--snow-density)) calc(60px / var(--snow-density)),
+    calc(112px / var(--snow-density)) calc(112px / var(--snow-density)),
+    calc(160px / var(--snow-density)) calc(160px / var(--snow-density));
+  background-position: 0 0, 0 0, 0 0;
+  opacity: calc(.50 + (.18 * var(--snow-density)));
   animation: snowLoopSlow 18s linear infinite;
 }
 .effectFill.effect-snow::before {
@@ -34,12 +74,12 @@
   left: -4%;
   right: -4%;
   bottom: -2%;
-  height: 17%;
+  height: 19%;
   background:
-    radial-gradient(ellipse at 20% 100%, rgba(255,255,255,.82), transparent 32%),
-    radial-gradient(ellipse at 62% 100%, rgba(255,255,255,.92), transparent 38%),
-    linear-gradient(0deg, rgba(255,255,255,.68), rgba(255,255,255,.22) 58%, transparent);
-  opacity: .76;
+    radial-gradient(ellipse at 20% 100%, rgba(255,255,255,.86), transparent 32%),
+    radial-gradient(ellipse at 62% 100%, rgba(255,255,255,.95), transparent 38%),
+    linear-gradient(0deg, rgba(255,255,255,.74), rgba(255,255,255,.26) 58%, transparent);
+  opacity: .82;
   animation: snowbankSubtle 10s ease-in-out infinite alternate;
 }
 .surfaceLayer:has(.effect-snow) .maskCutout::before,
@@ -49,15 +89,15 @@
   left: -2%;
   right: -2%;
   top: -8px;
-  height: 12px;
+  height: 13px;
   z-index: 8;
   pointer-events: none;
   background:
-    radial-gradient(ellipse at 22% 60%, rgba(255,255,255,.90), transparent 46%),
-    radial-gradient(ellipse at 62% 56%, rgba(238,248,255,.94), transparent 50%),
-    linear-gradient(180deg, rgba(255,255,255,.88), rgba(255,255,255,.50) 70%, transparent);
+    radial-gradient(ellipse at 22% 60%, rgba(255,255,255,.94), transparent 46%),
+    radial-gradient(ellipse at 62% 56%, rgba(238,248,255,.98), transparent 50%),
+    linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.56) 70%, transparent);
   border-radius: 999px 999px 55% 55%;
-  opacity: .8;
+  opacity: .9;
   animation: snowEdgeBreath 10s ease-in-out infinite alternate;
 }
 .surfaceLayer:has(.effect-snow) .maskCutout::after,
@@ -70,40 +110,42 @@
   height: 14px;
   z-index: 8;
   pointer-events: none;
-  opacity: .18;
-  background: linear-gradient(180deg, rgba(255,255,255,.55), transparent 78%);
+  opacity: .22;
+  background: linear-gradient(180deg, rgba(255,255,255,.62), transparent 78%);
   border-radius: 0 0 999px 999px;
   animation: snowMeltDrift 8s ease-in-out infinite alternate;
 }
 
-/* RAIN: softer, thinner, darker. Removes the thick road-line look. */
+/* RAIN: replacing “moving road lines” with a misty storm wash. */
 .effectFill.effect-rain {
-  opacity: .62;
+  opacity: calc(.24 + (.18 * var(--rain-density)));
   background:
-    linear-gradient(162deg, transparent 0 47%, rgba(210,235,255,.34) 48% 49%, transparent 50% 100%),
-    linear-gradient(162deg, transparent 0 58%, rgba(180,215,245,.20) 59% 60%, transparent 61% 100%),
-    linear-gradient(180deg, rgba(20,40,70,.16), rgba(95,150,200,.08));
-  background-size: 28px 84px, 54px 132px, 100% 100%;
-  background-position: 0 0, 0 0, 0 0;
-  filter: saturate(.9) brightness(.82) contrast(1.02);
-  animation: rainSoftLoop 1.35s linear infinite;
+    radial-gradient(ellipse at 24% 20%, rgba(145,190,235,.18), transparent 42%),
+    radial-gradient(ellipse at 78% 82%, rgba(90,145,190,.14), transparent 48%),
+    linear-gradient(180deg, rgba(20,38,66,.30), rgba(44,80,116,.16) 46%, rgba(8,18,34,.34));
+  filter: saturate(.78) brightness(.62) contrast(1.05);
+  animation: rainAtmosphere 6s ease-in-out infinite alternate;
 }
 .effectFill.effect-rain::after {
   background:
-    linear-gradient(162deg, transparent 0 49%, rgba(240,250,255,.26) 50% 51%, transparent 52% 100%);
-  background-size: 82px 160px;
-  background-position: 0 0;
-  opacity: .42;
-  animation: rainSoftLoop2 2.1s linear infinite;
+    linear-gradient(165deg, transparent 0 47%, rgba(215,235,255,.13) 48% 49%, transparent 50% 100%),
+    linear-gradient(165deg, transparent 0 62%, rgba(190,220,250,.09) 63% 64%, transparent 65% 100%);
+  background-size: 18px 70px, 34px 118px;
+  background-position: 0 0, 0 0;
+  opacity: calc(.28 + (.22 * var(--rain-density)));
+  filter: blur(.35px);
+  animation: rainFineFall var(--rain-speed) linear infinite;
 }
 .effectFill.effect-rain::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at 50% 96%, rgba(180,220,255,.18) 0 1px, transparent 2px);
-  background-size: 70px 26px;
-  opacity: .18;
-  animation: rainSparkle 2s linear infinite;
+  background:
+    radial-gradient(ellipse at 50% 94%, rgba(180,220,255,.12) 0 1px, transparent 2.2px),
+    linear-gradient(180deg, transparent 0 70%, rgba(120,170,220,.07));
+  background-size: 58px 28px, 100% 100%;
+  opacity: .22;
+  animation: rainGroundShimmer 2.6s linear infinite;
 }
 .surfaceLayer:has(.effect-rain) .maskCutout::before,
 .projectorCanvas:has(.effect-rain) .projectorMaskCutout::before {
@@ -114,22 +156,22 @@
   top: -3px;
   height: 5px;
   z-index: 8;
-  background: linear-gradient(90deg, transparent, rgba(190,225,255,.38), transparent);
-  opacity: .34;
-  animation: rainEdgeGlide 1.6s linear infinite;
+  background: linear-gradient(90deg, transparent, rgba(190,225,255,.26), transparent);
+  opacity: .26;
+  animation: rainEdgeGlide 1.8s linear infinite;
 }
 .surfaceLayer:has(.effect-rain) .maskCutout::after,
 .projectorCanvas:has(.effect-rain) .projectorMaskCutout::after {
   content: "";
   position: absolute;
-  left: 16%;
-  right: 16%;
+  left: 18%;
+  right: 18%;
   top: 0;
-  height: 16px;
+  height: 15px;
   z-index: 8;
-  background: repeating-linear-gradient(90deg, transparent 0 18px, rgba(190,225,255,.28) 19px 20px, transparent 21px 36px);
-  opacity: .22;
-  animation: rainDripSubtle 2.4s ease-in infinite;
+  background: repeating-linear-gradient(90deg, transparent 0 22px, rgba(190,225,255,.22) 23px 24px, transparent 25px 44px);
+  opacity: .18;
+  animation: rainDripSubtle 2.8s ease-in infinite;
 }
 
 /* FIRE: keep improved flame glow but a little less blown out. */
@@ -194,61 +236,96 @@
   animation: neonAura 7s linear infinite;
 }
 
-/* HAUNT: no fake lightning bolt/line. Uses area flashes + fog only. */
+/* HAUNT: candle/window glow + ambient spooky flicker, not a fake lightning line. */
 .effectFill.effect-haunt {
-  opacity: .78;
+  opacity: .84;
   background:
-    radial-gradient(ellipse at 18% 34%, rgba(167,139,250,.36), transparent 24%),
-    radial-gradient(ellipse at 76% 44%, rgba(34,211,238,.28), transparent 18%),
-    radial-gradient(ellipse at 50% 88%, rgba(230,230,255,.18), transparent 48%),
-    linear-gradient(180deg, rgba(25,20,65,.18), rgba(2,6,23,.10));
-  animation: hauntedBreath 6s ease-in-out infinite alternate;
+    radial-gradient(ellipse at 18% 34%, rgba(130,70,200,.22), transparent 26%),
+    radial-gradient(ellipse at 76% 44%, rgba(34,211,238,.16), transparent 18%),
+    radial-gradient(ellipse at 50% 88%, rgba(255,128,42,.15), transparent 42%),
+    linear-gradient(180deg, rgba(18,14,55,.26), rgba(2,6,23,.18));
+  animation: hauntedBreath 7s ease-in-out infinite alternate;
 }
 .effectFill.effect-haunt::after {
   background:
-    radial-gradient(ellipse at 28% 42%, rgba(255,255,255,.75), transparent 32%),
-    radial-gradient(ellipse at 70% 52%, rgba(220,235,255,.55), transparent 38%),
-    linear-gradient(180deg, rgba(255,255,255,.18), transparent 66%);
-  opacity: 0;
-  animation: areaLightning 8s linear infinite;
+    radial-gradient(ellipse at 23% 48%, rgba(255,178,72,.42), transparent 20%),
+    radial-gradient(ellipse at 52% 50%, rgba(255,205,110,.35), transparent 24%),
+    radial-gradient(ellipse at 78% 54%, rgba(255,138,52,.30), transparent 20%),
+    radial-gradient(ellipse at 62% 74%, rgba(255,96,28,.18), transparent 34%);
+  opacity: .55;
+  animation: candleFlicker 2.2s ease-in-out infinite alternate;
 }
 .effectFill.effect-haunt::before {
   content: "";
   position: absolute;
   inset: -20%;
   background:
-    radial-gradient(ellipse at 20% 70%, rgba(255,255,255,.12), transparent 35%),
-    radial-gradient(ellipse at 68% 58%, rgba(210,220,255,.10), transparent 38%);
+    radial-gradient(ellipse at 20% 70%, rgba(255,255,255,.08), transparent 35%),
+    radial-gradient(ellipse at 68% 58%, rgba(210,220,255,.08), transparent 38%);
   filter: blur(12px);
   animation: ghostFog 11s ease-in-out infinite alternate;
 }
+.surfaceLayer:has(.effect-haunt) .maskCutout::before,
+.projectorCanvas:has(.effect-haunt) .projectorMaskCutout::before {
+  content: "";
+  position: absolute;
+  left: 17%;
+  right: 17%;
+  top: -16px;
+  height: 18px;
+  z-index: 8;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 30% 70%, rgba(255,210,110,.88), transparent 35%),
+    radial-gradient(ellipse at 70% 70%, rgba(255,150,42,.72), transparent 38%),
+    linear-gradient(180deg, transparent 0 35%, rgba(45,24,10,.82) 36% 100%);
+  border-radius: 50% 50% 8px 8px;
+  filter: drop-shadow(0 0 10px rgba(255,142,42,.8));
+  animation: candleTopFlicker 1.4s ease-in-out infinite alternate;
+}
+.surfaceLayer:has(.effect-haunt) .maskCutout::after,
+.projectorCanvas:has(.effect-haunt) .projectorMaskCutout::after {
+  content: "";
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  bottom: -12px;
+  height: 18px;
+  z-index: 8;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(255,118,30,.65), transparent 48%),
+    radial-gradient(ellipse at 50% 72%, rgba(255,185,70,.35), transparent 60%);
+  border-radius: 999px;
+  opacity: .35;
+  animation: pumpkinGlow 2s ease-in-out infinite alternate;
+}
 
 @keyframes snowLoopSoft {
-  from { background-position: 0 0, 0 0, 0 0, 0 0; }
-  to { background-position: 48px 96px, -96px 192px, 144px 288px, 0 0; }
+  from { background-position: 0 0, 0 0, 0 0, 0 0, 0 0; }
+  to { background-position: 46px 92px, -82px 164px, 130px 260px, -180px 360px, 0 0; }
 }
 @keyframes snowLoopSlow {
-  from { background-position: 0 0, 0 0; }
-  to { background-position: -64px 128px, 128px 256px; }
-}
-@keyframes snowLightBreath { from { filter: brightness(.94) saturate(1.02); } to { filter: brightness(1.05) saturate(1.12); } }
-@keyframes snowbankSubtle { from { transform: translateY(5px) scaleX(1.01); opacity: .62; } to { transform: translateY(-2px) scaleX(1.04); opacity: .82; } }
-@keyframes snowEdgeBreath { from { transform: translateY(1px) scaleY(.84); opacity: .62; } to { transform: translateY(-1px) scaleY(1); opacity: .86; } }
-@keyframes snowMeltDrift { from { transform: translateY(-4px); opacity: .12; } to { transform: translateY(6px); opacity: .24; } }
-@keyframes rainSoftLoop {
   from { background-position: 0 0, 0 0, 0 0; }
-  to { background-position: -28px 84px, -54px 132px, 0 0; }
+  to { background-position: -60px 120px, 112px 224px, -160px 320px; }
 }
-@keyframes rainSoftLoop2 { from { background-position: 0 0; } to { background-position: -82px 160px; } }
-@keyframes rainSparkle { from { background-position: 0 0; opacity: .10; } 50% { opacity: .20; } to { background-position: 70px 26px; opacity: .10; } }
+@keyframes snowLightBreath { from { filter: brightness(.94) saturate(1.02); } to { filter: brightness(1.07) saturate(1.12); } }
+@keyframes snowbankSubtle { from { transform: translateY(5px) scaleX(1.01); opacity: .66; } to { transform: translateY(-2px) scaleX(1.04); opacity: .9; } }
+@keyframes snowEdgeBreath { from { transform: translateY(1px) scaleY(.84); opacity: .66; } to { transform: translateY(-1px) scaleY(1); opacity: .94; } }
+@keyframes snowMeltDrift { from { transform: translateY(-4px); opacity: .14; } to { transform: translateY(6px); opacity: .28; } }
+@keyframes rainAtmosphere { from { filter: brightness(.55) saturate(.7); opacity: calc(.20 + (.16 * var(--rain-density))); } to { filter: brightness(.72) saturate(.82); opacity: calc(.30 + (.20 * var(--rain-density))); } }
+@keyframes rainFineFall { from { background-position: 0 0, 0 0; } to { background-position: -18px 70px, -34px 118px; } }
+@keyframes rainGroundShimmer { from { background-position: 0 0, 0 0; opacity: .10; } 50% { opacity: .22; } to { background-position: 58px 28px, 0 0; opacity: .10; } }
 @keyframes rainEdgeGlide { from { transform: translateX(-45%); } to { transform: translateX(45%); } }
-@keyframes rainDripSubtle { from { transform: translateY(-8px); opacity: .05; } 50% { opacity: .24; } to { transform: translateY(13px); opacity: .03; } }
+@keyframes rainDripSubtle { from { transform: translateY(-8px); opacity: .04; } 50% { opacity: .20; } to { transform: translateY(13px); opacity: .03; } }
 @keyframes fireBase { from { transform: scaleY(.98) translateY(6px); filter: saturate(1.15) brightness(.92); } to { transform: scaleY(1.04) translateY(-5px); filter: saturate(1.45) brightness(1.1); } }
 @keyframes fireTongues { from { transform: translateY(10px) scaleX(.96); opacity: .38; } to { transform: translateY(-18px) scaleX(1.06); opacity: .82; } }
 @keyframes emberRise { from { background-position: 0 120px, 0 170px, 0 100px; transform: translateY(8px); } to { background-position: 18px -160px, -32px -230px, 24px -150px; transform: translateY(-14px); } }
 @keyframes neonColorSweep { from { filter: hue-rotate(-14deg) saturate(1.35) contrast(1.08); transform: scale(1); } to { filter: hue-rotate(20deg) saturate(1.62) contrast(1.18); transform: scale(1.018); } }
 @keyframes neonScanner { 0%, 22% { transform: translateX(-95%); opacity: 0; } 46% { opacity: .42; } 72%, 100% { transform: translateX(95%); opacity: 0; } }
 @keyframes neonAura { from { transform: rotate(0deg) scale(1); } to { transform: rotate(360deg) scale(1.05); } }
-@keyframes hauntedBreath { from { filter: brightness(.72) contrast(1.04) saturate(.95); } to { filter: brightness(1.02) contrast(1.16) saturate(1.18); } }
-@keyframes areaLightning { 0%, 72%, 77%, 100% { opacity: 0; } 73% { opacity: .58; } 74% { opacity: .08; } 75% { opacity: .36; } }
-@keyframes ghostFog { from { transform: translateX(-6%) translateY(3%) scale(1.04); opacity: .24; } to { transform: translateX(6%) translateY(-3%) scale(1.1); opacity: .48; } }
+@keyframes hauntedBreath { from { filter: brightness(.62) contrast(1.05) saturate(.92); } to { filter: brightness(.92) contrast(1.14) saturate(1.12); } }
+@keyframes candleFlicker { 0% { opacity: .32; filter: brightness(.8); } 24% { opacity: .62; filter: brightness(1.2); } 42% { opacity: .38; filter: brightness(.9); } 68% { opacity: .72; filter: brightness(1.28); } 100% { opacity: .48; filter: brightness(1.05); } }
+@keyframes candleTopFlicker { from { transform: translateY(2px) scale(.86); opacity: .55; } to { transform: translateY(-1px) scale(1.06); opacity: .95; } }
+@keyframes pumpkinGlow { from { transform: scale(.92); opacity: .20; } to { transform: scale(1.12); opacity: .48; } }
+@keyframes ghostFog { from { transform: translateX(-6%) translateY(3%) scale(1.04); opacity: .22; } to { transform: translateX(6%) translateY(-3%) scale(1.1); opacity: .42; } }
