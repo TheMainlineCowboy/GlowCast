@@ -17,6 +17,7 @@ const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min,
 const boxArea = (box: Box) => Math.max(1, (box.maxX - box.minX) * (box.maxY - box.minY));
 const boxWidth = (box: Box) => box.maxX - box.minX + 1;
 const boxHeight = (box: Box) => box.maxY - box.minY + 1;
+const boxDensity = (box: Box) => box.area / boxArea(box);
 
 function saturation(r: number, g: number, b: number) {
   const max = Math.max(r, g, b) / 255;
@@ -221,9 +222,9 @@ function shouldMergeAsArchitecture(a: Box, b: Box, width: number, height: number
   const ay = (a.minY + a.maxY) / 2;
   const bx = (b.minX + b.maxX) / 2;
   const by = (b.minY + b.maxY) / 2;
-  const sameVerticalObject = Math.abs(ax - bx) < width * 0.07 && Math.abs(ay - by) < height * 0.28;
-  const adjacentWindowPanels = Math.abs(ay - by) < height * 0.11 && Math.abs(ax - bx) < width * 0.16;
-  const expandedOverlap = overlap(expandBox(a, width * 0.02, height * 0.035), expandBox(b, width * 0.02, height * 0.035)) > 0;
+  const sameVerticalObject = Math.abs(ax - bx) < width * 0.055 && Math.abs(ay - by) < height * 0.20;
+  const adjacentWindowPanels = Math.abs(ay - by) < height * 0.075 && Math.abs(ax - bx) < width * 0.09;
+  const expandedOverlap = overlap(expandBox(a, width * 0.012, height * 0.025), expandBox(b, width * 0.012, height * 0.025)) > 0;
   return expandedOverlap || sameVerticalObject || adjacentWindowPanels;
 }
 
@@ -273,11 +274,12 @@ function scoreDarkArchitecture(box: Box, width: number, height: number) {
   const centerY = (box.minY + box.maxY) / 2 / height;
   const centerX = (box.minX + box.maxX) / 2 / width;
   let score = box.score;
-  if (aspect > 1.15 && aspect < 6.5) score += 1200;
-  if (h > height * 0.18 && centerY > 0.43) score += 2400; // door / tall sidelight
-  if (w > width * 0.05 && h > height * 0.08) score += 900; // window / glass panel
+  if (aspect > 1.15 && aspect < 6.5) score += 1600;
+  if (h > height * 0.18 && centerY > 0.43) score += 3000;
+  if (w > width * 0.05 && h > height * 0.08) score += 900;
   if (centerX > 0.10 && centerX < 0.84) score += 500;
   if (centerY < 0.28) score -= 1800;
+  if (boxDensity(box) < 0.18) score -= 2200;
   return score;
 }
 
@@ -287,10 +289,13 @@ function rejectFalsePositive(box: Box, width: number, height: number) {
   const centerX = (box.minX + box.maxX) / 2 / width;
   const centerY = (box.minY + box.maxY) / 2 / height;
   const aspect = h / Math.max(1, w);
-  const upperRightPorchPatch = centerX > 0.74 && centerY < 0.43 && w > width * 0.08 && h > height * 0.07;
-  const tinyRandomPatch = w < width * 0.025 || h < height * 0.025;
-  const unrealisticWidePatch = aspect < 0.22 || aspect > 8;
-  return upperRightPorchPatch || tinyRandomPatch || unrealisticWidePatch;
+  const density = boxDensity(box);
+  const upperRightPorchPatch = centerX > 0.63 && centerY < 0.63 && w > width * 0.18 && h > height * 0.14;
+  const largeWideLowDensityPatch = w > width * 0.16 && aspect < 1.15 && density < 0.52;
+  const skinnyGroundPatch = centerY > 0.70 && aspect < 0.55;
+  const tinyRandomPatch = w < width * 0.030 || h < height * 0.030;
+  const unrealisticPatch = aspect < 0.18 || aspect > 8;
+  return upperRightPorchPatch || largeWideLowDensityPatch || skinnyGroundPatch || tinyRandomPatch || unrealisticPatch;
 }
 
 function preferSpecificBoxes(boxes: Box[], width: number, height: number) {
@@ -299,9 +304,9 @@ function preferSpecificBoxes(boxes: Box[], width: number, height: number) {
     .sort((a, b) => b.score - a.score);
   const kept: Box[] = [];
   for (const candidate of sorted) {
-    const blocked = kept.some((existing) => overlap(existing, candidate) > 0.28 || containedRatio(existing, candidate) > 0.82 || containedRatio(candidate, existing) > 0.92);
+    const blocked = kept.some((existing) => overlap(existing, candidate) > 0.25 || containedRatio(existing, candidate) > 0.82 || containedRatio(candidate, existing) > 0.92);
     if (!blocked) kept.push(candidate);
-    if (kept.length >= 8) break;
+    if (kept.length >= 6) break;
   }
   return kept;
 }
@@ -333,20 +338,20 @@ export async function detectSurfaceAndMasks(imageUrl: string) {
       const diff = distance(r, g, b, wall);
       const green = g - Math.max(r, b) > 10 && sat > 0.16;
       const pixel = y * canvas.width + x;
-      const lowerWall = y > canvas.height * 0.26 && y < canvas.height * 0.92;
-      const darkArchitectural = brightness < 150 && diff > 18 && lowerWall && !green && !isLikelySky(r, g, b);
+      const inArchitectureBand = y > canvas.height * 0.29 && y < canvas.height * 0.87;
+      const darkArchitectural = brightness < 142 && diff > 20 && inArchitectureBand && !green && !isLikelySky(r, g, b);
       if (darkArchitectural) darkMask[pixel] = 1;
-      if (green && y > canvas.height * 0.32) plantMask[pixel] = 1;
-      if ((diff > 72 || sat > 0.55) && lowerWall && brightness > 95 && brightness < 235 && !green && !isLikelySky(r, g, b)) fixtureMask[pixel] = 1;
+      if (green && y > canvas.height * 0.45) plantMask[pixel] = 1;
+      if ((diff > 82 || sat > 0.62) && inArchitectureBand && brightness > 95 && brightness < 225 && !green && !isLikelySky(r, g, b)) fixtureMask[pixel] = 1;
     }
   }
 
   const darkBoxes = mergeArchitecturalBoxes(
-    findComponents(darkMask, canvas.width, canvas.height, "door / window / dark opening", 2100, {
+    findComponents(darkMask, canvas.width, canvas.height, "door / window / dark opening", 2300, {
       allowLarge: true,
       allowEdges: false,
-      minArea: canvas.width * canvas.height * 0.00035,
-      maxArea: canvas.width * canvas.height * 0.18
+      minArea: canvas.width * canvas.height * 0.00055,
+      maxArea: canvas.width * canvas.height * 0.10
     }),
     canvas.width,
     canvas.height
@@ -356,26 +361,29 @@ export async function detectSurfaceAndMasks(imageUrl: string) {
     .filter((box) => {
       const w = boxWidth(box);
       const h = boxHeight(box);
-      return w > canvas.width * 0.035 && h > canvas.height * 0.07;
+      const aspect = h / Math.max(1, w);
+      const density = boxDensity(box);
+      return w > canvas.width * 0.035 && h > canvas.height * 0.07 && (aspect > 0.58 || h > canvas.height * 0.18) && density > 0.16;
     });
 
-  const plantBoxes = findComponents(plantMask, canvas.width, canvas.height, "plant / landscaping", 1300, {
+  const plantBoxes = findComponents(plantMask, canvas.width, canvas.height, "plant / landscaping", 1000, {
     allowEdges: true,
     minArea: canvas.width * canvas.height * 0.001,
-    maxArea: canvas.width * canvas.height * 0.10
-  }).filter((box) => (box.minY + box.maxY) / 2 > canvas.height * 0.55);
+    maxArea: canvas.width * canvas.height * 0.06
+  }).filter((box) => (box.minY + box.maxY) / 2 > canvas.height * 0.58);
 
-  const fixtureBoxes = findComponents(fixtureMask, canvas.width, canvas.height, "sign / wall fixture", 800, {
+  const fixtureBoxes = findComponents(fixtureMask, canvas.width, canvas.height, "sign / wall fixture", 650, {
     allowEdges: false,
-    minArea: canvas.width * canvas.height * 0.00025,
-    maxArea: canvas.width * canvas.height * 0.018
+    minArea: canvas.width * canvas.height * 0.00035,
+    maxArea: canvas.width * canvas.height * 0.010
   }).filter((box) => {
     const w = boxWidth(box);
     const h = boxHeight(box);
     const centerY = (box.minY + box.maxY) / 2 / canvas.height;
-    return insideSurfaceOrLikelyDoor(box, surface, canvas.width, canvas.height) && centerY > 0.32 && w < canvas.width * 0.12 && h < canvas.height * 0.16;
+    const centerX = (box.minX + box.maxX) / 2 / canvas.width;
+    return insideSurfaceOrLikelyDoor(box, surface, canvas.width, canvas.height) && centerY > 0.34 && centerY < 0.68 && centerX < 0.86 && w < canvas.width * 0.09 && h < canvas.height * 0.12;
   });
 
   const kept = preferSpecificBoxes([...darkBoxes, ...plantBoxes, ...fixtureBoxes], canvas.width, canvas.height);
-  return { surface, masks: kept.map((box, index) => boxToZone(box, canvas.width, canvas.height, Date.now() + index, box.label.includes("door") ? 0.012 : 0.008)) };
+  return { surface, masks: kept.map((box, index) => boxToZone(box, canvas.width, canvas.height, Date.now() + index, 0.008)) };
 }
