@@ -5,10 +5,11 @@ const json=(body:unknown,status=200)=>new Response(JSON.stringify(body,null,2),{
 const DEFAULT_DETECTOR_MODEL="idea-research/grounding-dino";
 function surface(){const polygon=rect(.08,.30,.86,.60);return{polygon,svgPath:path(polygon)}}
 function configured(value?:string){return Boolean(value&&value!=="pending")}
+function detectorModel(value?:string){return configured(value)&&value!=="adirik/grounding-dino"?value:DEFAULT_DETECTOR_MODEL}
 async function analyze(imageDataUrl:string,env:Env,refinement?:{positivePoints?:Point[];negativePoints?:Point[];maskInsetOutsetPx?:number}){
   const warnings:string[]=[];
   let detector:any=null,segmentation:any=null,depth:any=null;
-  try{detector=await run({key:env.DETECTOR_API_KEY||env.SAM2_API_KEY,api:env.DETECTOR_API_URL,model:env.DETECTOR_MODEL||DEFAULT_DETECTOR_MODEL,version:env.DETECTOR_MODEL_VERSION,input:{image:imageDataUrl,prompt:DETECTOR_PROMPT,text:DETECTOR_PROMPT,caption:DETECTOR_PROMPT,box_threshold:.25,text_threshold:.25},label:"DETECTOR"})}catch(error){warnings.push(error instanceof Error?error.message:"Detector failed.")}
+  try{detector=await run({key:env.DETECTOR_API_KEY||env.SAM2_API_KEY,api:env.DETECTOR_API_URL,model:detectorModel(env.DETECTOR_MODEL),version:env.DETECTOR_MODEL_VERSION,input:{image:imageDataUrl,prompt:DETECTOR_PROMPT,text:DETECTOR_PROMPT,caption:DETECTOR_PROMPT,box_threshold:.25,text_threshold:.25},label:"DETECTOR"})}catch(error){warnings.push(error instanceof Error?error.message:"Detector failed.")}
   const detections=dets(detector);
   if(detections.length){
     try{segmentation=await run({key:env.SAM2_API_KEY,api:env.SAM2_API_URL,model:env.SAM2_MODEL||SAM_MODEL,version:env.SAM2_MODEL_VERSION,input:{image:imageDataUrl,boxes:detections.map(d=>d.box).filter(b=>b.length===4),box_2d:detections.map(d=>d.box).filter(b=>b.length===4),mask_limit:10,prompt:"segment detected architectural openings",points:refinement?.positivePoints??[],negative_points:refinement?.negativePoints??[]},label:"SAM2"})}catch(error){warnings.push(error instanceof Error?error.message:"SAM2 failed.")}
