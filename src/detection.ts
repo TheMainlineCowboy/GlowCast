@@ -62,16 +62,6 @@ function polygonToZone(points: ApiPoint[] | undefined, id: number, label: string
   };
 }
 
-function fallbackMasks(): Zone[] {
-  const base = Date.now();
-  return [
-    { id: base + 1, x: 21, y: 36, width: 11, height: 45, included: true, label: "large glass panel", confidence: 55 },
-    { id: base + 2, x: 33, y: 35, width: 14, height: 49, included: true, label: "front door", confidence: 55 },
-    { id: base + 3, x: 57, y: 38, width: 21, height: 15, included: true, label: "window", confidence: 55 },
-    { id: base + 4, x: 50, y: 38, width: 5, height: 16, included: true, label: "wall fixture", confidence: 50 }
-  ];
-}
-
 export async function detectSurfaceAndMasks(imageUrl: string) {
   try {
     const response = await fetch("/api/analyze-projection", {
@@ -82,17 +72,18 @@ export async function detectSurfaceAndMasks(imageUrl: string) {
 
     if (!response.ok) throw new Error(await response.text());
     const analysis = await response.json() as ApiAnalysis;
+    const warnings = analysis.debug?.warnings ?? [];
     const masks = (analysis.masks ?? [])
       .map((mask, index) => polygonToZone(mask.polygon ?? mask.points, Date.now() + index, mask.label ?? "AI avoid mask", Math.round((mask.confidence ?? 0.7) * 100)))
       .filter(Boolean) as Zone[];
 
     return {
       surface: polygonToZone(analysis.surface?.polygon, -1, "projection surface", 80) ?? defaultSurface(),
-      masks: masks.length ? masks : fallbackMasks(),
-      warnings: analysis.debug?.warnings ?? []
+      masks,
+      warnings: masks.length ? warnings : [`AI returned 0 usable masks. ${warnings.length ? warnings.join(" | ") : "No backend warning was returned."}`]
     };
   } catch (error) {
-    console.warn("Projection API detection failed; using fallback masks.", error);
-    return { surface: defaultSurface(), masks: fallbackMasks(), warnings: [error instanceof Error ? error.message : "Projection API failed"] };
+    console.warn("Projection API detection failed.", error);
+    return { surface: defaultSurface(), masks: [], warnings: [error instanceof Error ? error.message : "Projection API failed"] };
   }
 }
