@@ -2,7 +2,7 @@ import {DETECTOR_PROMPT,Env,SAM_MODEL,dets,masks,path,rect,run,type Mask,type Po
 
 type ProjectionAnalysis={surface:{polygon:Polygon;svgPath:string};masks:Mask[];depth?:{outputUrl?:string};flattenedTemplate:{width:number;height:number;aspectRatio:"16:9"};debug:{detectorProvider:string;geometryProvider:string;segmentationProvider:string;depthProvider:string;warnings:string[]}};
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body,null,2),{status,headers:{"Content-Type":"application/json"}});
-const DEFAULT_DETECTOR_MODEL="adirik/grounding-dino";
+const DEFAULT_DETECTOR_MODEL="idea-research/grounding-dino";
 function surface(){const polygon=rect(.08,.30,.86,.60);return{polygon,svgPath:path(polygon)}}
 function configured(value?:string){return Boolean(value&&value!=="pending")}
 async function analyze(imageDataUrl:string,env:Env,refinement?:{positivePoints?:Point[];negativePoints?:Point[];maskInsetOutsetPx?:number}){
