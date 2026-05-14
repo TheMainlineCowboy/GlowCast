@@ -10,7 +10,6 @@ import {
   Plus,
   Save,
   ScanLine,
-  Sparkles,
   Trash2,
   Video
 } from "lucide-react";
@@ -286,8 +285,8 @@ export default function App() {
   const [debugWarnings, setDebugWarnings] = useState<string[]>([]);
   const [cornerMode, setCornerMode] = useState(false);
   const [cornerPoints, setCornerPoints] = useState<Point[]>([]);
+  const [showSurfaceHandles, setShowSurfaceHandles] = useState(true);
 
-  // Edge Scanner State
   const [showEdges, setShowEdges] = useState(false);
   const [edgeOverlayUrl, setEdgeOverlayUrl] = useState<string | null>(null);
   const [edgePoints, setEdgePoints] = useState<EdgePoint[]>([]);
@@ -377,7 +376,6 @@ export default function App() {
     hasProject
   ]);
 
-  // EDIT 3 — REPLACE getPoint() WITH SNAP-AWARE VERSION
   function getPoint(event: React.PointerEvent<HTMLElement>, allowSnap = true) {
     const surface = surfaceRef.current;
     if (!surface) return null;
@@ -438,12 +436,12 @@ export default function App() {
     }
   }
 
-  // EDIT 1 — RESET EDGE SCANNER WHEN A NEW PHOTO LOADS
   function resetForPhoto(src: string, thumbnail: string | null, size: ImageSize, message: string) {
     setImageUrl(src);
     setThumb(thumbnail ?? src);
     setImageSize(size);
     setSurfaceZone(defaultSurface());
+    setShowSurfaceHandles(true);
     setZones([]);
     setSelectedTarget("surface");
     setSelectedZoneId(null);
@@ -454,7 +452,7 @@ export default function App() {
     setDebugWarnings([]);
     setCornerMode(false);
     setCornerPoints([]);
-    resetEdgeScanner(); // Added here
+    resetEdgeScanner();
     setStep("mask");
     setDetectMessage(message);
   }
@@ -485,7 +483,7 @@ export default function App() {
       photo.imageUrl,
       photo.thumbnailUrl,
       photo.imageSize,
-      "Recent photo loaded. Detect surface/masks or use Set Wall Corners for zero-cost precision mode."
+      "Recent photo loaded. Use Set Wall Corners for zero-cost precision mode."
     );
 
     rememberPhoto({
@@ -549,7 +547,6 @@ export default function App() {
     setDetectMessage("Tap wall corners in order: top-left, top-right, bottom-right, bottom-left.");
   }
 
-  // EDIT 2 — RESET EDGE SCANNER AFTER WALL FLATTENING
   async function finishCornerCalibration(points: Quad) {
     if (!imageUrl) return;
 
@@ -565,6 +562,7 @@ export default function App() {
       setThumb(thumbnail);
       setImageSize({ width: 1600, height: 900 });
       setSurfaceZone(flattenedSurface());
+      setShowSurfaceHandles(false);
       setZones([]);
       setSelectedTarget("surface");
       setSelectedZoneId(null);
@@ -572,7 +570,7 @@ export default function App() {
       setCornerPoints([]);
       setDrawMode(false);
       setProjectionOnly(false);
-      resetEdgeScanner(); // Added here
+      resetEdgeScanner();
       setDetectMessage("Wall flattened into a 16:9 canvas. Draw avoid masks on this squared projection surface.");
     } catch (error) {
       setDebugWarnings([
@@ -609,7 +607,7 @@ export default function App() {
       setDetectMessage(
         result.masks.length
           ? `Detected projection surface and ${result.masks.length} avoid mask${result.masks.length === 1 ? "" : "s"}. Tap the surface or any mask to correct it.`
-          : "AI returned 0 usable masks. Backend warnings are shown below."
+          : "System returned 0 usable masks."
       );
     } catch (error) {
       const message =
@@ -798,9 +796,8 @@ export default function App() {
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (resizeAction) return;
 
-    // EDIT 4 — PREVENT SET WALL CORNERS FROM SNAPPING
     if (cornerMode && imageUrl && !projectionOnly) {
-      const point = getPoint(event, false); // allowSnap = false
+      const point = getPoint(event, false);
       if (!point) return;
 
       event.preventDefault();
@@ -1178,7 +1175,6 @@ export default function App() {
               />
             )}
 
-            {/* EDIT 5 — ADD THE EDGE OVERLAY LAYER */}
             {showEdges && edgeOverlayUrl && !projectionOnly ? (
               <img
                 src={edgeOverlayUrl}
@@ -1190,7 +1186,7 @@ export default function App() {
 
             {cornerOverlay()}
 
-            {!projectionOnly && !cornerMode && (
+            {showSurfaceHandles && !projectionOnly && !cornerMode ? (
               <div
                 className={`projectionBoundary ${
                   selectedTarget === "surface" ? "selectedSurface" : ""
@@ -1203,7 +1199,7 @@ export default function App() {
                 <b>surface</b>
                 {renderHandles("surface", projectionArea as ProjectZone)}
               </div>
-            )}
+            ) : null}
 
             {invertMode && (
               <div className="projectionSurface" style={toStyle(projectionArea)}>
@@ -1511,7 +1507,14 @@ export default function App() {
                 Set Wall Corners
               </button>
 
-              {/* EDIT 6 — ADD THE EDGE SCANNER BUTTON */}
+              <button
+                type="button"
+                onClick={() => setShowSurfaceHandles((current) => !current)}
+                disabled={!imageUrl}
+              >
+                {showSurfaceHandles ? "Hide Surface Handles" : "Show Surface Handles"}
+              </button>
+
               <button
                 type="button"
                 onClick={toggleEdgeScanner}
@@ -1525,7 +1528,6 @@ export default function App() {
                     : "Show Edge Scanner"}
               </button>
 
-              {/* EDIT 7 — ADD THE MAGNETIC SNAP CHECKBOX */}
               <label className="flex items-center gap-2 text-sm text-slate-200">
                 <input
                   type="checkbox"
@@ -1547,20 +1549,6 @@ export default function App() {
                   Reset Corners
                 </button>
               )}
-
-              <button
-                className="primary"
-                onClick={() => {
-                  setDebugWarnings([
-                    "Paid AI detection is disabled because Replicate requires billing credit. Use Set Wall Corners and manual masks for the zero-cost workflow."
-                  ]);
-                  setDetectMessage("Manual masking is the free path. Paid AI detection requires Replicate credit.");
-                }}
-                disabled={!imageUrl || detecting || cornerMode}
-              >
-                <Sparkles size={18} />
-                Paid AI Detect
-              </button>
 
               <div className="shapeToolRow">
                 {shapeOptions.map((shape) => (
