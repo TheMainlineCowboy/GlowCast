@@ -551,16 +551,32 @@ export default function App() {
     if (!imageUrl) return;
 
     try {
-      setDetectMessage("Flattening wall into 16:9 canvas...");
+      setDetectMessage("Flattening wall into natural aspect ratio...");
 
       const image = await loadImage(imageUrl);
-      const canvas = warpImageToCanvas(image, points, 1600, 900);
-      const flattened = canvas.toDataURL("image/jpeg", 0.92);
-      const thumbnail = await createThumbnail(flattened);
+      
+      // --- PATCH 3 LOGIC START ---
+      const topWidth = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y); 
+      const bottomWidth = Math.hypot(points[2].x - points[3].x, points[2].y - points[3].y); 
+      const leftHeight = Math.hypot(points[3].x - points[0].x, points[3].y - points[0].y); 
+      const rightHeight = Math.hypot(points[2].x - points[1].x, points[2].y - points[1].y); 
+      
+      const averageWidth = Math.max((topWidth + bottomWidth) / 2, 1); 
+      const averageHeight = Math.max((leftHeight + rightHeight) / 2, 1); 
+      const aspectRatio = averageHeight / averageWidth; 
+      
+      const outputWidth = 1600; 
+      const outputHeight = Math.max(300, Math.round(outputWidth * aspectRatio)); 
+      
+      const canvas = warpImageToCanvas(image, points, outputWidth, outputHeight); 
+      const flattened = canvas.toDataURL("image/jpeg", 0.92); 
+      const thumbnail = await createThumbnail(flattened); 
+      
+      setImageUrl(flattened); 
+      setThumb(thumbnail); 
+      setImageSize({ width: outputWidth, height: outputHeight }); 
+      // --- PATCH 3 LOGIC END ---
 
-      setImageUrl(flattened);
-      setThumb(thumbnail);
-      setImageSize({ width: 1600, height: 900 });
       setSurfaceZone(flattenedSurface());
       setShowSurfaceHandles(false);
       setZones([]);
@@ -571,7 +587,7 @@ export default function App() {
       setDrawMode(false);
       setProjectionOnly(false);
       resetEdgeScanner();
-      setDetectMessage("Wall flattened into a 16:9 canvas. Draw avoid masks on this squared projection surface.");
+      setDetectMessage("Wall flattened. Aspect ratio preserved. Draw avoid masks on this surface.");
     } catch (error) {
       setDebugWarnings([
         error instanceof Error ? error.message : "Wall flattening failed."
