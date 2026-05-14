@@ -1218,10 +1218,10 @@ export default function App() {
           ) : null}
 
           {invertMode && includedZones.map((zone) => (
-            <div key={`pc-${zone.id}`} className={`projectorMaskCutout ${shapeClass(zone.shape)}`} style={{ ...toStyle(zone), clipPath: zone.points ? `polygon(${zone.points.map(p => `${p.x}% ${p.y}%`).join(",")})` : "none" }} />
+            <div key={`pc-${zone.id}`} className={`projectorMaskCutout ${shapeClass(zone.shape)}`} style={{ ...toStyle(zone), ...(zone.points ? { clipPath: `polygon(${zone.points.map((p) => `${p.x}% ${p.y}%`).join(",")})` } : {}) }} />
           ))}
           {!invertMode && includedZones.map((zone) => (
-            <div key={`pf-${zone.id}`} className={`zoneProjection ${shapeClass(zone.shape)}`} style={{ ...toStyle(zone), clipPath: zone.points ? `polygon(${zone.points.map(p => `${p.x}% ${p.y}%`).join(",")})` : "none" }} >
+            <div key={`pf-${zone.id}`} className={`zoneProjection ${shapeClass(zone.shape)}`} style={{ ...toStyle(zone), ...(zone.points ? { clipPath: `polygon(${zone.points.map((p) => `${p.x}% ${p.y}%`).join(",")})` } : {}) }} >
               {renderProjectionLayer("projectorEffect")}
             </div>
           ))}
@@ -1265,15 +1265,15 @@ export default function App() {
           )}
 
           {invertMode && includedZones.map((zone) => (
-            <div key={`cut-${zone.id}`} className={`maskCutout ${shapeClass(zone.shape)}`} style={{ ...toStyle(zone), backgroundImage: projectionOnly || !imageUrl ? "none" : `url(${imageUrl})`, backgroundSize: `${10000 / zone.width}% ${10000 / zone.height}%`, backgroundPosition: `${zone.x >= 100 - zone.width ? 100 : (zone.x / (100 - zone.width)) * 100}% ${zone.y >= 100 - zone.height ? 100 : (zone.y / (100 - zone.height)) * 100}%`, clipPath: zone.points ? `polygon(${zone.points.map(p => `${p.x}% ${p.y}%`).join(",")})` : "none" }} />
+            <div key={`cut-${zone.id}`} className={`maskCutout ${shapeClass(zone.shape)}`} style={{ ...toStyle(zone), backgroundImage: projectionOnly || !imageUrl ? "none" : `url(${imageUrl})`, backgroundSize: `${10000 / zone.width}% ${10000 / zone.height}%`, backgroundPosition: `${zone.x >= 100 - zone.width ? 100 : (zone.x / (100 - zone.width)) * 100}% ${zone.y >= 100 - zone.height ? 100 : (zone.y / (100 - zone.height)) * 100}%`, ...(zone.points ? { clipPath: `polygon(${zone.points.map((p) => `${p.x}% ${p.y}%`).join(",")})` } : {}) }} />
           ))}
           {!invertMode && includedZones.map((zone) => (
-            <div key={`fx-${zone.id}`} className={`zoneProjection ${shapeClass(zone.shape)}`} style={{ ...toStyle(zone), clipPath: zone.points ? `polygon(${zone.points.map(p => `${p.x}% ${p.y}%`).join(",")})` : "none" }} >
+            <div key={`fx-${zone.id}`} className={`zoneProjection ${shapeClass(zone.shape)}`} style={{ ...toStyle(zone), ...(zone.points ? { clipPath: `polygon(${zone.points.map((p) => `${p.x}% ${p.y}%`).join(",")})` } : {}) }} >
               {renderProjectionLayer()}
             </div>
           ))}
           {!projectionOnly && !cornerMode && !surfacePolygonMode && zones.map((zone, index) => (
-            <div key={zone.id} className={`zone ${shapeClass(zone.shape)} ${zone.included ? "included" : "excluded"} ${selectedTarget === "zone" && selectedZoneId === zone.id ? "selected" : ""}`} style={{ ...toStyle(zone), clipPath: zone.points ? `polygon(${zone.points.map(p => `${p.x}% ${p.y}%`).join(",")})` : "none" }} onPointerDown={(event) => startResize(event, "zone", zone, "move")} >
+            <div key={zone.id} className={`zone ${shapeClass(zone.shape)} ${zone.included ? "included" : "excluded"} ${selectedTarget === "zone" && selectedZoneId === zone.id ? "selected" : ""}`} style={{ ...toStyle(zone), ...(zone.points ? { clipPath: `polygon(${zone.points.map((p) => `${p.x}% ${p.y}%`).join(",")})` } : {}) }} onPointerDown={(event) => startResize(event, "zone", zone, "move")} >
               <span>{index + 1}</span>
               
               {/* EDITING OVERLAY PATCH START */}
@@ -1406,7 +1406,7 @@ export default function App() {
           <aside className="toolPanel">
             <div className="panelBlock">
               <h2>Surface + Masks</h2>
-              <button type="button" onClick={startSurfacePolygonMode} disabled={!imageUrl} className={surfacePolygonMode ? "activeEffect" : ""} >
+              <button type="button" onClick={startSurfacePolygonMode} disabled={!imageUrl} className={surfacePolygonMode ? "activeStep" : ""} >
                 {surfacePolygonMode ? "Tap Surface Points" : "Draw Projection Surface"}
               </button>
               <button type="button" onClick={resetSurfacePolygon} disabled={!surfacePolygonPoints.length} >
