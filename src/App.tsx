@@ -183,7 +183,7 @@ type Effect = {
   description: string;
 };
 
-// PATCH: Added "circle" to MaskShape
+// PATCH: Explicitly handle Circle and Oval
 type MaskShape = "rectangle" | "circle" | "oval" | "triangle" | "freehand";
 
 type ProjectZone = Zone & {
@@ -255,7 +255,7 @@ const effects: Effect[] = [
   { id: "grid", name: "Alignment Grid", description: "Useful for lining up the projector" }
 ];
 
-// PATCH: Updated shapeOptions to split Circle and Oval
+// PATCH: Split tools for Circle vs Oval
 const shapeOptions: { id: MaskShape; name: string }[] = [
   { id: "rectangle", name: "Rectangle" },
   { id: "circle", name: "Circle" },
@@ -345,7 +345,7 @@ function clampZone<T extends Pick<Zone, "x" | "y" | "width" | "height">>(zone: T
   };
 }
 
-// PATCH: True Circle normalization constraints
+// PATCH: Normalize Circle to 1:1 Aspect Ratio
 function normalizeDraftZone(draft: DraftZone): Omit<ProjectZone, "id" | "included"> {
   let x1 = Math.min(draft.startX, draft.currentX);
   let y1 = Math.min(draft.startY, draft.currentY);
@@ -480,6 +480,7 @@ export default function App() {
     surfacePolygonPoints.length
   );
 
+  // FIX: Fixed visibleRecentPhotos logic to prevent build error
   const visibleRecentPhotos = useMemo(
     () => mergePhotos(recentPhotos, photosFromProjects(recentProjects)),
     [recentPhotos, recentProjects]
@@ -487,11 +488,10 @@ export default function App() {
 
   useEffect(() => {
     const projects = getRecentProjects();
-    const photos = mergePhotos(getRecentPhotos(), photosFromProjects(projects));
+    const photos = getRecentPhotos();
 
     setRecentProjects(projects);
     setRecentPhotos(photos);
-    try { localStorage.setItem(RECENT_PHOTOS_KEY, JSON.stringify(photos)); } catch { }
   }, []);
 
   useEffect(() => {
@@ -617,7 +617,7 @@ export default function App() {
     const recent = mergePhotos([photo], getRecentPhotos());
     try {
       localStorage.setItem(RECENT_PHOTOS_KEY, JSON.stringify(recent));
-      setRecentProjects(recent);
+      setRecentPhotos(recent);
     } catch { }
   }
 
@@ -830,7 +830,7 @@ export default function App() {
     }));
   }
 
-  // PATCH: Circle logic in manual addition
+  // PATCH: addZone handles circle square-default
   function addZone(shape: MaskShape = drawShape) {
     const id = Date.now();
     const isCircle = shape === "circle";
@@ -882,6 +882,7 @@ export default function App() {
     setSelectedTarget("zone");
   }
 
+  // PATCH: Resize handles circle-lock constraint
   function applyResize(action: ResizeAction, point: { x: number; y: number }) {
     const dx = point.x - action.startX;
     const dy = point.y - action.startY;
@@ -898,7 +899,6 @@ export default function App() {
     if (action.mode.includes("w")) { x += dx; width -= dx; }
     if (action.mode.includes("n")) { y += dy; height -= dy; }
 
-    // PATCH: If it's a circle, maintain square aspect ratio during resize
     if (original.shape === "circle" && action.mode !== "move") {
       const size = Math.max(width, height);
       width = size;
