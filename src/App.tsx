@@ -276,7 +276,8 @@ export default function App() {
   const [edgeScanning, setEdgeScanning] = useState(false);
   const [snapEnabled, setSnapEnabled] = useState(true);
 
-  const projectionArea = surfaceZone ?? defaultSurface();
+  // CHANGED: No longer rendering fake defaultSurface
+  const projectionArea = surfaceZone;
 
   const selectedZone = useMemo(
     () => zones.find((zone) => zone.id === selectedZoneId) ?? null,
@@ -475,7 +476,7 @@ export default function App() {
     setImageUrl(src);
     setThumb(thumbnail ?? src);
     setImageSize(size);
-    setSurfaceZone(defaultSurface());
+    setSurfaceZone(null); // CHANGED: null instead of defaultSurface
     setShowSurfaceHandles(true);
     setZones([]);
     setSelectedTarget("surface");
@@ -498,7 +499,7 @@ export default function App() {
     setThumb(project.thumbnailUrl ?? project.imageUrl ?? null);
     setVideoUrl(project.videoUrl ?? null);
     setImageSize(project.imageSize ?? { width: 16, height: 9 });
-    setSurfaceZone(project.surfaceZone ?? defaultSurface());
+    setSurfaceZone(project.surfaceZone ?? null);
     setZones(project.zones ?? []);
     setSelectedTarget("surface");
     setSelectedZoneId(null);
@@ -519,7 +520,7 @@ export default function App() {
       photo.imageUrl,
       photo.thumbnailUrl,
       photo.imageSize,
-      "Recent photo loaded. Use Set Wall Corners for zero-cost precision mode."
+      "Recent photo loaded. Use Draw Projection Surface to start."
     );
 
     rememberPhoto({
@@ -544,7 +545,7 @@ export default function App() {
       src,
       thumbnail,
       size,
-      "Photo loaded. Use Set Wall Corners for zero-cost precision, or drag the surface handles manually."
+      "Photo loaded. Use Draw Projection Surface to define where you want to project."
     );
 
     rememberPhoto({
@@ -700,7 +701,7 @@ export default function App() {
   }
 
   function updateSelectedEditable(update: Partial<ProjectZone>) {
-    if (selectedTarget === "surface") {
+    if (selectedTarget === "surface" && projectionArea) {
       updateSurface(update);
     } else {
       updateSelectedZone(update);
@@ -820,9 +821,18 @@ export default function App() {
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (resizeAction) return;
 
-    if (surfacePolygonMode && imageUrl && !projectionOnly) { const point = getPoint(event, false); if (!point) return; event.preventDefault(); event.stopPropagation(); addSurfacePolygonPoint(point); return; } 
+    if (surfacePolygonMode && imageUrl && !projectionOnly) { 
+      const point = getPoint(event, false); 
+      if (!point) return; 
+      event.preventDefault(); 
+      event.stopPropagation(); 
+      addSurfacePolygonPoint(point); 
+      return; 
+    } 
 
-    if (cornerMode && imageUrl && !projectionOnly) {
+    // CHANGED: Old corner mode hijacked taps for destructive 4-tap workflow. 
+    // Temporarily disabled to prevent accidental crops.
+    if (false && cornerMode && imageUrl && !projectionOnly) {
       const point = getImagePoint(event);
       if (!point) return;
 
@@ -974,6 +984,8 @@ export default function App() {
   }
 
   function exportAlignmentGuide() {
+    if (!projectionArea) return;
+    
     const canvas = document.createElement("canvas");
     canvas.width = 1920;
     canvas.height = 1080;
@@ -1141,7 +1153,7 @@ export default function App() {
             aspectRatio: `${imageSize.width} / ${imageSize.height}`
           }}
         >
-          {invertMode && (
+          {invertMode && projectionArea && (
             <div className="projectionSurface" style={toStyle(projectionArea)}>
               {renderProjectionLayer("projectorEffect")}
             </div>
@@ -1221,7 +1233,7 @@ export default function App() {
 
             {surfacePolygonOverlay()} {cornerOverlay()}
 
-            {showSurfaceHandles && !projectionOnly && !cornerMode ? (
+            {projectionArea && showSurfaceHandles && !projectionOnly && !cornerMode ? (
               <div
                 className={`projectionBoundary ${
                   selectedTarget === "surface" ? "selectedSurface" : ""
@@ -1236,7 +1248,7 @@ export default function App() {
               </div>
             ) : null}
 
-            {invertMode && (
+            {invertMode && projectionArea && (
               <div className="projectionSurface" style={toStyle(projectionArea)}>
                 {renderProjectionLayer()}
               </div>
@@ -1546,13 +1558,7 @@ export default function App() {
 
               <button type="button" onClick={resetSurfacePolygon} disabled={!surfacePolygonPoints.length} > Clear Projection Surface </button> 
 
-              <button
-                className="primary"
-                onClick={startCornerCalibration}
-                disabled={!imageUrl || detecting}
-              >
-                Set Wall Corners
-              </button>
+              {/* REMOVED: Set Wall Corners button */}
 
               <button
                 type="button"
