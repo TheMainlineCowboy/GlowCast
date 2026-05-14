@@ -820,13 +820,23 @@ export default function App() {
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (resizeAction) return;
 
-    // --- FIX: RESTORED CORNER MODE HANDLING ---
+    // --- PATCH: POLYGON TAPS REGISTER FIRST ---
+    if (surfacePolygonMode && imageUrl && !projectionOnly) { 
+      const point = getPoint(event, false); 
+      if (!point) return; 
+      event.preventDefault(); 
+      event.stopPropagation(); 
+      addSurfacePolygonPoint(point); 
+      return; 
+    } 
+
+    // --- PATCH: CORNER MODE SECONDARY ---
     if (cornerMode && imageUrl && !projectionOnly) {
-      const point = getImagePoint(event); // Maps click to raw photo coordinates
+      const point = getImagePoint(event);
       if (!point) return;
 
       event.preventDefault();
-      event.stopPropagation(); // Prevents "Draft Rectangle" from starting
+      event.stopPropagation(); 
 
       const next = [...cornerPoints, point];
       setCornerPoints(next);
@@ -839,15 +849,6 @@ export default function App() {
       }
       return;
     }
-
-    if (surfacePolygonMode && imageUrl && !projectionOnly) { 
-      const point = getPoint(event, false); 
-      if (!point) return; 
-      event.preventDefault(); 
-      event.stopPropagation(); 
-      addSurfacePolygonPoint(point); 
-      return; 
-    } 
 
     if (
       !imageUrl ||
@@ -882,7 +883,7 @@ export default function App() {
       return;
     }
 
-    if (!draftZone || !drawMode || projectionOnly || cornerMode) return;
+    if (!draftZone || !drawMode || projectionOnly || cornerMode || surfacePolygonMode) return;
 
     setDraftZone((current) =>
       current
@@ -1062,7 +1063,7 @@ export default function App() {
     const selected =
       selectedTarget === target && (target === "surface" || selectedZoneId === zone.id);
 
-    if (!selected || projectionOnly || cornerMode) return null;
+    if (!selected || projectionOnly || cornerMode || surfacePolygonMode) return null;
 
     return handles.map((handle) => (
       <i
@@ -1073,7 +1074,19 @@ export default function App() {
     ));
   }
 
-  function surfacePolygonOverlay() { if (!surfacePolygonPoints.length) return null; const points = surfacePolygonPoints .map((point) => `${point.x},${point.y}`) .join(" "); return ( <svg className="surfacePolygonOverlay" viewBox="0 0 100 100" preserveAspectRatio="none" > {surfacePolygonPoints.length >= 2 ? ( <polyline points={points} className="surfacePolygonLine" /> ) : null} {surfacePolygonClosed && surfacePolygonPoints.length >= 3 ? ( <polygon points={points} className="surfacePolygonFill" /> ) : null} {surfacePolygonPoints.map((point, index) => ( <circle key={index} cx={point.x} cy={point.y} r={index === 0 ? 1.35 : 1} className={ index === 0 ? "surfacePolygonPoint surfacePolygonFirstPoint" : "surfacePolygonPoint" } /> ))} </svg> ); } 
+  function surfacePolygonOverlay() { 
+    if (!surfacePolygonPoints.length) return null; 
+    const points = surfacePolygonPoints .map((point) => `${point.x},${point.y}`) .join(" "); 
+    return ( 
+      <svg className="surfacePolygonOverlay" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 7 }}> 
+        {surfacePolygonPoints.length >= 2 ? ( <polyline points={points} fill="none" stroke="#fef08a" strokeWidth="0.5" strokeDasharray="1,1" /> ) : null} 
+        {surfacePolygonClosed && surfacePolygonPoints.length >= 3 ? ( <polygon points={points} fill="rgba(254, 240, 138, 0.2)" stroke="#fef08a" strokeWidth="0.5" /> ) : null} 
+        {surfacePolygonPoints.map((point, index) => ( 
+          <circle key={index} cx={point.x} cy={point.y} r={index === 0 ? 1.2 : 0.8} fill={index === 0 ? "#facc15" : "#fef08a"} /> 
+        ))} 
+      </svg> 
+    ); 
+  } 
 
   function cornerOverlay() {
     if (!cornerMode && !cornerPoints.length) return null;
@@ -1200,7 +1213,7 @@ export default function App() {
         {(imageUrl || videoUrl) && (
           <div
             ref={surfaceRef}
-            className={`surfaceLayer ${drawMode ? "drawMode" : ""}`}
+            className={`surfaceLayer ${drawMode ? "drawMode" : ""} ${surfacePolygonMode ? "polygonMode" : ""}`}
             style={{
               aspectRatio: `${imageSize.width} / ${imageSize.height}`
             }}
@@ -1228,9 +1241,10 @@ export default function App() {
               />
             ) : null}
 
-            {surfacePolygonOverlay()} {cornerOverlay()}
+            {surfacePolygonOverlay()} 
+            {cornerOverlay()}
 
-            {projectionArea && showSurfaceHandles && !projectionOnly && !cornerMode ? (
+            {projectionArea && showSurfaceHandles && !projectionOnly && !cornerMode && !surfacePolygonMode ? (
               <div
                 className={`projectionBoundary ${
                   selectedTarget === "surface" ? "selectedSurface" : ""
@@ -1293,6 +1307,7 @@ export default function App() {
 
             {!projectionOnly &&
               !cornerMode &&
+              !surfacePolygonMode &&
               zones.map((zone, index) => (
                 <div
                   key={zone.id}
@@ -1314,7 +1329,7 @@ export default function App() {
                 </div>
               ))}
 
-            {draftRect && !projectionOnly && !cornerMode && (
+            {draftRect && !projectionOnly && !cornerMode && !surfacePolygonMode && (
               <div
                 className={`draftZone ${shapeClass(draftRect.shape)}`}
                 style={toStyle(draftRect)}
@@ -1324,7 +1339,7 @@ export default function App() {
         )}
       </div>
 
-      {selectedEditable && !projectionOnly && !cornerMode && (
+      {selectedEditable && !projectionOnly && !cornerMode && !surfacePolygonMode && (
         <div className="zoneEditor">
           <strong>
             {selectedTarget === "surface"
@@ -1381,7 +1396,7 @@ export default function App() {
       {selectedTarget === "zone" &&
         selectedZone &&
         !projectionOnly &&
-        !cornerMode && (
+        !cornerMode && !surfacePolygonMode && (
           <div className="shapeEditor">
             {shapeOptions.map((shape) => (
               <button
@@ -1551,7 +1566,15 @@ export default function App() {
             <div className="panelBlock">
               <h2>Surface + Masks</h2>
 
-              <button type="button" onClick={startSurfacePolygonMode} disabled={!imageUrl} > {surfacePolygonMode ? "Tap Surface Points" : "Draw Projection Surface"} </button> 
+              {/* PATCH: Correct button wiring */}
+              <button 
+                type="button" 
+                onClick={startSurfacePolygonMode} 
+                disabled={!imageUrl}
+                className={surfacePolygonMode ? "activeEffect" : ""}
+              > 
+                {surfacePolygonMode ? "Tap Surface Points" : "Draw Projection Surface"} 
+              </button> 
 
               <button type="button" onClick={resetSurfacePolygon} disabled={!surfacePolygonPoints.length} > Clear Projection Surface </button> 
 
@@ -1617,6 +1640,7 @@ export default function App() {
                       setProjectionOnly(false);
                       setCornerMode(false);
                       setCornerPoints([]);
+                      setSurfacePolygonMode(false);
                     }}
                   >
                     {shape.name}
@@ -1630,6 +1654,7 @@ export default function App() {
                   setProjectionOnly(false);
                   setCornerMode(false);
                   setCornerPoints([]);
+                  setSurfacePolygonMode(false);
                 }}
                 disabled={!imageUrl}
               >
@@ -1639,7 +1664,7 @@ export default function App() {
 
               <button
                 onClick={() => addZone(drawShape)}
-                disabled={!imageUrl || cornerMode}
+                disabled={!imageUrl || cornerMode || surfacePolygonMode}
               >
                 <Plus size={18} />
                 Add {drawShape} Zone
@@ -1647,7 +1672,10 @@ export default function App() {
 
               <button
                 className="primary"
-                onClick={() => setProjectionOnly((value) => !value)}
+                onClick={() => {
+                    setProjectionOnly((value) => !value);
+                    if (!projectionOnly) resetSurfacePolygon();
+                }}
                 disabled={!hasProject}
               >
                 {projectionOnly ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -1655,13 +1683,15 @@ export default function App() {
               </button>
 
               <p className="helperText">
-                {cornerMode
-                  ? `Corner ${Math.min(cornerPoints.length + 1, 4)} of 4: ${
-                      cornerNames[cornerPoints.length] ?? "complete"
-                    }`
-                  : drawMode
-                    ? `Drag directly on the photo to draw a ${drawShape} avoid mask.`
-                    : detectMessage}
+                {surfacePolygonMode 
+                  ? "Tap the photo to outline your projection surface. Close the shape by tapping your first point." 
+                  : cornerMode
+                    ? `Corner ${Math.min(cornerPoints.length + 1, 4)} of 4: ${
+                        cornerNames[cornerPoints.length] ?? "complete"
+                      }`
+                    : drawMode
+                      ? `Drag directly on the photo to draw a ${drawShape} avoid mask.`
+                      : detectMessage}
               </p>
 
               {debugWarnings.length > 0 && (
@@ -1812,3 +1842,4 @@ export default function App() {
     </main>
   );
 }
+
