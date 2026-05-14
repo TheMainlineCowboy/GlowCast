@@ -820,6 +820,8 @@ export default function App() {
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (resizeAction) return;
 
+    if (surfacePolygonMode && imageUrl && !projectionOnly) { const point = getPoint(event, false); if (!point) return; event.preventDefault(); event.stopPropagation(); addSurfacePolygonPoint(point); return; } 
+
     if (cornerMode && imageUrl && !projectionOnly) {
       const point = getImagePoint(event);
       if (!point) return;
@@ -1062,6 +1064,8 @@ export default function App() {
     ));
   }
 
+  function surfacePolygonOverlay() { if (!surfacePolygonPoints.length) return null; const points = surfacePolygonPoints .map((point) => `${point.x},${point.y}`) .join(" "); return ( <svg className="surfacePolygonOverlay" viewBox="0 0 100 100" preserveAspectRatio="none" > {surfacePolygonPoints.length >= 2 ? ( <polyline points={points} className="surfacePolygonLine" /> ) : null} {surfacePolygonClosed && surfacePolygonPoints.length >= 3 ? ( <polygon points={points} className="surfacePolygonFill" /> ) : null} {surfacePolygonPoints.map((point, index) => ( <circle key={index} cx={point.x} cy={point.y} r={index === 0 ? 1.35 : 1} className={ index === 0 ? "surfacePolygonPoint surfacePolygonFirstPoint" : "surfacePolygonPoint" } /> ))} </svg> ); } 
+
   function cornerOverlay() {
     if (!cornerMode && !cornerPoints.length) return null;
 
@@ -1215,7 +1219,7 @@ export default function App() {
               />
             ) : null}
 
-            {cornerOverlay()}
+            {surfacePolygonOverlay()} {cornerOverlay()}
 
             {showSurfaceHandles && !projectionOnly && !cornerMode ? (
               <div
@@ -1537,6 +1541,10 @@ export default function App() {
           <aside className="toolPanel">
             <div className="panelBlock">
               <h2>Surface + Masks</h2>
+
+              <button type="button" onClick={startSurfacePolygonMode} disabled={!imageUrl} > {surfacePolygonMode ? "Tap Surface Points" : "Draw Projection Surface"} </button> 
+
+              <button type="button" onClick={resetSurfacePolygon} disabled={!surfacePolygonPoints.length} > Clear Projection Surface </button> 
 
               <button
                 className="primary"
