@@ -535,32 +535,56 @@ export default function App() {
     setDetectMessage("Tap wall corners in order: top-left, top-right, bottom-right, bottom-left.");
   }
 
+  // STEP 2 — Add crop helper function
+  function cropImageToSelectedArea(image: HTMLImageElement, points: Quad) {
+    const pixelPoints = points.map((point) => ({
+      x: (point.x / 100) * image.naturalWidth,
+      y: (point.y / 100) * image.naturalHeight
+    }));
+    const xs = pixelPoints.map((point) => point.x);
+    const ys = pixelPoints.map((point) => point.y);
+    const left = Math.max(0, Math.min(...xs));
+    const right = Math.min(image.naturalWidth, Math.max(...xs));
+    const top = Math.max(0, Math.min(...ys));
+    const bottom = Math.min(image.naturalHeight, Math.max(...ys));
+    const cropWidth = Math.max(1, Math.round(right - left));
+    const cropHeight = Math.max(1, Math.round(bottom - top));
+    const canvas = document.createElement("canvas");
+    canvas.width = cropWidth;
+    canvas.height = cropHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return canvas;
+    ctx.drawImage(
+      image,
+      left,
+      top,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      cropWidth,
+      cropHeight
+    );
+    return canvas;
+  }
+
   async function finishCornerCalibration(points: Quad) {
     if (!imageUrl) return;
 
     try {
-      setDetectMessage("Flattening wall into natural aspect ratio...");
+      setDetectMessage("Isolating wall area...");
       const image = await loadImage(imageUrl);
       
-      const topWidth = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y); 
-      const bottomWidth = Math.hypot(points[2].x - points[3].x, points[2].y - points[3].y); 
-      const leftHeight = Math.hypot(points[3].x - points[0].x, points[3].y - points[0].y); 
-      const rightHeight = Math.hypot(points[2].x - points[1].x, points[2].y - points[1].y); 
-      
-      const averageWidth = Math.max((topWidth + bottomWidth) / 2, 1); 
-      const averageHeight = Math.max((leftHeight + rightHeight) / 2, 1); 
-      const aspectRatio = averageHeight / averageWidth; 
-      
-      const outputWidth = 1600; 
-      const outputHeight = Math.max(300, Math.round(outputWidth * aspectRatio)); 
-      
-      const canvas = warpImageToCanvas(image, points, outputWidth, outputHeight); 
+      // STEP 3 — Replace the warp call with crop helper
+      const canvas = cropImageToSelectedArea(image, points); 
       const flattened = canvas.toDataURL("image/jpeg", 0.92); 
       const thumbnail = await createThumbnail(flattened); 
       
       setImageUrl(flattened); 
       setThumb(thumbnail); 
-      setImageSize({ width: outputWidth, height: outputHeight }); 
+
+      // STEP 4 — Fix image size after crop
+      setImageSize({ width: canvas.width, height: canvas.height }); 
 
       setSurfaceZone(flattenedSurface());
       setShowSurfaceHandles(false);
@@ -570,10 +594,12 @@ export default function App() {
       setDrawMode(false);
       setProjectionOnly(false);
       resetEdgeScanner();
-      setDetectMessage("Wall straightened. Add masks to define projection and avoidance areas.");
+
+      // STEP 5 — Change the success message
+      setDetectMessage("Selected wall area isolated. Draw avoid masks on this cropped surface.");
     } catch (error) {
-      setDebugWarnings([error instanceof Error ? error.message : "Wall flattening failed."]);
-      setDetectMessage("Wall flattening failed. Try choosing the four corners again.");
+      setDebugWarnings([error instanceof Error ? error.message : "Wall isolation failed."]);
+      setDetectMessage("Wall isolation failed. Try choosing the four corners again.");
     }
   }
 
@@ -763,7 +789,7 @@ export default function App() {
       if (next.length < 4) {
         setDetectMessage(`Tap wall corners in order: ${cornerNames[next.length]}.`);
       } else {
-        setDetectMessage("Corners selected. Flattening wall...");
+        setDetectMessage("Corners selected. Isolating area...");
         void finishCornerCalibration(next as Quad);
       }
 
@@ -1725,4 +1751,3 @@ export default function App() {
     </main>
   );
 }
-
