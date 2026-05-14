@@ -287,7 +287,7 @@ export default function App() {
   const [cornerMode, setCornerMode] = useState(false);
   const [cornerPoints, setCornerPoints] = useState<Point[]>([]);
 
-  // New Edge Scanner State
+  // Edge Scanner State
   const [showEdges, setShowEdges] = useState(false);
   const [edgeOverlayUrl, setEdgeOverlayUrl] = useState<string | null>(null);
   const [edgePoints, setEdgePoints] = useState<EdgePoint[]>([]);
@@ -391,11 +391,45 @@ export default function App() {
 
   function rememberPhoto(photo: RecentPhoto) {
     const recent = mergePhotos([photo], getRecentPhotos());
-
     try {
       localStorage.setItem(RECENT_PHOTOS_KEY, JSON.stringify(recent));
       setRecentPhotos(recent);
     } catch {}
+  }
+
+  // STEP 3C — New edge scanner functions
+  function resetEdgeScanner() {
+    setShowEdges(false);
+    setEdgeOverlayUrl(null);
+    setEdgePoints([]);
+    setEdgeScanning(false);
+    setSnapEnabled(true);
+  }
+
+  async function toggleEdgeScanner() {
+    if (!imageUrl) return;
+    if (showEdges) {
+      setShowEdges(false);
+      return;
+    }
+    try {
+      setEdgeScanning(true);
+      setDetectMessage("Scanning local architectural edges...");
+      const result = await scanImageEdges(imageUrl);
+      setEdgeOverlayUrl(result.edgeCanvasUrl);
+      setEdgePoints(result.edgePoints);
+      setShowEdges(true);
+      setDetectMessage(
+        `Edge scanner found ${result.edgePoints.length.toLocaleString()} architectural edge points. Use masks near trim lines for snapping.`
+      );
+    } catch (error) {
+      setDebugWarnings([
+        error instanceof Error ? error.message : "Edge scanner failed."
+      ]);
+      setDetectMessage("Edge scanner failed. You can still use manual masks.");
+    } finally {
+      setEdgeScanning(false);
+    }
   }
 
   function resetForPhoto(src: string, thumbnail: string | null, size: ImageSize, message: string) {
@@ -413,6 +447,7 @@ export default function App() {
     setDebugWarnings([]);
     setCornerMode(false);
     setCornerPoints([]);
+    resetEdgeScanner(); // Reset scanner when photo changes
     setStep("mask");
     setDetectMessage(message);
   }
@@ -433,6 +468,7 @@ export default function App() {
     setDebugWarnings([]);
     setCornerMode(false);
     setCornerPoints([]);
+    resetEdgeScanner();
     setStep("mask");
     setDetectMessage("Project loaded. Tap the surface or a mask to edit it.");
   }
@@ -528,6 +564,7 @@ export default function App() {
       setCornerPoints([]);
       setDrawMode(false);
       setProjectionOnly(false);
+      resetEdgeScanner();
       setDetectMessage("Wall flattened into a 16:9 canvas. Draw avoid masks on this squared projection surface.");
     } catch (error) {
       setDebugWarnings([
