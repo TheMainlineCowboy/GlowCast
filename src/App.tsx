@@ -18,6 +18,19 @@ import { warpImageToCanvas, type Point, type Quad } from "./homography";
 import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";
 
 // --- SNOW ENGINE PATCH START ---
+
+interface SnowLedge {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  slope: number;
+  intercept: number;
+  normalX: number;
+  normalY: number;
+  accumulation: number[]; // Heights at various points along the ledge
+}
+
 class SnowFlake {
   x: number;
   y: number;
@@ -43,18 +56,37 @@ class SnowFlake {
   }
 }
 
-class Ledge {
-  x: number;
-  y: number;
-  width: number;
-  pileHeight: number;
+/**
+ * Step A: The Ledge Factory
+ * Converts ProjectZones into geometry with surface normals and slope data.
+ */
+function createLedgesFromZones(zones: ProjectZone[], canvasWidth: number, canvasHeight: number): SnowLedge[] {
+  return zones
+    .filter(z => z.included && z.shape === "rectangle")
+    .map(z => {
+      const x1 = (z.x / 100) * canvasWidth;
+      const y1 = (z.y / 100) * canvasHeight;
+      const x2 = x1 + (z.width / 100) * canvasWidth;
+      const y2 = y1; // Top edge of the mask
 
-  constructor(x: number, y: number, width: number) {
-    this.x = x;
-    this.y = y;
-    this.width = width;
-    this.pileHeight = 0;
-  }
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const slope = dy / dx;
+      const intercept = y1 - slope * x1;
+
+      // Surface Normal Calculation
+      const len = Math.sqrt(dx * dx + dy * dy);
+      const normalX = -dy / len;
+      const normalY = dx / len;
+
+      return {
+        x1, y1, x2, y2,
+        slope, intercept,
+        normalX, normalY,
+        accumulation: new Array(Math.floor(dx)).fill(0)
+      };
+    })
+    .filter(l => Math.abs(l.slope) < 1.4); // Slope check ensures snow doesn't stick to vertical walls
 }
 
 function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
@@ -72,35 +104,69 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
     canvas.height = rect.height * dpr;
     ctx.scale(dpr, dpr);
 
-    const flakes = Array.from({ length: 150 }, () => new SnowFlake(rect.width));
-    const activeLedges = ledges.map(l => new Ledge(
-      (l.x / 100) * rect.width,
-      (l.y / 100) * rect.height,
-      (l.width / 100) * rect.width
-    ));
+    const flakes = Array.from({ length: 250 }, () => new SnowFlake(rect.width));
+    const activeLedges = createLedgesFromZones(ledges, rect.width, rect.height);
 
     let frameId: number;
     const render = () => {
       ctx.clearRect(0, 0, rect.width, rect.height);
-      ctx.fillStyle = "white";
 
       flakes.forEach(f => {
         f.update(rect.height, rect.width);
-        
-        // Accumulation logic: Check if flake hits a ledge top
+
+        /**
+         * Step B: Vector-Based Collision
+         * Collision check calculates intersection using y = mx + b
+         */
         activeLedges.forEach(l => {
-          if (f.x > l.x && f.x < l.x + l.width && Math.abs(f.y - l.y) < 2) {
-            l.pileHeight = Math.min(10, l.pileHeight + 0.01);
+          if (f.x >= l.x1 && f.x <= l.x2) {
+            const surfaceY = l.slope * f.x + l.intercept;
+            const dist = Math.abs(f.y - surfaceY);
+
+            if (dist < 3) {
+              const idx = Math.floor(f.x - l.x1);
+              if (l.accumulation[idx] !== undefined) {
+                l.accumulation[idx] = Math.min(15, l.accumulation[idx] + 0.05);
+                // Reset flake to top after "piling"
+                f.y = -10;
+                f.x = Math.random() * rect.width;
+              }
+            }
           }
         });
 
+        ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
         ctx.beginPath();
         ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
         ctx.fill();
       });
 
+      /**
+       * 3. Rendering the "Ridge"
+       * Uses Surface Normals to make snow "pile up" in the direction the ledge faces.
+       */
       activeLedges.forEach(l => {
-        ctx.fillRect(l.x, l.y - l.pileHeight, l.width, l.pileHeight);
+        ctx.beginPath();
+        l.accumulation.forEach((h, i) => {
+          const px = l.x1 + i;
+          const py = l.slope * px + l.intercept;
+          // Offset by normal to simulate pile depth
+          const ox = px + l.normalX * h;
+          const oy = py - l.normalY * h;
+
+          if (i === 0) ctx.moveTo(ox, oy);
+          else ctx.lineTo(ox, oy);
+        });
+
+        // Primary Stroke: Bright core
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Secondary Stroke: Soft feather/shadow effect
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+        ctx.lineWidth = 6;
+        ctx.stroke();
       });
 
       frameId = requestAnimationFrame(render);
@@ -110,7 +176,20 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
     return () => cancelAnimationFrame(frameId);
   }, [ledges]);
 
-  return <canvas ref={canvasRef} className="snowCanvasLayer" style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />;
+  return (
+    <canvas 
+      ref={canvasRef} 
+      className="snowCanvasLayer" 
+      style={{ 
+        width: '100%', 
+        height: '100%', 
+        position: 'absolute', 
+        top: 0, 
+        left: 0,
+        zIndex: 10 // Ensure snow is visible over masks
+      }} 
+    />
+  );
 }
 // --- SNOW ENGINE PATCH END ---
 
@@ -1018,11 +1097,6 @@ export default function App() {
     anchor.click();
   }
 
-  /**
-   * UPDATED: renderProjectionLayer
-   * Now swaps the standard CSS snowfall with the CanvasSnowLayer component
-   * that handles ledge accumulation.
-   */
   function renderProjectionLayer(extra = "") {
     if (projectionContent === "video" && videoUrl) {
       return (
@@ -1037,10 +1111,11 @@ export default function App() {
       );
     }
     
-    // NEW: Use the canvas-based Snow Engine for the "snow" effect
+    /**
+     * UPDATED: The new Canvas-based Snow Engine is triggered here
+     */
     if (activeEffect === "snow") {
-      const includedRectLedges = zones.filter(z => z.included && z.shape === "rectangle");
-      return <CanvasSnowLayer ledges={includedRectLedges} />;
+      return <CanvasSnowLayer ledges={zones} />;
     }
 
     return <div className={`effectFill ${effectClass} ${extra}`} />;
