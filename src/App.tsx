@@ -377,16 +377,23 @@ export default function App() {
     hasProject
   ]);
 
-  function getPoint(event: React.PointerEvent<HTMLElement>) {
+  // EDIT 3 — REPLACE getPoint() WITH SNAP-AWARE VERSION
+  function getPoint(event: React.PointerEvent<HTMLElement>, allowSnap = true) {
     const surface = surfaceRef.current;
     if (!surface) return null;
 
     const rect = surface.getBoundingClientRect();
 
-    return {
+    const rawPoint = {
       x: clamp(((event.clientX - rect.left) / rect.width) * 100),
       y: clamp(((event.clientY - rect.top) / rect.height) * 100)
     };
+
+    if (!allowSnap || !snapEnabled || !showEdges || !edgePoints.length) {
+      return rawPoint;
+    }
+
+    return snapPointToEdge(rawPoint, edgePoints);
   }
 
   function rememberPhoto(photo: RecentPhoto) {
@@ -397,7 +404,6 @@ export default function App() {
     } catch {}
   }
 
-  // STEP 3C — New edge scanner functions
   function resetEdgeScanner() {
     setShowEdges(false);
     setEdgeOverlayUrl(null);
@@ -432,6 +438,7 @@ export default function App() {
     }
   }
 
+  // EDIT 1 — RESET EDGE SCANNER WHEN A NEW PHOTO LOADS
   function resetForPhoto(src: string, thumbnail: string | null, size: ImageSize, message: string) {
     setImageUrl(src);
     setThumb(thumbnail ?? src);
@@ -447,7 +454,7 @@ export default function App() {
     setDebugWarnings([]);
     setCornerMode(false);
     setCornerPoints([]);
-    resetEdgeScanner(); // Reset scanner when photo changes
+    resetEdgeScanner(); // Added here
     setStep("mask");
     setDetectMessage(message);
   }
@@ -542,6 +549,7 @@ export default function App() {
     setDetectMessage("Tap wall corners in order: top-left, top-right, bottom-right, bottom-left.");
   }
 
+  // EDIT 2 — RESET EDGE SCANNER AFTER WALL FLATTENING
   async function finishCornerCalibration(points: Quad) {
     if (!imageUrl) return;
 
@@ -564,7 +572,7 @@ export default function App() {
       setCornerPoints([]);
       setDrawMode(false);
       setProjectionOnly(false);
-      resetEdgeScanner();
+      resetEdgeScanner(); // Added here
       setDetectMessage("Wall flattened into a 16:9 canvas. Draw avoid masks on this squared projection surface.");
     } catch (error) {
       setDebugWarnings([
@@ -790,8 +798,9 @@ export default function App() {
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (resizeAction) return;
 
+    // EDIT 4 — PREVENT SET WALL CORNERS FROM SNAPPING
     if (cornerMode && imageUrl && !projectionOnly) {
-      const point = getPoint(event);
+      const point = getPoint(event, false); // allowSnap = false
       if (!point) return;
 
       event.preventDefault();
@@ -1169,6 +1178,16 @@ export default function App() {
               />
             )}
 
+            {/* EDIT 5 — ADD THE EDGE OVERLAY LAYER */}
+            {showEdges && edgeOverlayUrl && !projectionOnly ? (
+              <img
+                src={edgeOverlayUrl}
+                className="edgeOverlay"
+                alt=""
+                draggable={false}
+              />
+            ) : null}
+
             {cornerOverlay()}
 
             {!projectionOnly && !cornerMode && (
@@ -1491,6 +1510,30 @@ export default function App() {
               >
                 Set Wall Corners
               </button>
+
+              {/* EDIT 6 — ADD THE EDGE SCANNER BUTTON */}
+              <button
+                type="button"
+                onClick={toggleEdgeScanner}
+                disabled={!imageUrl || edgeScanning}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg disabled:opacity-50"
+              >
+                {edgeScanning
+                  ? "Scanning Edges..."
+                  : showEdges
+                    ? "Hide Edge Scanner"
+                    : "Show Edge Scanner"}
+              </button>
+
+              {/* EDIT 7 — ADD THE MAGNETIC SNAP CHECKBOX */}
+              <label className="flex items-center gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={snapEnabled}
+                  onChange={(event) => setSnapEnabled(event.target.checked)}
+                />
+                Magnetic snap
+              </label>
 
               {cornerMode && (
                 <button
