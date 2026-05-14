@@ -72,6 +72,8 @@ type SavedProject = {
   invertMode: boolean;
   projectionContent: ProjectionContent;
   videoUrl: string | null;
+  surfacePolygonPoints?: SurfacePoint[];
+  surfacePolygonClosed?: boolean;
 };
 
 type RecentPhoto = {
@@ -288,7 +290,7 @@ export default function App() {
   const draftRect = draftZone ? normalizeDraftZone(draftZone) : null;
   const effectClass = `effect-${activeEffect}`;
 
-  // EDIT 6 - MAKE HASPROJECT TRUE WHEN POLYGON EXISTS
+  // UPDATED: hasProject now recognizes a drawn polygon as a valid state
   const hasProject = Boolean(
     imageUrl ||
     surfaceZone ||
@@ -336,7 +338,9 @@ export default function App() {
         activeEffect,
         invertMode,
         projectionContent,
-        videoUrl
+        videoUrl,
+        surfacePolygonPoints,
+        surfacePolygonClosed
       };
       const recent = [project, ...getRecentProjects()].slice(0, 5);
       try {
@@ -355,7 +359,9 @@ export default function App() {
     invertMode,
     projectionContent,
     videoUrl,
-    hasProject
+    hasProject,
+    surfacePolygonPoints,
+    surfacePolygonClosed
   ]);
 
   function getImagePoint(event: React.PointerEvent) {
@@ -506,6 +512,8 @@ export default function App() {
     setDebugWarnings([]);
     setCornerMode(false);
     setCornerPoints([]);
+    setSurfacePolygonPoints(project.surfacePolygonPoints ?? []);
+    setSurfacePolygonClosed(project.surfacePolygonClosed ?? false);
     resetEdgeScanner();
     setStep("mask");
     setDetectMessage("Project loaded. Tap the surface or a mask to edit it.");
@@ -740,7 +748,6 @@ export default function App() {
   function handlePointerDown(event: React.PointerEvent) {
     if (resizeAction) return;
 
-    // --- PATCH: POLYGON TAPS REGISTER FIRST --- 
     if (surfacePolygonMode && imageUrl && !projectionOnly) {
       const point = getPoint(event, false);
       if (!point) return;
@@ -749,7 +756,6 @@ export default function App() {
       addSurfacePolygonPoint(point);
       return;
     }
-    // --- PATCH: CORNER MODE SECONDARY --- 
     if (cornerMode && imageUrl && !projectionOnly) {
       const point = getImagePoint(event);
       if (!point) return;
@@ -837,7 +843,9 @@ export default function App() {
       activeEffect,
       invertMode,
       projectionContent,
-      videoUrl
+      videoUrl,
+      surfacePolygonPoints,
+      surfacePolygonClosed
     };
 
     const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
@@ -929,7 +937,7 @@ export default function App() {
     );
   }
 
-  // EDIT 2 — ADD POLYGON PROJECTION HELPER
+  // ADDED: renderPolygonProjectionLayer ensures animations are contained within custom polygons
   function renderPolygonProjectionLayer(extra = "") {
     if (!surfacePolygonClosed || surfacePolygonPoints.length < 3) return null;
     const polygonPoints = surfacePolygonPoints
@@ -937,7 +945,7 @@ export default function App() {
       .join(" ");
     const maskId = `polygonProjectionMask-${extra || "main"}`;
     return (
-      <svg className={`polygonProjectionLayer ${extra}`} viewBox="0 0 100 100" preserveAspectRatio="none" >
+      <svg className={`polygonProjectionLayer ${extra}`} viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 6 }}>
         <defs>
           <mask id={maskId}>
             <rect x="0" y="0" width="100" height="100" fill="black" />
@@ -948,7 +956,7 @@ export default function App() {
           </mask>
         </defs>
         <foreignObject x="0" y="0" width="100" height="100" mask={`url(#${maskId})`} >
-          <div className="polygonProjectionForeign">
+          <div className="polygonProjectionForeign" style={{ width: '100%', height: '100%' }}>
             {renderProjectionLayer("polygonProjectionEffect")}
           </div>
         </foreignObject>
@@ -1012,7 +1020,7 @@ export default function App() {
           Exit Projector
         </button>
         <div className="projectorCanvas" style={{ aspectRatio: `${imageSize.width} / ${imageSize.height}` }} >
-          {/* EDIT 5 — PROJECTOR MODE SHOULD USE POLYGON TOO */}
+          {/* UPDATED: Projector mode now prioritizes the polygon projection if it exists */}
           {invertMode && surfacePolygonClosed ? (
             renderPolygonProjectionLayer("projectorPolygonEffect")
           ) : invertMode && projectionArea ? (
@@ -1038,8 +1046,7 @@ export default function App() {
     <div className={`stage ${projectionOnly ? "projectionOnly" : ""}`}>
       {!imageUrl && !videoUrl && (
         <div className="emptyStage">
-          <p>No project loaded yet.</p>
-          <small>Upload a reference photo from the Start page.</small>
+          <p>No project loaded yet. Upload a reference photo from the Start page.</p>
         </div>
       )}
 
@@ -1054,7 +1061,7 @@ export default function App() {
           {surfacePolygonOverlay()}
           {cornerOverlay()}
 
-          {/* EDIT 3 — RENDER THE POLYGON PROJECTION LAYER */}
+          {/* UPDATED: Render the polygon projection layer within the main stage */}
           {surfacePolygonClosed ? renderPolygonProjectionLayer() : null}
 
           {projectionArea && showSurfaceHandles && !projectionOnly && !cornerMode && !surfacePolygonMode ? (
@@ -1064,7 +1071,7 @@ export default function App() {
             </div>
           ) : null}
 
-          {/* EDIT 4 — HIDE OLD RECTANGLE EFFECT LAYER WHEN POLYGON EXISTS */}
+          {/* UPDATED: Hide the rectangular projection layer if a polygon is active */}
           {invertMode && projectionArea && !surfacePolygonClosed && (
             <div className="projectionSurface" style={toStyle(projectionArea)}>
               {renderProjectionLayer()}
@@ -1227,7 +1234,7 @@ export default function App() {
                 <Plus size={18} /> Add {drawShape} Zone
               </button>
 
-              {/* EDIT 1 — STOP PREVIEW BUTTON FROM CLEARING THE POLYGON */}
+              {/* UPDATED: Preview button now maintains polygon state */}
               <button className="primary" onClick={() => { setProjectionOnly((value) => !value); }} disabled={!hasProject} >
                 {projectionOnly ? <EyeOff size={18} /> : <Eye size={18} />}
                 {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}
