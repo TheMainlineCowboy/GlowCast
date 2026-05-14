@@ -183,7 +183,6 @@ type Effect = {
   description: string;
 };
 
-// PATCH: Explicitly handle Circle and Oval
 type MaskShape = "rectangle" | "circle" | "oval" | "triangle" | "freehand";
 
 type ProjectZone = Zone & {
@@ -255,7 +254,6 @@ const effects: Effect[] = [
   { id: "grid", name: "Alignment Grid", description: "Useful for lining up the projector" }
 ];
 
-// PATCH: Split tools for Circle vs Oval
 const shapeOptions: { id: MaskShape; name: string }[] = [
   { id: "rectangle", name: "Rectangle" },
   { id: "circle", name: "Circle" },
@@ -345,7 +343,6 @@ function clampZone<T extends Pick<Zone, "x" | "y" | "width" | "height">>(zone: T
   };
 }
 
-// PATCH: Normalize Circle to 1:1 Aspect Ratio
 function normalizeDraftZone(draft: DraftZone): Omit<ProjectZone, "id" | "included"> {
   let x1 = Math.min(draft.startX, draft.currentX);
   let y1 = Math.min(draft.startY, draft.currentY);
@@ -480,7 +477,6 @@ export default function App() {
     surfacePolygonPoints.length
   );
 
-  // FIX: Fixed visibleRecentPhotos logic to prevent build error
   const visibleRecentPhotos = useMemo(
     () => mergePhotos(recentPhotos, photosFromProjects(recentProjects)),
     [recentPhotos, recentProjects]
@@ -830,7 +826,6 @@ export default function App() {
     }));
   }
 
-  // PATCH: addZone handles circle square-default
   function addZone(shape: MaskShape = drawShape) {
     const id = Date.now();
     const isCircle = shape === "circle";
@@ -882,7 +877,6 @@ export default function App() {
     setSelectedTarget("zone");
   }
 
-  // PATCH: Resize handles circle-lock constraint
   function applyResize(action: ResizeAction, point: { x: number; y: number }) {
     const dx = point.x - action.startX;
     const dy = point.y - action.startY;
@@ -1281,6 +1275,27 @@ export default function App() {
           {!projectionOnly && !cornerMode && !surfacePolygonMode && zones.map((zone, index) => (
             <div key={zone.id} className={`zone ${shapeClass(zone.shape)} ${zone.included ? "included" : "excluded"} ${selectedTarget === "zone" && selectedZoneId === zone.id ? "selected" : ""}`} style={{ ...toStyle(zone), clipPath: zone.points ? `polygon(${zone.points.map(p => `${p.x}% ${p.y}%`).join(",")})` : "none" }} onPointerDown={(event) => startResize(event, "zone", zone, "move")} >
               <span>{index + 1}</span>
+              
+              {/* EDITING OVERLAY PATCH START */}
+              {zone.shape === "triangle" ? (
+                <svg className="zoneShapeOutline" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <polygon points="50,0 100,100 0,100" />
+                </svg>
+              ) : null}
+
+              {(zone.shape === "circle" || zone.shape === "oval") ? (
+                <svg className="zoneShapeOutline" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <ellipse cx="50" cy="50" rx="49" ry="49" />
+                </svg>
+              ) : null}
+
+              {zone.shape === "freehand" ? (
+                <svg className="zoneShapeOutline" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <path d="M8,42 C14,12 35,4 50,8 C75,2 94,24 92,50 C96,76 70,96 46,90 C20,98 4,70 8,42 Z" />
+                </svg>
+              ) : null}
+              {/* EDITING OVERLAY PATCH END */}
+
               {renderHandles("zone", zone)}
             </div>
           ))}
