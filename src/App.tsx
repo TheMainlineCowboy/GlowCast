@@ -87,7 +87,7 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
       flakes.forEach(f => {
         f.update(rect.height, rect.width);
         
-        // Accumulation logic
+        // Accumulation logic: Check if flake hits a ledge top
         activeLedges.forEach(l => {
           if (f.x > l.x && f.x < l.x + l.width && Math.abs(f.y - l.y) < 2) {
             l.pileHeight = Math.min(10, l.pileHeight + 0.01);
@@ -110,7 +110,7 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
     return () => cancelAnimationFrame(frameId);
   }, [ledges]);
 
-  return <canvas ref={canvasRef} className="snowCanvasLayer" style={{ width: '100%', height: '100%' }} />;
+  return <canvas ref={canvasRef} className="snowCanvasLayer" style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />;
 }
 // --- SNOW ENGINE PATCH END ---
 
@@ -1018,7 +1018,11 @@ export default function App() {
     anchor.click();
   }
 
-  // UPDATED: renderProjectionLayer now uses the CanvasSnowLayer for the snow effect
+  /**
+   * UPDATED: renderProjectionLayer
+   * Now swaps the standard CSS snowfall with the CanvasSnowLayer component
+   * that handles ledge accumulation.
+   */
   function renderProjectionLayer(extra = "") {
     if (projectionContent === "video" && videoUrl) {
       return (
@@ -1033,8 +1037,10 @@ export default function App() {
       );
     }
     
+    // NEW: Use the canvas-based Snow Engine for the "snow" effect
     if (activeEffect === "snow") {
-      return <CanvasSnowLayer ledges={zones.filter(z => z.included && z.shape === "rectangle")} />;
+      const includedRectLedges = zones.filter(z => z.included && z.shape === "rectangle");
+      return <CanvasSnowLayer ledges={includedRectLedges} />;
     }
 
     return <div className={`effectFill ${effectClass} ${extra}`} />;
