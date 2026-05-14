@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { detectSurfaceAndMasks, loadImage, type Zone } from "./detection";
 import { warpImageToCanvas, type Point, type Quad } from "./homography";
+import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";
 
 type Effect = {
   id: string;
@@ -285,6 +286,13 @@ export default function App() {
   const [debugWarnings, setDebugWarnings] = useState<string[]>([]);
   const [cornerMode, setCornerMode] = useState(false);
   const [cornerPoints, setCornerPoints] = useState<Point[]>([]);
+
+  // New Edge Scanner State
+  const [showEdges, setShowEdges] = useState(false);
+  const [edgeOverlayUrl, setEdgeOverlayUrl] = useState<string | null>(null);
+  const [edgePoints, setEdgePoints] = useState<EdgePoint[]>([]);
+  const [edgeScanning, setEdgeScanning] = useState(false);
+  const [snapEnabled, setSnapEnabled] = useState(true);
 
   const projectionArea = surfaceZone ?? defaultSurface();
 
