@@ -13,7 +13,7 @@ import {
   Trash2,
   Video
 } from "lucide-react";
-import { detectSurfaceAndMasks, loadImage, type Zone } from "./detection";
+import { detectSurfaceAndMasks, loadImage, type Zone, detectArchitecturalFeatures } from "./detection";
 import { warpImageToCanvas, type Point, type Quad } from "./homography";
 import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";
 
@@ -27,6 +27,7 @@ type MaskShape = "rectangle" | "oval" | "triangle" | "freehand";
 
 type ProjectZone = Zone & {
   shape?: MaskShape;
+  points?: Point[]; // Added for Patch 4 polygon support
 };
 
 type DraftZone = {
@@ -81,36 +82,12 @@ type RecentPhoto = {
 };
 
 const effects: Effect[] = [
-  {
-    id: "haunt",
-    name: "Haunted Windows",
-    description: "Ghostly pulses, lightning flashes, and eerie glow"
-  },
-  {
-    id: "snow",
-    name: "Snowfall",
-    description: "Soft falling snow for holiday mapping"
-  },
-  {
-    id: "rain",
-    name: "Rainfall",
-    description: "Soft rain streaks that respect avoid masks"
-  },
-  {
-    id: "neon",
-    name: "Neon Glow",
-    description: "Business sign or party-style electric glow"
-  },
-  {
-    id: "fire",
-    name: "Fire Glow",
-    description: "Warm flame movement for dramatic projection"
-  },
-  {
-    id: "grid",
-    name: "Alignment Grid",
-    description: "Useful for lining up the projector"
-  }
+  { id: "haunt", name: "Haunted Windows", description: "Ghostly pulses, lightning flashes, and eerie glow" },
+  { id: "snow", name: "Snowfall", description: "Soft falling snow for holiday mapping" },
+  { id: "rain", name: "Rainfall", description: "Soft rain streaks that respect avoid masks" },
+  { id: "neon", name: "Neon Glow", description: "Business sign or party-style electric glow" },
+  { id: "fire", name: "Fire Glow", description: "Warm flame movement for dramatic projection" },
+  { id: "grid", name: "Alignment Grid", description: "Useful for lining up the projector" }
 ];
 
 const shapeOptions: { id: MaskShape; name: string }[] = [
@@ -552,10 +529,8 @@ export default function App() {
 
     try {
       setDetectMessage("Flattening wall into natural aspect ratio...");
-
       const image = await loadImage(imageUrl);
       
-      // --- PATCH 3 LOGIC START ---
       const topWidth = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y); 
       const bottomWidth = Math.hypot(points[2].x - points[3].x, points[2].y - points[3].y); 
       const leftHeight = Math.hypot(points[3].x - points[0].x, points[3].y - points[0].y); 
@@ -575,65 +550,54 @@ export default function App() {
       setImageUrl(flattened); 
       setThumb(thumbnail); 
       setImageSize({ width: outputWidth, height: outputHeight }); 
-      // --- PATCH 3 LOGIC END ---
 
       setSurfaceZone(flattenedSurface());
       setShowSurfaceHandles(false);
-      setZones([]);
-      setSelectedTarget("surface");
-      setSelectedZoneId(null);
+      
+      // --- PATCH 4 LOGIC START ---
+      // Trigger architectural feature detection automatically after calibration
+      await performArchitecturalDetection(flattened);
+      // --- PATCH 4 LOGIC END ---
+
       setCornerMode(false);
       setCornerPoints([]);
       setDrawMode(false);
       setProjectionOnly(false);
       resetEdgeScanner();
-      setDetectMessage("Wall flattened. Aspect ratio preserved. Draw avoid masks on this surface.");
     } catch (error) {
-      setDebugWarnings([
-        error instanceof Error ? error.message : "Wall flattening failed."
-      ]);
+      setDebugWarnings([error instanceof Error ? error.message : "Wall flattening failed."]);
       setDetectMessage("Wall flattening failed. Try choosing the four corners again.");
     }
   }
 
-  async function detectMaskAreas() {
-    if (!imageUrl) return;
-
+  // --- PATCH 4 IMPLEMENTATION: Automated Architectural Masking ---
+  async function performArchitecturalDetection(flattenedUrl: string) {
     setDetecting(true);
-    setDrawMode(false);
-    setProjectionOnly(false);
-    setCornerMode(false);
-    setCornerPoints([]);
-    setDebugWarnings([]);
-    setDetectMessage("Detecting projection surface separately from avoid masks...");
+    setDetectMessage("Automatically identifying doors and windows on the straightened wall...");
 
     try {
-      const result = await detectSurfaceAndMasks(imageUrl);
-
-      setSurfaceZone(clampZone(result.surface ?? defaultSurface()));
-      setZones(
-        result.masks.map((zone) => ({
-          ...clampZone(zone),
-          shape: "rectangle" as MaskShape
-        }))
-      );
-      setSelectedTarget("surface");
-      setSelectedZoneId(null);
-      setDebugWarnings(result.warnings ?? []);
-      setDetectMessage(
-        result.masks.length
-          ? `Detected projection surface and ${result.masks.length} avoid mask${result.masks.length === 1 ? "" : "s"}. Tap the surface or any mask to correct it.`
-          : "System returned 0 usable masks."
-      );
+      // Moves beyond rectangles to "pixel-perfect" polygons solving perspective distortion
+      const result = await detectArchitecturalFeatures(flattenedUrl);
+      
+      if (result.features.length > 0) {
+        setZones(
+          result.features.map((feature) => ({
+            ...clampZone(feature.bounds),
+            id: feature.id,
+            included: true,
+            label: feature.label,
+            shape: feature.shape as MaskShape,
+            points: feature.points // Store polygon points for pixel-perfect masking
+          }))
+        );
+        setDetectMessage(`Success! Identified the full wall and detected ${result.features.length} features. Toggle them in the mask list.`);
+      } else {
+        setZones([]);
+        setDetectMessage("Wall straightened, but no clear architectural features were auto-detected. Use manual drawing.");
+      }
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Detection failed. Use manual surface and avoid-zone editing.";
-
-      setZones([]);
-      setDebugWarnings([message]);
-      setDetectMessage(message);
+      setDebugWarnings([error instanceof Error ? error.message : "Architectural detection failed."]);
+      setDetectMessage("Straightening complete. Auto-masking failed, but you can still draw masks manually.");
     } finally {
       setDetecting(false);
     }
@@ -1243,7 +1207,9 @@ export default function App() {
                       zone.y >= 100 - zone.height
                         ? 100
                         : (zone.y / (100 - zone.height)) * 100
-                    }%`
+                    }%`,
+                    // Support for pixel-perfect polygon masks from Patch 4
+                    clipPath: zone.points ? `polygon(${zone.points.map(p => `${p.x}% ${p.y}%`).join(",")})` : "none"
                   }}
                 />
               ))}
@@ -1253,7 +1219,10 @@ export default function App() {
                 <div
                   key={`fx-${zone.id}`}
                   className={`zoneProjection ${shapeClass(zone.shape)}`}
-                  style={toStyle(zone)}
+                  style={{
+                    ...toStyle(zone),
+                    clipPath: zone.points ? `polygon(${zone.points.map(p => `${p.x}% ${p.y}%`).join(",")})` : "none"
+                  }}
                 >
                   {renderProjectionLayer()}
                 </div>
@@ -1271,7 +1240,10 @@ export default function App() {
                       ? "selected"
                       : ""
                   }`}
-                  style={toStyle(zone)}
+                  style={{
+                    ...toStyle(zone),
+                    clipPath: zone.points ? `polygon(${zone.points.map(p => `${p.x}% ${p.y}%`).join(",")})` : "none"
+                  }}
                   onPointerDown={(event) => startResize(event, "zone", zone, "move")}
                 >
                   <span>{index + 1}</span>
@@ -1355,7 +1327,8 @@ export default function App() {
                 onClick={() =>
                   updateSelectedZone({
                     shape: shape.id,
-                    label: `manual ${shape.id} avoid zone`
+                    label: `manual ${shape.id} avoid zone`,
+                    points: undefined // Clear polygon if shape is manually changed
                   })
                 }
               >
