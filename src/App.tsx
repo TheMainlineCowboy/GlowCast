@@ -343,6 +343,19 @@ function clampZone<T extends Pick<Zone, "x" | "y" | "width" | "height">>(zone: T
   };
 }
 
+// STEP 2 - Add a move-only clamp helper
+function clampZonePositionOnly<T extends Pick<Zone, "x" | "y" | "width" | "height">>(zone: T): T { 
+  const width = num(zone.width, 10); 
+  const height = num(zone.height, 10); 
+  return { 
+    ...zone, 
+    x: Number(clamp(num(zone.x, 0), 0, 100 - width).toFixed(2)), 
+    y: Number(clamp(num(zone.y, 0), 0, 100 - height).toFixed(2)), 
+    width: Number(width.toFixed(2)), 
+    height: Number(height.toFixed(2)) 
+  }; 
+}
+
 function normalizeDraftZone(draft: DraftZone): Omit<ProjectZone, "id" | "included"> {
   let x1 = Math.min(draft.startX, draft.currentX);
   let y1 = Math.min(draft.startY, draft.currentY);
@@ -877,6 +890,7 @@ export default function App() {
     setSelectedTarget("zone");
   }
 
+  // STEP 3 — Update applyResize
   function applyResize(action: ResizeAction, point: { x: number; y: number }) {
     const dx = point.x - action.startX;
     const dy = point.y - action.startY;
@@ -887,11 +901,15 @@ export default function App() {
     let width = original.width;
     let height = original.height;
 
-    if (action.mode === "move") { x += dx; y += dy; }
-    if (action.mode.includes("e")) width += dx;
-    if (action.mode.includes("s")) height += dy;
-    if (action.mode.includes("w")) { x += dx; width -= dx; }
-    if (action.mode.includes("n")) { y += dy; height -= dy; }
+    if (action.mode === "move") { 
+      x += dx; 
+      y += dy; 
+    } else {
+      if (action.mode.includes("e")) width += dx;
+      if (action.mode.includes("s")) height += dy;
+      if (action.mode.includes("w")) { x += dx; width -= dx; }
+      if (action.mode.includes("n")) { y += dy; height -= dy; }
+    }
 
     if (original.shape === "circle" && action.mode !== "move") {
       const size = Math.max(width, height);
@@ -899,23 +917,26 @@ export default function App() {
       height = size;
     }
 
-    const update = clampZone({ x, y, width, height });
+    // This makes moving preserve the original size
+    const update = action.mode === "move" 
+      ? clampZonePositionOnly({ x, y, width: original.width, height: original.height }) 
+      : clampZone({ x, y, width, height });
 
     if (action.target === "surface") {
       updateSurface(update);
     } else {
-      setZones((current) => current.map((zone) => zone.id === action.id ? { ...zone, ...update } : zone)
-    );
+      setZones((current) => current.map((zone) => zone.id === action.id ? { ...zone, ...update } : zone));
     }
   }
 
+  // STEP 4 — Turn off snap while moving/resizing
   function startResize(
     event: React.PointerEvent,
     target: EditTarget,
     zone: ProjectZone,
     mode: ResizeMode
   ) {
-    const point = getPoint(event);
+    const point = getPoint(event, false); // Snap disabled for resizing
     if (!point) return;
 
     event.stopPropagation();
@@ -968,8 +989,9 @@ export default function App() {
     setDraftZone({ startX: point.x, startY: point.y, currentX: point.x, currentY: point.y, shape: drawShape });
   }
 
+  // STEP 4 — Turn off snap while moving/resizing
   function handlePointerMove(event: React.PointerEvent) {
-    const point = getPoint(event);
+    const point = resizeAction ? getPoint(event, false) : getPoint(event); // Snap disabled if dragging
     if (!point) return;
 
     if (resizeAction) {
