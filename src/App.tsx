@@ -17,6 +17,103 @@ import { detectSurfaceAndMasks, loadImage, type Zone } from "./detection";
 import { warpImageToCanvas, type Point, type Quad } from "./homography";
 import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";
 
+// --- SNOW ENGINE PATCH START ---
+class SnowFlake {
+  x: number;
+  y: number;
+  radius: number;
+  speed: number;
+  drift: number;
+
+  constructor(width: number) {
+    this.x = Math.random() * width;
+    this.y = Math.random() * -100;
+    this.radius = Math.random() * 2 + 1;
+    this.speed = Math.random() * 1 + 0.5;
+    this.drift = Math.random() * 0.5 - 0.25;
+  }
+
+  update(height: number, width: number) {
+    this.y += this.speed;
+    this.x += this.drift;
+    if (this.y > height) {
+      this.y = -10;
+      this.x = Math.random() * width;
+    }
+  }
+}
+
+class Ledge {
+  x: number;
+  y: number;
+  width: number;
+  pileHeight: number;
+
+  constructor(x: number, y: number, width: number) {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.pileHeight = 0;
+  }
+}
+
+function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+
+    const flakes = Array.from({ length: 150 }, () => new SnowFlake(rect.width));
+    const activeLedges = ledges.map(l => new Ledge(
+      (l.x / 100) * rect.width,
+      (l.y / 100) * rect.height,
+      (l.width / 100) * rect.width
+    ));
+
+    let frameId: number;
+    const render = () => {
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      ctx.fillStyle = "white";
+
+      flakes.forEach(f => {
+        f.update(rect.height, rect.width);
+        
+        // Accumulation logic
+        activeLedges.forEach(l => {
+          if (f.x > l.x && f.x < l.x + l.width && Math.abs(f.y - l.y) < 2) {
+            l.pileHeight = Math.min(10, l.pileHeight + 0.01);
+          }
+        });
+
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      activeLedges.forEach(l => {
+        ctx.fillRect(l.x, l.y - l.pileHeight, l.width, l.pileHeight);
+      });
+
+      frameId = requestAnimationFrame(render);
+    };
+
+    render();
+    return () => cancelAnimationFrame(frameId);
+  }, [ledges]);
+
+  return <canvas ref={canvasRef} className="snowCanvasLayer" style={{ width: '100%', height: '100%' }} />;
+}
+// --- SNOW ENGINE PATCH END ---
+
 type Effect = {
   id: string;
   name: string;
@@ -290,7 +387,6 @@ export default function App() {
   const draftRect = draftZone ? normalizeDraftZone(draftZone) : null;
   const effectClass = `effect-${activeEffect}`;
 
-  // UPDATED: hasProject now recognizes a drawn polygon as a valid state
   const hasProject = Boolean(
     imageUrl ||
     surfaceZone ||
@@ -721,7 +817,7 @@ export default function App() {
       updateSurface(update);
     } else {
       setZones((current) => current.map((zone) => zone.id === action.id ? { ...zone, ...update } : zone)
-      );
+    );
     }
   }
 
@@ -922,22 +1018,28 @@ export default function App() {
     anchor.click();
   }
 
+  // UPDATED: renderProjectionLayer now uses the CanvasSnowLayer for the snow effect
   function renderProjectionLayer(extra = "") {
-    return projectionContent === "video" && videoUrl ? (
-      <video
-        className={`projectionVideo ${extra}`}
-        src={videoUrl}
-        autoPlay
-        muted
-        loop
-        playsInline
-      />
-    ) : (
-      <div className={`effectFill ${effectClass} ${extra}`} />
-    );
+    if (projectionContent === "video" && videoUrl) {
+      return (
+        <video
+          className={`projectionVideo ${extra}`}
+          src={videoUrl}
+          autoPlay
+          muted
+          loop
+          playsInline
+        />
+      );
+    }
+    
+    if (activeEffect === "snow") {
+      return <CanvasSnowLayer ledges={zones.filter(z => z.included && z.shape === "rectangle")} />;
+    }
+
+    return <div className={`effectFill ${effectClass} ${extra}`} />;
   }
 
-  // ADDED: renderPolygonProjectionLayer ensures animations are contained within custom polygons
   function renderPolygonProjectionLayer(extra = "") {
     if (!surfacePolygonClosed || surfacePolygonPoints.length < 3) return null;
     const polygonPoints = surfacePolygonPoints
@@ -1020,7 +1122,6 @@ export default function App() {
           Exit Projector
         </button>
         <div className="projectorCanvas" style={{ aspectRatio: `${imageSize.width} / ${imageSize.height}` }} >
-          {/* UPDATED: Projector mode now prioritizes the polygon projection if it exists */}
           {invertMode && surfacePolygonClosed ? (
             renderPolygonProjectionLayer("projectorPolygonEffect")
           ) : invertMode && projectionArea ? (
@@ -1061,7 +1162,6 @@ export default function App() {
           {surfacePolygonOverlay()}
           {cornerOverlay()}
 
-          {/* UPDATED: Render the polygon projection layer within the main stage */}
           {surfacePolygonClosed ? renderPolygonProjectionLayer() : null}
 
           {projectionArea && showSurfaceHandles && !projectionOnly && !cornerMode && !surfacePolygonMode ? (
@@ -1071,7 +1171,6 @@ export default function App() {
             </div>
           ) : null}
 
-          {/* UPDATED: Hide the rectangular projection layer if a polygon is active */}
           {invertMode && projectionArea && !surfacePolygonClosed && (
             <div className="projectionSurface" style={toStyle(projectionArea)}>
               {renderProjectionLayer()}
@@ -1234,7 +1333,6 @@ export default function App() {
                 <Plus size={18} /> Add {drawShape} Zone
               </button>
 
-              {/* UPDATED: Preview button now maintains polygon state */}
               <button className="primary" onClick={() => { setProjectionOnly((value) => !value); }} disabled={!hasProject} >
                 {projectionOnly ? <EyeOff size={18} /> : <Eye size={18} />}
                 {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}
