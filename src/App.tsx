@@ -235,6 +235,7 @@ function mergePhotos(a: RecentPhoto[], b: RecentPhoto[]) {
 
 export default function App() {
   const surfaceRef = useRef<HTMLDivElement | null>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
   const importProjectRef = useRef<HTMLInputElement | null>(null);
 
   const [step, setStep] = useState<Step>("start");
@@ -352,6 +353,16 @@ export default function App() {
     videoUrl,
     hasProject
   ]);
+
+  function getImagePoint(event: React.PointerEvent<HTMLElement>) {
+    const image = imageRef.current;
+    if (!image) return getPoint(event, false);
+    const rect = image.getBoundingClientRect();
+    return {
+      x: clamp(((event.clientX - rect.left) / rect.width) * 100),
+      y: clamp(((event.clientY - rect.top) / rect.height) * 100)
+    };
+  }
 
   function getPoint(event: React.PointerEvent<HTMLElement>, allowSnap = true) {
     const surface = surfaceRef.current;
@@ -740,7 +751,7 @@ export default function App() {
     if (resizeAction) return;
 
     if (cornerMode && imageUrl && !projectionOnly) {
-      const point = getPoint(event, false);
+      const point = getImagePoint(event);
       if (!point) return;
 
       event.preventDefault();
@@ -1117,6 +1128,7 @@ export default function App() {
           >
             {imageUrl && (
               <img
+                ref={imageRef}
                 className="referencePhoto"
                 src={imageUrl}
                 alt="Projection surface"
@@ -1713,3 +1725,4 @@ export default function App() {
     </main>
   );
 }
+
