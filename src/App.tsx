@@ -276,7 +276,6 @@ export default function App() {
   const [edgeScanning, setEdgeScanning] = useState(false);
   const [snapEnabled, setSnapEnabled] = useState(true);
 
-  // CHANGED: No longer rendering fake defaultSurface
   const projectionArea = surfaceZone;
 
   const selectedZone = useMemo(
@@ -476,7 +475,7 @@ export default function App() {
     setImageUrl(src);
     setThumb(thumbnail ?? src);
     setImageSize(size);
-    setSurfaceZone(null); // CHANGED: null instead of defaultSurface
+    setSurfaceZone(null); 
     setShowSurfaceHandles(true);
     setZones([]);
     setSelectedTarget("surface");
@@ -821,23 +820,13 @@ export default function App() {
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (resizeAction) return;
 
-    if (surfacePolygonMode && imageUrl && !projectionOnly) { 
-      const point = getPoint(event, false); 
-      if (!point) return; 
-      event.preventDefault(); 
-      event.stopPropagation(); 
-      addSurfacePolygonPoint(point); 
-      return; 
-    } 
-
-    // CHANGED: Old corner mode hijacked taps for destructive 4-tap workflow. 
-    // Temporarily disabled to prevent accidental crops.
-    if (false && cornerMode && imageUrl && !projectionOnly) {
-      const point = getImagePoint(event);
+    // --- FIX: RESTORED CORNER MODE HANDLING ---
+    if (cornerMode && imageUrl && !projectionOnly) {
+      const point = getImagePoint(event); // Maps click to raw photo coordinates
       if (!point) return;
 
       event.preventDefault();
-      event.stopPropagation();
+      event.stopPropagation(); // Prevents "Draft Rectangle" from starting
 
       const next = [...cornerPoints, point];
       setCornerPoints(next);
@@ -848,9 +837,17 @@ export default function App() {
         setDetectMessage("Corners selected. Isolating area...");
         void finishCornerCalibration(next as Quad);
       }
-
       return;
     }
+
+    if (surfacePolygonMode && imageUrl && !projectionOnly) { 
+      const point = getPoint(event, false); 
+      if (!point) return; 
+      event.preventDefault(); 
+      event.stopPropagation(); 
+      addSurfacePolygonPoint(point); 
+      return; 
+    } 
 
     if (
       !imageUrl ||
@@ -1558,7 +1555,13 @@ export default function App() {
 
               <button type="button" onClick={resetSurfacePolygon} disabled={!surfacePolygonPoints.length} > Clear Projection Surface </button> 
 
-              {/* REMOVED: Set Wall Corners button */}
+              <button 
+                type="button" 
+                onClick={startCornerCalibration} 
+                disabled={!imageUrl || cornerMode}
+              > 
+                Straighten Wall (4 Corners) 
+              </button>
 
               <button
                 type="button"
