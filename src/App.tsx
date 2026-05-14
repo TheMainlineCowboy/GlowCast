@@ -1578,14 +1578,6 @@ export default function App() {
 
               <button type="button" onClick={resetSurfacePolygon} disabled={!surfacePolygonPoints.length} > Clear Projection Surface </button> 
 
-              <button 
-                type="button" 
-                onClick={startCornerCalibration} 
-                disabled={!imageUrl || cornerMode}
-              > 
-                Straighten Wall (4 Corners) 
-              </button>
-
               <button
                 type="button"
                 onClick={() => setShowSurfaceHandles((current) => !current)}
@@ -1842,4 +1834,3 @@ export default function App() {
     </main>
   );
 }
-
