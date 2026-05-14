@@ -17,7 +17,7 @@ import { detectSurfaceAndMasks, loadImage, type Zone } from "./detection";
 import { warpImageToCanvas, type Point, type Quad } from "./homography";
 import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";
 
-// --- SNOW ENGINE PATCH START ---
+// --- SNOW ENGINE START ---
 
 interface SnowLedge {
   x1: number;
@@ -28,7 +28,7 @@ interface SnowLedge {
   intercept: number;
   normalX: number;
   normalY: number;
-  accumulation: number[]; // Heights at various points along the ledge
+  accumulation: number[]; 
 }
 
 class SnowFlake {
@@ -56,25 +56,20 @@ class SnowFlake {
   }
 }
 
-/**
- * Step A: The Ledge Factory
- * Converts ProjectZones into geometry with surface normals and slope data.
- */
 function createLedgesFromZones(zones: ProjectZone[], canvasWidth: number, canvasHeight: number): SnowLedge[] {
   return zones
-    .filter(z => z.included && z.shape === "rectangle")
+    .filter(z => z.included && (z.shape === "rectangle" || z.shape === "circle" || z.shape === "oval"))
     .map(z => {
       const x1 = (z.x / 100) * canvasWidth;
       const y1 = (z.y / 100) * canvasHeight;
       const x2 = x1 + (z.width / 100) * canvasWidth;
-      const y2 = y1; // Top edge of the mask
+      const y2 = y1; 
 
       const dx = x2 - x1;
       const dy = y2 - y1;
       const slope = dy / dx;
       const intercept = y1 - slope * x1;
 
-      // Surface Normal Calculation
       const len = Math.sqrt(dx * dx + dy * dy);
       const normalX = -dy / len;
       const normalY = dx / len;
@@ -86,7 +81,7 @@ function createLedgesFromZones(zones: ProjectZone[], canvasWidth: number, canvas
         accumulation: new Array(Math.floor(dx)).fill(0)
       };
     })
-    .filter(l => Math.abs(l.slope) < 1.4); // Slope check ensures snow doesn't stick to vertical walls
+    .filter(l => Math.abs(l.slope) < 1.4);
 }
 
 function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
@@ -114,10 +109,6 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
       flakes.forEach(f => {
         f.update(rect.height, rect.width);
 
-        /**
-         * Step B: Vector-Based Collision
-         * Collision check calculates intersection using y = mx + b
-         */
         activeLedges.forEach(l => {
           if (f.x >= l.x1 && f.x <= l.x2) {
             const surfaceY = l.slope * f.x + l.intercept;
@@ -127,7 +118,6 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
               const idx = Math.floor(f.x - l.x1);
               if (l.accumulation[idx] !== undefined) {
                 l.accumulation[idx] = Math.min(15, l.accumulation[idx] + 0.05);
-                // Reset flake to top after "piling"
                 f.y = -10;
                 f.x = Math.random() * rect.width;
               }
@@ -141,16 +131,11 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
         ctx.fill();
       });
 
-      /**
-       * 3. Rendering the "Ridge"
-       * Uses Surface Normals to make snow "pile up" in the direction the ledge faces.
-       */
       activeLedges.forEach(l => {
         ctx.beginPath();
         l.accumulation.forEach((h, i) => {
           const px = l.x1 + i;
           const py = l.slope * px + l.intercept;
-          // Offset by normal to simulate pile depth
           const ox = px + l.normalX * h;
           const oy = py - l.normalY * h;
 
@@ -158,12 +143,10 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
           else ctx.lineTo(ox, oy);
         });
 
-        // Primary Stroke: Bright core
         ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
         ctx.lineWidth = 3;
         ctx.stroke();
 
-        // Secondary Stroke: Soft feather/shadow effect
         ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
         ctx.lineWidth = 6;
         ctx.stroke();
@@ -186,12 +169,13 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
         position: 'absolute', 
         top: 0, 
         left: 0,
-        zIndex: 10 // Ensure snow is visible over masks
+        zIndex: 10,
+        pointerEvents: 'none'
       }} 
     />
   );
 }
-// --- SNOW ENGINE PATCH END ---
+// --- SNOW ENGINE END ---
 
 type Effect = {
   id: string;
@@ -199,7 +183,8 @@ type Effect = {
   description: string;
 };
 
-type MaskShape = "rectangle" | "oval" | "triangle" | "freehand";
+// PATCH: Added "circle" to MaskShape
+type MaskShape = "rectangle" | "circle" | "oval" | "triangle" | "freehand";
 
 type ProjectZone = Zone & {
   shape?: MaskShape;
@@ -270,9 +255,11 @@ const effects: Effect[] = [
   { id: "grid", name: "Alignment Grid", description: "Useful for lining up the projector" }
 ];
 
+// PATCH: Updated shapeOptions to split Circle and Oval
 const shapeOptions: { id: MaskShape; name: string }[] = [
   { id: "rectangle", name: "Rectangle" },
-  { id: "oval", name: "Circle / Oval" },
+  { id: "circle", name: "Circle" },
+  { id: "oval", name: "Oval" },
   { id: "triangle", name: "Triangle" },
   { id: "freehand", name: "Freehand-ish" }
 ];
@@ -358,11 +345,30 @@ function clampZone<T extends Pick<Zone, "x" | "y" | "width" | "height">>(zone: T
   };
 }
 
+// PATCH: True Circle normalization constraints
 function normalizeDraftZone(draft: DraftZone): Omit<ProjectZone, "id" | "included"> {
-  const x1 = Math.min(draft.startX, draft.currentX);
-  const y1 = Math.min(draft.startY, draft.currentY);
-  const x2 = Math.max(draft.startX, draft.currentX);
-  const y2 = Math.max(draft.startY, draft.currentY);
+  let x1 = Math.min(draft.startX, draft.currentX);
+  let y1 = Math.min(draft.startY, draft.currentY);
+  let x2 = Math.max(draft.startX, draft.currentX);
+  let y2 = Math.max(draft.startY, draft.currentY);
+
+  if (draft.shape === "circle") {
+    const size = Math.min(x2 - x1, y2 - y1);
+    if (draft.currentX < draft.startX) {
+      x1 = draft.startX - size;
+      x2 = draft.startX;
+    } else {
+      x2 = draft.startX + size;
+      x1 = draft.startX;
+    }
+    if (draft.currentY < draft.startY) {
+      y1 = draft.startY - size;
+      y2 = draft.startY;
+    } else {
+      y2 = draft.startY + size;
+      y1 = draft.startY;
+    }
+  }
 
   return clampZone({
     x: x1,
@@ -611,7 +617,7 @@ export default function App() {
     const recent = mergePhotos([photo], getRecentPhotos());
     try {
       localStorage.setItem(RECENT_PHOTOS_KEY, JSON.stringify(recent));
-      setRecentPhotos(recent);
+      setRecentProjects(recent);
     } catch { }
   }
 
@@ -824,12 +830,14 @@ export default function App() {
     }));
   }
 
+  // PATCH: Circle logic in manual addition
   function addZone(shape: MaskShape = drawShape) {
     const id = Date.now();
+    const isCircle = shape === "circle";
 
     setZones((current) => [
       ...current,
-      clampZone({ id, x: 18, y: 18, width: 24, height: 22, included: true, label: `manual ${shape} avoid zone`, shape })
+      clampZone({ id, x: 18, y: 18, width: 24, height: isCircle ? 24 : 22, included: true, label: `manual ${shape} avoid zone`, shape })
     ]);
     setSelectedTarget("zone");
     setSelectedZoneId(id);
@@ -889,6 +897,13 @@ export default function App() {
     if (action.mode.includes("s")) height += dy;
     if (action.mode.includes("w")) { x += dx; width -= dx; }
     if (action.mode.includes("n")) { y += dy; height -= dy; }
+
+    // PATCH: If it's a circle, maintain square aspect ratio during resize
+    if (original.shape === "circle" && action.mode !== "move") {
+      const size = Math.max(width, height);
+      width = size;
+      height = size;
+    }
 
     const update = clampZone({ x, y, width, height });
 
@@ -1111,9 +1126,6 @@ export default function App() {
       );
     }
     
-    /**
-     * UPDATED: The new Canvas-based Snow Engine is triggered here
-     */
     if (activeEffect === "snow") {
       return <CanvasSnowLayer ledges={zones} />;
     }
@@ -1295,7 +1307,7 @@ export default function App() {
         </p>
         <small>
           Reference photos stay in setup. Projection preview shows only animation or
-          video through your masks.
+          video only.
         </small>
       </header>
 
@@ -1394,11 +1406,6 @@ export default function App() {
               <label className="flex items-center gap-2 text-sm text-slate-200">
                 <input type="checkbox" checked={snapEnabled} onChange={(event) => setSnapEnabled(event.target.checked)} /> Magnetic snap
               </label>
-              {cornerMode && (
-                <button onClick={() => { setCornerPoints([]); setDetectMessage("Tap wall corners in order: top-left, top-right, bottom-right, bottom-left."); }} >
-                  Reset Corners
-                </button>
-              )}
               <div className="shapeToolRow">
                 {shapeOptions.map((shape) => (
                   <button key={shape.id} className={drawShape === shape.id ? "activeEffect" : ""} onClick={() => { setDrawShape(shape.id); setDrawMode(true); setProjectionOnly(false); setCornerMode(false); setCornerPoints([]); setSurfacePolygonMode(false); }} >
@@ -1422,14 +1429,6 @@ export default function App() {
               <p className="helperText">
                 {surfacePolygonMode ? "Tap the photo to outline your projection surface. Close the shape by tapping your first point." : cornerMode ? `Corner ${Math.min(cornerPoints.length + 1, 4)} of 4: ${cornerNames[cornerPoints.length] ?? "complete"}` : drawMode ? `Drag directly on the photo to draw a ${drawShape} avoid mask.` : detectMessage}
               </p>
-              {debugWarnings.length > 0 && (
-                <div className="debugWarnings">
-                  <strong>Backend warnings</strong>
-                  {debugWarnings.map((warning, index) => (
-                    <p key={index}>{warning}</p>
-                  ))}
-                </div>
-              )}
             </div>
             <div className="panelBlock">
               <h2>Projection Logic</h2>
