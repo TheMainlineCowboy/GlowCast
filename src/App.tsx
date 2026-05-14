@@ -13,7 +13,7 @@ import {
   Trash2,
   Video
 } from "lucide-react";
-import { detectSurfaceAndMasks, loadImage, type Zone, detectArchitecturalFeatures } from "./detection";
+import { detectSurfaceAndMasks, loadImage, type Zone } from "./detection";
 import { warpImageToCanvas, type Point, type Quad } from "./homography";
 import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";
 
@@ -27,7 +27,7 @@ type MaskShape = "rectangle" | "oval" | "triangle" | "freehand";
 
 type ProjectZone = Zone & {
   shape?: MaskShape;
-  points?: Point[]; // Added for Patch 4 polygon support
+  points?: Point[]; 
 };
 
 type DraftZone = {
@@ -554,52 +554,15 @@ export default function App() {
       setSurfaceZone(flattenedSurface());
       setShowSurfaceHandles(false);
       
-      // --- PATCH 4 LOGIC START ---
-      // Trigger architectural feature detection automatically after calibration
-      await performArchitecturalDetection(flattened);
-      // --- PATCH 4 LOGIC END ---
-
       setCornerMode(false);
       setCornerPoints([]);
       setDrawMode(false);
       setProjectionOnly(false);
       resetEdgeScanner();
+      setDetectMessage("Wall straightened. Add masks to define projection and avoidance areas.");
     } catch (error) {
       setDebugWarnings([error instanceof Error ? error.message : "Wall flattening failed."]);
       setDetectMessage("Wall flattening failed. Try choosing the four corners again.");
-    }
-  }
-
-  // --- PATCH 4 IMPLEMENTATION: Automated Architectural Masking ---
-  async function performArchitecturalDetection(flattenedUrl: string) {
-    setDetecting(true);
-    setDetectMessage("Automatically identifying doors and windows on the straightened wall...");
-
-    try {
-      // Moves beyond rectangles to "pixel-perfect" polygons solving perspective distortion
-      const result = await detectArchitecturalFeatures(flattenedUrl);
-      
-      if (result.features.length > 0) {
-        setZones(
-          result.features.map((feature) => ({
-            ...clampZone(feature.bounds),
-            id: feature.id,
-            included: true,
-            label: feature.label,
-            shape: feature.shape as MaskShape,
-            points: feature.points // Store polygon points for pixel-perfect masking
-          }))
-        );
-        setDetectMessage(`Success! Identified the full wall and detected ${result.features.length} features. Toggle them in the mask list.`);
-      } else {
-        setZones([]);
-        setDetectMessage("Wall straightened, but no clear architectural features were auto-detected. Use manual drawing.");
-      }
-    } catch (error) {
-      setDebugWarnings([error instanceof Error ? error.message : "Architectural detection failed."]);
-      setDetectMessage("Straightening complete. Auto-masking failed, but you can still draw masks manually.");
-    } finally {
-      setDetecting(false);
     }
   }
 
@@ -1104,7 +1067,10 @@ export default function App() {
               <div
                 key={`pc-${zone.id}`}
                 className={`projectorMaskCutout ${shapeClass(zone.shape)}`}
-                style={toStyle(zone)}
+                style={{
+                   ...toStyle(zone),
+                   clipPath: zone.points ? `polygon(${zone.points.map(p => `${p.x}% ${p.y}%`).join(",")})` : "none"
+                }}
               />
             ))}
 
@@ -1113,7 +1079,10 @@ export default function App() {
               <div
                 key={`pf-${zone.id}`}
                 className={`zoneProjection ${shapeClass(zone.shape)}`}
-                style={toStyle(zone)}
+                style={{
+                   ...toStyle(zone),
+                   clipPath: zone.points ? `polygon(${zone.points.map(p => `${p.x}% ${p.y}%`).join(",")})` : "none"
+                }}
               >
                 {renderProjectionLayer("projectorEffect")}
               </div>
@@ -1208,7 +1177,6 @@ export default function App() {
                         ? 100
                         : (zone.y / (100 - zone.height)) * 100
                     }%`,
-                    // Support for pixel-perfect polygon masks from Patch 4
                     clipPath: zone.points ? `polygon(${zone.points.map(p => `${p.x}% ${p.y}%`).join(",")})` : "none"
                   }}
                 />
@@ -1328,7 +1296,7 @@ export default function App() {
                   updateSelectedZone({
                     shape: shape.id,
                     label: `manual ${shape.id} avoid zone`,
-                    points: undefined // Clear polygon if shape is manually changed
+                    points: undefined 
                   })
                 }
               >
