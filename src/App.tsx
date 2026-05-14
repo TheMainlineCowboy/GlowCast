@@ -1462,11 +1462,16 @@ export default function App() {
 
               <button
                 className="primary"
-                onClick={detectMaskAreas}
+                onClick={() => {
+                  setDebugWarnings([
+                    "Paid AI detection is disabled because Replicate requires billing credit. Use Set Wall Corners and manual masks for the zero-cost workflow."
+                  ]);
+                  setDetectMessage("Manual masking is the free path. Paid AI detection requires Replicate credit.");
+                }}
                 disabled={!imageUrl || detecting || cornerMode}
               >
                 <Sparkles size={18} />
-                {detecting ? "Detecting..." : "AI Detect Surface + Masks"}
+                Paid AI Detect
               </button>
 
               <div className="shapeToolRow">
