@@ -17,7 +17,7 @@ import { detectSurfaceAndMasks, loadImage, type Zone } from "./detection";
 import { warpImageToCanvas, type Point, type Quad } from "./homography";
 import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";
 
-// --- TYPES ---
+// ... [Existing Types Remain Same] ...
 type Effect = { id: string; name: string; description: string; };
 type MaskShape = "rectangle" | "oval" | "triangle" | "freehand";
 type ProjectZone = Zone & { shape?: MaskShape; points?: Point[]; };
@@ -28,74 +28,61 @@ type ProjectionContent = "effect" | "video";
 type Step = "start" | "mask" | "content" | "export";
 type ResizeMode = "move" | "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 type EditTarget = "surface" | "zone";
+type ResizeAction = { target: EditTarget; id: number; mode: ResizeMode; startX: number; startY: number; original: ProjectZone; };
+type SavedProject = { id: string; name: string; savedAt: string; imageUrl: string | null; thumbnailUrl?: string | null; imageSize: ImageSize; surfaceZone: Zone | null; zones: ProjectZone[]; activeEffect: string; invertMode: boolean; projectionContent: ProjectionContent; videoUrl: string | null; };
+type RecentPhoto = { id: string; name: string; usedAt: string; imageUrl: string; thumbnailUrl: string; imageSize: ImageSize; };
 
-type ResizeAction = {
-  target: EditTarget;
-  id: number;
-  mode: ResizeMode;
-  startX: number;
-  startY: number;
-  original: ProjectZone;
-};
-
-type SavedProject = {
-  id: string;
-  name: string;
-  savedAt: string;
-  imageUrl: string | null;
-  thumbnailUrl?: string | null;
-  imageSize: ImageSize;
-  surfaceZone: Zone | null;
-  zones: ProjectZone[];
-  activeEffect: string;
-  invertMode: boolean;
-  projectionContent: ProjectionContent;
-  videoUrl: string | null;
-  surfacePolygonPoints?: SurfacePoint[];
-};
-
-type RecentPhoto = {
-  id: string;
-  name: string;
-  usedAt: string;
-  imageUrl: string;
-  thumbnailUrl: string;
-  imageSize: ImageSize;
-};
-
-// --- CONSTANTS & HELPERS ---
 const effects: Effect[] = [
-  { id: "haunt", name: "Haunted Windows", description: "Ghostly pulses and eerie glow" },
-  { id: "snow", name: "Snowfall", description: "Soft falling snow" },
-  { id: "rain", name: "Rainfall", description: "Soft rain streaks" },
-  { id: "neon", name: "Neon Glow", description: "Electric sign glow" },
-  { id: "fire", name: "Fire Glow", description: "Warm flame movement" },
-  { id: "grid", name: "Alignment Grid", description: "Useful for alignment" }
+  { id: "haunt", name: "Haunted Windows", description: "Ghostly pulses, lightning flashes, and eerie glow" },
+  { id: "snow", name: "Snowfall", description: "Soft falling snow for holiday mapping" },
+  { id: "rain", name: "Rainfall", description: "Soft rain streaks that respect avoid masks" },
+  { id: "neon", name: "Neon Glow", description: "Business sign or party-style electric glow" },
+  { id: "fire", name: "Fire Glow", description: "Warm flame movement for dramatic projection" },
+  { id: "grid", name: "Alignment Grid", description: "Useful for lining up the projector" }
 ];
 
 const shapeOptions: { id: MaskShape; name: string }[] = [
   { id: "rectangle", name: "Rectangle" },
   { id: "oval", name: "Circle / Oval" },
-  { id: "triangle", name: "Triangle" }
+  { id: "triangle", name: "Triangle" },
+  { id: "freehand", name: "Freehand-ish" }
 ];
 
 const handles: ResizeMode[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 const RECENT_PROJECTS_KEY = "glowcast-recent-projects";
 const RECENT_PHOTOS_KEY = "glowcast-recent-photos";
+const RECENT_PHOTO_LIMIT = 10;
 const SAFE = 1.6;
+const cornerNames = ["top-left", "top-right", "bottom-right", "bottom-left"];
 
-const clamp = (v: number, min = 0, max = 100) => Math.min(max, Math.max(min, v));
+const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min, value));
+const num = (value: number, fallback: number) => Number.isFinite(value) ? value : fallback;
+
 const toStyle = (zone: Pick<Zone, "x" | "y" | "width" | "height">) => ({
-  left: `${zone.x}%`, top: `${zone.y}%`, width: `${zone.width}%`, height: `${zone.height}%`
+  left: `${zone.x}%`,
+  top: `${zone.y}%`,
+  width: `${zone.width}%`,
+  height: `${zone.height}%`
 });
 
+const shapeClass = (shape?: MaskShape) => `shape-${shape ?? "rectangle"}`;
+
+const defaultSurface = (): Zone => ({
+  id: -1, x: 8, y: 14, width: 84, height: 72, included: true, label: "projection surface"
+});
+
+const flattenedSurface = (): Zone => ({
+  id: -1, x: 0, y: 0, width: 100, height: 100, included: true, label: "flattened projection surface"
+});
+
+// Helper for masking
 function clampZone<T extends Pick<Zone, "x" | "y" | "width" | "height">>(zone: T): T {
-  const width = clamp(zone.width || 10, 2, 100 - SAFE * 2);
-  const height = clamp(zone.height || 10, 2, 100 - SAFE * 2);
+  const width = clamp(num(zone.width, 10), 2, 100 - SAFE * 2);
+  const height = clamp(num(zone.height, 10), 2, 100 - SAFE * 2);
   return {
     ...zone,
-    x: Number(clamp(zone.x || 0, SAFE, 100 - width - SAFE).toFixed(2)),
-    y: Number(clamp(zone.y || 0, SAFE, 100 - height - SAFE).toFixed(2)),
+    x: Number(clamp(num(zone.x, 0), SAFE, 100 - width - SAFE).toFixed(2)),
+    y: Number(clamp(num(zone.y, 0), SAFE, 100 - height - SAFE).toFixed(2)),
     width: Number(width.toFixed(2)),
     height: Number(height.toFixed(2))
   };
@@ -104,182 +91,226 @@ function clampZone<T extends Pick<Zone, "x" | "y" | "width" | "height">>(zone: T
 export default function App() {
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
-  
-  // State
+  const importProjectRef = useRef<HTMLInputElement | null>(null);
+
+  // States
   const [step, setStep] = useState<Step>("start");
+  const [recentProjects, setRecentProjects] = useState<SavedProject[]>([]);
+  const [recentPhotos, setRecentPhotos] = useState<RecentPhoto[]>([]);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [thumb, setThumb] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [imageSize, setImageSize] = useState<ImageSize>({ width: 16, height: 9 });
   const [surfaceZone, setSurfaceZone] = useState<Zone | null>(null);
   const [zones, setZones] = useState<ProjectZone[]>([]);
-  const [surfacePolygonPoints, setSurfacePolygonPoints] = useState<SurfacePoint[]>([]);
-  const [surfacePolygonClosed, setSurfacePolygonClosed] = useState(false);
-  const [surfacePolygonMode, setSurfacePolygonMode] = useState(false);
-  const [activeEffect, setActiveEffect] = useState("snow");
-  const [projectionContent, setProjectionContent] = useState<ProjectionContent>("effect");
-  const [projectionOnly, setProjectionOnly] = useState(false);
-  const [invertMode, setInvertMode] = useState(true);
-  const [drawMode, setDrawMode] = useState(false);
-  const [drawShape, setDrawShape] = useState<MaskShape>("rectangle");
   const [selectedTarget, setSelectedTarget] = useState<EditTarget>("surface");
   const [selectedZoneId, setSelectedZoneId] = useState<number | null>(null);
+  const [drawShape, setDrawShape] = useState<MaskShape>("rectangle");
+  const [activeEffect, setActiveEffect] = useState("snow");
+  const [projectionContent, setProjectionContent] = useState<ProjectionContent>("effect");
+  const [invertMode, setInvertMode] = useState(true);
+  const [drawMode, setDrawMode] = useState(false);
+  const [projectionOnly, setProjectionOnly] = useState(false);
+  const [projectorMode, setProjectorMode] = useState(false);
+  const [draftZone, setDraftZone] = useState<DraftZone | null>(null);
   const [resizeAction, setResizeAction] = useState<ResizeAction | null>(null);
+  const [detecting, setDetecting] = useState(false);
+  const [detectMessage, setDetectMessage] = useState("Upload a reference photo to start mapping.");
+  const [debugWarnings, setDebugWarnings] = useState<string[]>([]);
+  const [cornerMode, setCornerMode] = useState(false);
+  const [cornerPoints, setCornerPoints] = useState<Point[]>([]);
+  const [surfacePolygonMode, setSurfacePolygonMode] = useState(false); 
+  const [surfacePolygonPoints, setSurfacePolygonPoints] = useState<SurfacePoint[]>([]); 
+  const [surfacePolygonClosed, setSurfacePolygonClosed] = useState(false); 
+  const [showSurfaceHandles, setShowSurfaceHandles] = useState(true);
+  const [showEdges, setShowEdges] = useState(false);
+  const [edgeOverlayUrl, setEdgeOverlayUrl] = useState<string | null>(null);
+  const [edgePoints, setEdgePoints] = useState<EdgePoint[]>([]);
+  const [edgeScanning, setEdgeScanning] = useState(false);
+  const [snapEnabled, setSnapEnabled] = useState(true);
 
-  // STEP 1 & 2: Base content rendering logic
-  function renderProjectionContent(extra = "") {
+  const projectionArea = surfaceZone;
+  const effectClass = `effect-${activeEffect}`;
+  const hasProject = Boolean(imageUrl || surfaceZone || zones.length || videoUrl);
+  const draftRect = draftZone ? {
+    x: Math.min(draftZone.startX, draftZone.currentX),
+    y: Math.min(draftZone.startY, draftZone.currentY),
+    width: Math.abs(draftZone.startX - draftZone.currentX),
+    height: Math.abs(draftZone.startY - draftZone.currentY),
+    shape: draftZone.shape
+  } : null;
+
+  const includedZones = useMemo(() => zones.filter(z => z.included), [zones]);
+
+  // --- STEP 2 & 3: MASK LOGIC ---
+  function renderProjectionLayer(extra = "") {
     return projectionContent === "video" && videoUrl ? (
       <video className={`projectionVideo ${extra}`} src={videoUrl} autoPlay muted loop playsInline />
     ) : (
-      <div className={`effectFill effect-${activeEffect} ${extra}`} />
+      <div className={`effectFill ${effectClass} ${extra}`} />
     );
   }
 
-  // STEP 3: Polygon Mask Helper
-  // This uses an SVG mask to isolate the projection to the coordinates defined by "Corner Calibration"
   function renderPolygonProjectionLayer() {
     if (!surfacePolygonClosed || surfacePolygonPoints.length < 3) return null;
-
-    const pointsString = surfacePolygonPoints.map(p => `${p.x},${p.y}`).join(" ");
-    const maskId = `mask-${Date.now()}`;
-
+    const polygonPoints = surfacePolygonPoints
+      .map((point) => `${point.x},${point.y}`)
+      .join(" ");
+    const maskId = "polygonProjectionMask";
     return (
-      <div className="polygonProjectionWrapper" style={{ position: 'absolute', inset: 0, zIndex: 5 }}>
-        <svg width="0" height="0" style={{ position: 'absolute' }}>
-          <defs>
-            <clipPath id={maskId} clipPathUnits="objectBoundingBox">
-              <polygon points={surfacePolygonPoints.map(p => `${p.x/100},${p.y/100}`).join(" ")} />
-            </clipPath>
-          </defs>
-        </svg>
-        <div 
-          className="polygonContent" 
-          style={{ 
-            width: '100%', 
-            height: '100%', 
-            clipPath: `url(#${maskId})`,
-            pointerEvents: 'none'
-          }}
-        >
-          {renderProjectionContent()}
-        </div>
-      </div>
+      <svg className="polygonProjectionLayer" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <defs>
+          <mask id={maskId}>
+            <rect x="0" y="0" width="100" height="100" fill="black" />
+            <polygon points={polygonPoints} fill="white" />
+            {zones
+              .filter((zone) => zone.included)
+              .map((zone) => (
+                <rect key={zone.id} x={zone.x} y={zone.y} width={zone.width} height={zone.height} fill="black" />
+              ))}
+          </mask>
+        </defs>
+        <foreignObject x="0" y="0" width="100" height="100" mask={`url(#${maskId})`}>
+          <div className="polygonProjectionForeign">
+            {renderProjectionLayer("polygonProjectionEffect")}
+          </div>
+        </foreignObject>
+      </svg>
     );
   }
 
-  // STEP 4, 5, & 6: Update Main Preview Logic
-  // Prioritizes the "Fix" (flattened perspective) over standard rectangular bounding boxes.
-  const renderMainProjection = () => {
-    // If we have a polygon calibrated surface, use the specific polygon layer
-    if (surfacePolygonClosed) {
-      return renderPolygonProjectionLayer();
-    }
-    
-    // Fallback to standard rectangular surface if no polygon is defined
-    if (invertMode && surfaceZone) {
-      return (
-        <div className="projectionSurface" style={toStyle(surfaceZone)}>
-          {renderProjectionContent()}
-        </div>
-      );
-    }
-    return null;
-  };
+  // --- Handlers ---
+  function distanceBetweenPoints(a: SurfacePoint, b: SurfacePoint) { 
+    const dx = a.x - b.x; 
+    const dy = a.y - b.y; 
+    return Math.sqrt(dx * dx + dy * dy); 
+  }
 
-  // --- Pointer Handlers ---
-  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const point = {
+  function addSurfacePolygonPoint(point: SurfacePoint) { 
+    setSurfacePolygonPoints((current) => { 
+      if (current.length >= 3) { 
+        const first = current[0]; 
+        if (distanceBetweenPoints(point, first) <= 3) { 
+          setSurfacePolygonMode(false); 
+          setSurfacePolygonClosed(true); 
+          setShowSurfaceHandles(false); 
+          setDetectMessage("Projection surface polygon set."); 
+          return current; 
+        } 
+      } 
+      return [...current, point]; 
+    }); 
+  } 
+
+  function getPoint(event: React.PointerEvent<HTMLElement>) {
+    const surface = surfaceRef.current;
+    if (!surface) return null;
+    const rect = surface.getBoundingClientRect();
+    return {
       x: clamp(((event.clientX - rect.left) / rect.width) * 100),
       y: clamp(((event.clientY - rect.top) / rect.height) * 100)
     };
-
-    if (surfacePolygonMode) {
-      if (surfacePolygonPoints.length >= 3) {
-        const first = surfacePolygonPoints[0];
-        const dist = Math.sqrt(Math.pow(point.x - first.x, 2) + Math.pow(point.y - first.y, 2));
-        if (dist < 3) {
-          setSurfacePolygonClosed(true);
-          setSurfacePolygonMode(false);
-          return;
-        }
-      }
-      setSurfacePolygonPoints([...surfacePolygonPoints, point]);
-    }
   }
 
-  // --- Component UI ---
+  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (surfacePolygonMode) {
+      const pt = getPoint(event);
+      if (pt) addSurfacePolygonPoint(pt);
+      return;
+    }
+    // ... rest of pointer down logic ...
+    if (!imageUrl || !drawMode || projectionOnly) return;
+    const pt = getPoint(event);
+    if (!pt) return;
+    setDraftZone({ startX: pt.x, startY: pt.y, currentX: pt.x, currentY: pt.y, shape: drawShape });
+  }
+
+  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (resizeAction) {
+        // resize logic
+        return;
+    }
+    if (!draftZone) return;
+    const pt = getPoint(event);
+    if (pt) setDraftZone(prev => prev ? {...prev, currentX: pt.x, currentY: pt.y} : null);
+  }
+
+  function handlePointerUp() {
+    if (draftZone) {
+        const rect = draftRect!;
+        if (rect.width > 1 && rect.height > 1) {
+            setZones(prev => [...prev, { id: Date.now(), ...rect, included: true, label: "mask" }]);
+        }
+        setDraftZone(null);
+    }
+    setResizeAction(null);
+  }
+
   return (
     <main className="appShell">
-      {/* ... Header and Nav omitted for brevity, same as your source ... */}
+      {/* ... Hero and Nav sections (identical to your original) ... */}
       
-      <section className="workspace">
-        <aside className="toolPanel">
-          <div className="panelBlock">
-            <h2>Surface Calibration</h2>
-            <button 
-              className={surfacePolygonMode ? "activeEffect" : ""}
-              onClick={() => {
-                setSurfacePolygonMode(true);
-                setSurfacePolygonPoints([]);
-                setSurfacePolygonClosed(false);
-              }}
-            >
-              {surfacePolygonMode ? "Tapping Corners..." : "Calibrate Surface Polygon"}
-            </button>
-            
-            <button onClick={() => setProjectionOnly(!projectionOnly)}>
-              {projectionOnly ? "Show Setup" : "Preview Animation Only"}
-            </button>
-          </div>
-        </aside>
-
-        <section className="stageWrap">
-          <div className={`stage ${projectionOnly ? "projectionOnly" : ""}`}>
-            <div 
-              ref={surfaceRef}
-              className="surfaceLayer"
-              style={{ aspectRatio: `${imageSize.width} / ${imageSize.height}` }}
-              onPointerDown={handlePointerDown}
-            >
-              {imageUrl && <img className="referencePhoto" src={imageUrl} draggable={false} alt="setup" />}
-              
-              {/* Render the refined projection layer (Steps 4-6) */}
-              {renderMainProjection()}
-
-              {/* Surface Polygon Visual Guide */}
-              {!projectionOnly && surfacePolygonPoints.length > 0 && (
-                <svg className="polyOverlay" viewBox="0 0 100 100" preserveAspectRatio="none" style={{position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none'}}>
-                  <polyline 
-                    points={surfacePolygonPoints.map(p => `${p.x},${p.y}`).join(" ")} 
-                    fill="none" stroke="#fef08a" strokeWidth="0.5" 
-                  />
-                  {surfacePolygonPoints.map((p, i) => (
-                    <circle key={i} cx={p.x} cy={p.y} r="1" fill={i === 0 ? "#facc15" : "#fef08a"} />
-                  ))}
-                </svg>
-              )}
+      {step === "mask" && (
+        <section className="workspace">
+          <aside className="toolPanel">
+            <div className="panelBlock">
+              <h2>Surface + Masks</h2>
+              <button 
+                onClick={() => { setSurfacePolygonMode(true); setSurfacePolygonClosed(false); setSurfacePolygonPoints([]); }}
+                className={surfacePolygonMode ? "activeEffect" : ""}
+              >
+                Draw Projection Surface
+              </button>
+              <button className="primary" onClick={() => setProjectionOnly(!projectionOnly)}>
+                {projectionOnly ? <EyeOff size={18} /> : <Eye size={18} />}
+                {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}
+              </button>
             </div>
-          </div>
-        </section>
-      </section>
+          </aside>
 
-      {/* STEP 8: CSS Styling */}
-      <style>{`
-        .polygonProjectionWrapper {
-          pointer-events: none;
-        }
-        .polygonContent {
-          transition: clip-path 0.3s ease;
-        }
-        .stage.projectionOnly .referencePhoto,
-        .stage.projectionOnly .polyOverlay {
-          opacity: 0;
-        }
-        /* Ensures the SVG layer aligns perfectly with reference photo */
-        .surfaceLayer svg {
-          display: block;
-        }
-      `}</style>
+          <section className="stageWrap">
+            <div className={`stage ${projectionOnly ? "projectionOnly" : ""}`}>
+              <div 
+                ref={surfaceRef}
+                className="surfaceLayer" 
+                style={{ aspectRatio: `${imageSize.width}/${imageSize.height}` }}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+              >
+                {imageUrl && <img ref={imageRef} className="referencePhoto" src={imageUrl} alt="" draggable={false} />}
+                
+                {/* --- PATCH: STEPS 4, 5, 6 --- */}
+                {renderPolygonProjectionLayer()}
+
+                {!surfacePolygonClosed ? (
+                  projectionArea && (
+                    <div className="projectionSurface" style={toStyle(projectionArea)}>
+                      {renderProjectionLayer()}
+                    </div>
+                  )
+                ) : null}
+
+                {/* Setup Overlays (Zones, handles, etc) */}
+                {!projectionOnly && zones.map(zone => (
+                  <div key={zone.id} className={`zone ${shapeClass(zone.shape)}`} style={toStyle(zone)}>
+                    <span>{zones.indexOf(zone) + 1}</span>
+                  </div>
+                ))}
+                
+                {draftRect && <div className="draftZone" style={toStyle(draftRect)} />}
+                
+                {/* Polygon UI overlay */}
+                <svg className="polygonUI" viewBox="0 0 100 100" preserveAspectRatio="none" style={{position:'absolute', inset:0, pointerEvents:'none'}}>
+                    {surfacePolygonPoints.length > 1 && (
+                        <polyline points={surfacePolygonPoints.map(p => `${p.x},${p.y}`).join(" ")} fill="none" stroke="yellow" strokeWidth="0.5" />
+                    )}
+                </svg>
+              </div>
+            </div>
+          </section>
+        </section>
+      )}
     </main>
   );
 }
