@@ -17,6 +17,15 @@ export type GeometryZone = Zone & {
   shape?: "rectangle" | "circle" | "oval" | "triangle" | "freehand";
 };
 
+function normalizedShape(zone: GeometryZone) {
+  const label = (zone.label ?? "").toLowerCase();
+  if (zone.shape === "circle" || label.includes("circle")) return "circle";
+  if (zone.shape === "oval" || label.includes("oval")) return "oval";
+  if (zone.shape === "triangle" || label.includes("triangle")) return "triangle";
+  if (zone.shape === "freehand" || label.includes("freehand")) return "freehand";
+  return zone.shape ?? "rectangle";
+}
+
 export function zoneToGeometryPoints(
   zone: GeometryZone,
   steps = 24
@@ -25,7 +34,7 @@ export function zoneToGeometryPoints(
   const y = zone.y;
   const w = zone.width;
   const h = zone.height;
-  const shape = zone.shape ?? "rectangle";
+  const shape = normalizedShape(zone);
 
   if (shape === "rectangle") {
     return [
