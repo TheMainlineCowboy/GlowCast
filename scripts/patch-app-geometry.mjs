@@ -25,4 +25,31 @@ if (!text.includes('type MaskShape = "rectangle" | "circle" | "oval" | "triangle
   text = text.replace("type ProjectZone = Zone & {", maskShapeType + "type ProjectZone = Zone & {");
 }
 
+// Some older UI states saved circle masks as rectangle-shaped zones with a circle label.
+// Normalize that before geometry/mask rendering so circle uses real circle math.
+if (!text.includes("function normalizeZoneShape")) {
+  text = text.replace(
+    "const shapeClass = (shape?: MaskShape) => `shape-${shape ?? \"rectangle\"}`;",
+    `const normalizeShape = (shape?: MaskShape, label?: string) => {
+  const normalizedLabel = (label ?? "").toLowerCase();
+  if (shape === "circle" || normalizedLabel.includes("circle")) return "circle";
+  if (shape === "oval" || normalizedLabel.includes("oval")) return "oval";
+  if (shape === "triangle" || normalizedLabel.includes("triangle")) return "triangle";
+  if (shape === "freehand" || normalizedLabel.includes("freehand")) return "freehand";
+  return shape ?? "rectangle";
+};
+
+function normalizeZoneShape<T extends { shape?: MaskShape; label?: string }>(zone: T): T {
+  return { ...zone, shape: normalizeShape(zone.shape, zone.label) };
+}
+
+const shapeClass = (shape?: MaskShape) => \`shape-\${shape ?? "rectangle"}\`;`
+  );
+}
+
+text = text.replace(
+  "const includedZones = zones.filter((zone) => zone.included);",
+  "const includedZones = zones.filter((zone) => zone.included).map(normalizeZoneShape);"
+);
+
 writeFileSync(appPath, text);
