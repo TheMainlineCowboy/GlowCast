@@ -1,26 +1,29 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
-const path = "src/App.tsx";
-let text = readFileSync(path, "utf8");
+const appPath = "src/App.tsx";
+let text = readFileSync(appPath, "utf8");
 
-text = text.replaceAll(
-  "{surfacePolygonClosed && !projectionOnly && surfacePolygonPoints.map((point, index) => (",
-  "{step === \"start\" && surfacePolygonClosed && !projectionOnly && surfacePolygonPoints.map((point, index) => ("
-);
-
-text = text.replaceAll(
-  "{step === \"start\" && step === \"start\" && surfacePolygonClosed && !projectionOnly && surfacePolygonPoints.map((point, index) => (",
-  "{step === \"start\" && surfacePolygonClosed && !projectionOnly && surfacePolygonPoints.map((point, index) => ("
+text = text.replace(
+  /\{(?:step === \"start\" && )*surfacePolygonClosed && !projectionOnly && surfacePolygonPoints\.map\(\(point, index\) => \(/g,
+  '{step === "start" && surfacePolygonClosed && !projectionOnly && surfacePolygonPoints.map((point, index) => ('
 );
 
 text = text.replace(
-  "{projectionArea && showSurfaceHandles && !projectionOnly && !cornerMode && !surfacePolygonMode ? (",
-  "{step === \"start\" && projectionArea && showSurfaceHandles && !projectionOnly && !cornerMode && !surfacePolygonMode ? ("
+  /\{(?:step === \"start\" && )*projectionArea && showSurfaceHandles && !projectionOnly && !cornerMode && !surfacePolygonMode \? \(/g,
+  '{step === "start" && projectionArea && showSurfaceHandles && !projectionOnly && !cornerMode && !surfacePolygonMode ? ('
 );
 
-text = text.replaceAll(
-  "{step === \"start\" && step === \"start\" && projectionArea && showSurfaceHandles && !projectionOnly && !cornerMode && !surfacePolygonMode ? (",
-  "{step === \"start\" && projectionArea && showSurfaceHandles && !projectionOnly && !cornerMode && !surfacePolygonMode ? ("
-);
+writeFileSync(appPath, text);
 
-writeFileSync(path, text);
+const cssPath = "styles.css";
+let css = readFileSync(cssPath, "utf8");
+if (!css.includes("Mask page surface edit hard block")) {
+  css += `
+/* Mask page surface edit hard block */
+.maskOnlyWorkspace .surfacePointHandle,
+.maskOnlyWorkspace .projectionBoundary{display:none!important;pointer-events:none!important;visibility:hidden!important;}
+.maskOnlyWorkspace .surfacePolygonOverlay circle{display:none!important;pointer-events:none!important;}
+.maskOnlyWorkspace .surfacePolygonOverlay{pointer-events:none!important;}
+`;
+}
+writeFileSync(cssPath, css);
