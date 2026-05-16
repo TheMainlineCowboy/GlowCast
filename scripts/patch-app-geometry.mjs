@@ -38,7 +38,7 @@ const shapeClass = (shape?: MaskShape) => \`shape-\${shape ?? "rectangle"}\`;`);
 text = text.replace("const includedZones = zones.filter((zone) => zone.included);", "const includedZones = zones.filter((zone) => zone.included).map(normalizeZoneShape);");
 
 if (!text.includes("function getCircleDraftZone")) {
-  text = text.replace("  function getImagePoint(event: React.PointerEvent<HTMLElement>) {", `  function getCircleDraftZone(draft: DraftZone): Omit<ProjectZone, "id" | "included"> {
+  text = text.replace("  function getPoint(event: React.PointerEvent, allowSnap = true) {", `  function getCircleDraftZone(draft: DraftZone): Omit<ProjectZone, "id" | "included"> {
     const rect = surfaceRef.current?.getBoundingClientRect();
     const aspect = rect && rect.height > 0 ? rect.width / rect.height : 1;
     const dx = draft.currentX - draft.startX;
@@ -50,7 +50,7 @@ if (!text.includes("function getCircleDraftZone")) {
     return clampZone({ x, y, width, height, shape: "circle" });
   }
 
-  function getImagePoint(event: React.PointerEvent<HTMLElement>) {`);
+  function getPoint(event: React.PointerEvent, allowSnap = true) {`);
 }
 
 text = text.replace("  const draftRect = draftZone ? normalizeDraftZone(draftZone) : null;", "  const draftRect = draftZone ? (draftZone.shape === \"circle\" ? getCircleDraftZone(draftZone) : normalizeDraftZone(draftZone)) : null;");
