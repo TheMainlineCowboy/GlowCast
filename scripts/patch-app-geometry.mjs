@@ -25,8 +25,6 @@ if (!text.includes('type MaskShape = "rectangle" | "circle" | "oval" | "triangle
   text = text.replace("type ProjectZone = Zone & {", maskShapeType + "type ProjectZone = Zone & {");
 }
 
-// Some older UI states saved circle masks as rectangle-shaped zones with a circle label.
-// Normalize that before geometry/mask rendering so circle uses real circle math.
 if (!text.includes("function normalizeZoneShape")) {
   text = text.replace(
     "const shapeClass = (shape?: MaskShape) => `shape-${shape ?? \"rectangle\"}`;",
@@ -50,6 +48,45 @@ const shapeClass = (shape?: MaskShape) => \`shape-\${shape ?? "rectangle"}\`;`
 text = text.replace(
   "const includedZones = zones.filter((zone) => zone.included);",
   "const includedZones = zones.filter((zone) => zone.included).map(normalizeZoneShape);"
+);
+
+if (!text.includes("function renderZoneMaskPrimitive")) {
+  text = text.replace(
+    "  function renderPolygonProjectionLayer(extra = \"\") {",
+    `  function renderZoneMaskPrimitive(zone: ProjectZone, key: string) {
+    const shape = normalizeShape(zone.shape, zone.label);
+    const x = zone.x;
+    const y = zone.y;
+    const w = zone.width;
+    const h = zone.height;
+
+    if (zone.points && zone.points.length >= 3) {
+      return <polygon key={key} points={zone.points.map((point) => point.x + "," + point.y).join(" ")} fill="black" />;
+    }
+
+    if (shape === "circle") {
+      const size = Math.min(w, h);
+      return <ellipse key={key} cx={x + w / 2} cy={y + h / 2} rx={size / 2} ry={size / 2} fill="black" />;
+    }
+
+    if (shape === "oval") {
+      return <ellipse key={key} cx={x + w / 2} cy={y + h / 2} rx={w / 2} ry={h / 2} fill="black" />;
+    }
+
+    if (shape === "triangle") {
+      return <polygon key={key} points={(x + w / 2) + "," + y + " " + (x + w) + "," + (y + h) + " " + x + "," + (y + h)} fill="black" />;
+    }
+
+    return <rect key={key} x={x} y={y} width={w} height={h} fill="black" />;
+  }
+
+  function renderPolygonProjectionLayer(extra = "") {`
+  );
+}
+
+text = text.replace(
+  /\{includedZones\.map\(\(zone\) => \(\s*<rect key=\{`pm-\$\{zone\.id\}`} x=\{zone\.x\} y=\{zone\.y\} width=\{zone\.width\} height=\{zone\.height\} fill="black" \/>\s*\)\)\}/s,
+  "{includedZones.map((zone) => renderZoneMaskPrimitive(zone, `pm-${zone.id}`))}"
 );
 
 writeFileSync(appPath, text);
