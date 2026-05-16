@@ -34,16 +34,17 @@ if (!text.includes("async function generateFlattenedSurfacePreview")) {
   );
 }
 
-text = text.replaceAll(
-  "setFlattenedSurfaceUrl(null);\n    setFlattenedSurfaceMessage(\"Flattened preview has not been generated yet.\");",
-  "setFlattenedSurfaceUrl(null);\n    setFlattenedSurfaceMessage(\"Flattened preview has not been generated yet.\");"
-);
-
+const flattenButton = "              <button type=\"button\" onClick={generateFlattenedSurfacePreview} disabled={!imageUrl || surfacePolygonPoints.length < 4}>Flatten Surface Preview</button>\n";
 if (!text.includes("Flatten Surface Preview")) {
-  text = text.replace(
-    "              <button className=\"primary\" type=\"button\" onClick={() => { setShowSurfaceHandles(false); setSelectedTarget(\"zone\"); setSelectedZoneId(null); setStep(\"mask\"); }} disabled={!surfacePolygonClosed && !projectionArea}>Continue to Mask & Edit</button>",
-    "              <button type=\"button\" onClick={generateFlattenedSurfacePreview} disabled={!imageUrl || surfacePolygonPoints.length < 4}>Flatten Surface Preview</button>\n              <button className=\"primary\" type=\"button\" onClick={() => { setShowSurfaceHandles(false); setSelectedTarget(\"zone\"); setSelectedZoneId(null); setStep(\"mask\"); }} disabled={!surfacePolygonClosed && !projectionArea}>Continue to Mask & Edit</button>"
-  );
+  const continueButtonRegex = /(              <button className=\"primary\" type=\"button\" onClick=\{\(\) => \{[^}]*setStep\(\"mask\"\); \}\} disabled=\{!surfacePolygonClosed && !projectionArea\}>Continue to Mask & Edit<\/button>)/;
+  if (continueButtonRegex.test(text)) {
+    text = text.replace(continueButtonRegex, flattenButton + "$1");
+  } else {
+    text = text.replace(
+      "              <button className=\"primary\" type=\"button\" onClick={() => { setShowSurfaceHandles(false); setSurfacePointAction(null); setResizeAction(null); setSelectedTarget(\"zone\"); setSelectedZoneId(null); setStep(\"mask\"); }} disabled={!surfacePolygonClosed && !projectionArea}>Continue to Mask & Edit</button>",
+      flattenButton + "              <button className=\"primary\" type=\"button\" onClick={() => { setShowSurfaceHandles(false); setSurfacePointAction(null); setResizeAction(null); setSelectedTarget(\"zone\"); setSelectedZoneId(null); setStep(\"mask\"); }} disabled={!surfacePolygonClosed && !projectionArea}>Continue to Mask & Edit</button>"
+    );
+  }
 }
 
 text = text.replace(
