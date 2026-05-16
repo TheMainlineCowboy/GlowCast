@@ -10,10 +10,22 @@ if (!text.includes("const [flattenedSurfaceUrl")) {
   );
 }
 
+if (!text.includes("function surfacePointDistancePixels")) {
+  text = text.replace(
+    "  function distanceBetweenPoints(a: SurfacePoint, b: SurfacePoint) {",
+    "  function surfacePointDistancePixels(a: SurfacePoint, b: SurfacePoint, image: HTMLImageElement) {\n    const dx = ((a.x - b.x) / 100) * image.naturalWidth;\n    const dy = ((a.y - b.y) / 100) * image.naturalHeight;\n    return Math.sqrt(dx * dx + dy * dy);\n  }\n\n  function getFlattenedPreviewSize(points: SurfacePoint[], image: HTMLImageElement) {\n    const [tl, tr, br, bl] = points;\n    const top = surfacePointDistancePixels(tl, tr, image);\n    const bottom = surfacePointDistancePixels(bl, br, image);\n    const left = surfacePointDistancePixels(tl, bl, image);\n    const right = surfacePointDistancePixels(tr, br, image);\n    const widthEdge = Math.max(1, (top + bottom) / 2);\n    const heightEdge = Math.max(1, (left + right) / 2);\n    const ratio = Math.min(4, Math.max(0.25, widthEdge / heightEdge));\n    const maxLongSide = 1200;\n    if (ratio >= 1) return { width: maxLongSide, height: Math.max(240, Math.round(maxLongSide / ratio)), ratio };\n    return { width: Math.max(240, Math.round(maxLongSide * ratio)), height: maxLongSide, ratio };\n  }\n\n  function distanceBetweenPoints(a: SurfacePoint, b: SurfacePoint) {"
+  );
+}
+
 if (!text.includes("async function generateFlattenedSurfacePreview")) {
   text = text.replace(
     "  function resetSurfacePolygon() {",
-    "  async function generateFlattenedSurfacePreview() {\n    if (!imageUrl || surfacePolygonPoints.length < 4) {\n      setFlattenedSurfaceMessage(\"Set a four-point projection surface first.\");\n      return;\n    }\n    try {\n      setFlattenedSurfaceMessage(\"Generating flattened surface preview...\");\n      const image = await loadImage(imageUrl);\n      const quad = surfacePolygonPoints.slice(0, 4).map((point) => ({ x: point.x, y: point.y })) as Quad;\n      const canvas = warpImageToCanvas(image, quad, 1200, 675);\n      setFlattenedSurfaceUrl(canvas.toDataURL(\"image/png\"));\n      setFlattenedSurfaceMessage(\"Flattened preview generated from the first four surface points.\");\n    } catch (error) {\n      setFlattenedSurfaceMessage(error instanceof Error ? error.message : \"Could not generate flattened surface preview.\");\n    }\n  }\n\n  function resetSurfacePolygon() {"
+    "  async function generateFlattenedSurfacePreview() {\n    if (!imageUrl || surfacePolygonPoints.length < 4) {\n      setFlattenedSurfaceMessage(\"Set a four-point projection surface first.\");\n      return;\n    }\n    try {\n      setFlattenedSurfaceMessage(\"Generating flattened surface preview...\");\n      const image = await loadImage(imageUrl);\n      const quadPoints = surfacePolygonPoints.slice(0, 4);\n      const quad = quadPoints.map((point) => ({ x: point.x, y: point.y })) as Quad;\n      const previewSize = getFlattenedPreviewSize(quadPoints, image);\n      const canvas = warpImageToCanvas(image, quad, previewSize.width, previewSize.height);\n      setFlattenedSurfaceUrl(canvas.toDataURL(\"image/png\"));\n      setFlattenedSurfaceMessage(\"Flattened preview generated with the selected surface aspect ratio.\");\n    } catch (error) {\n      setFlattenedSurfaceMessage(error instanceof Error ? error.message : \"Could not generate flattened surface preview.\");\n    }\n  }\n\n  function resetSurfacePolygon() {"
+  );
+} else {
+  text = text.replace(
+    "      const quad = surfacePolygonPoints.slice(0, 4).map((point) => ({ x: point.x, y: point.y })) as Quad;\n      const canvas = warpImageToCanvas(image, quad, 1200, 675);\n      setFlattenedSurfaceUrl(canvas.toDataURL(\"image/png\"));\n      setFlattenedSurfaceMessage(\"Flattened preview generated from the first four surface points.\");",
+    "      const quadPoints = surfacePolygonPoints.slice(0, 4);\n      const quad = quadPoints.map((point) => ({ x: point.x, y: point.y })) as Quad;\n      const previewSize = getFlattenedPreviewSize(quadPoints, image);\n      const canvas = warpImageToCanvas(image, quad, previewSize.width, previewSize.height);\n      setFlattenedSurfaceUrl(canvas.toDataURL(\"image/png\"));\n      setFlattenedSurfaceMessage(\"Flattened preview generated with the selected surface aspect ratio.\");"
   );
 }
 
@@ -42,6 +54,9 @@ writeFileSync(appPath, text);
 const cssPath = "styles.css";
 let css = readFileSync(cssPath, "utf8");
 if (!css.includes(".flattenPreviewPanel")) {
-  css += `\n.flattenPreviewPanel{margin-top:12px;border:1px solid rgba(148,163,184,.25);background:rgba(15,23,42,.72);border-radius:22px;padding:14px}.flattenPreviewPanel img{width:100%;display:block;border-radius:14px;background:#020617}.flattenPreviewEmpty{height:160px;display:grid;place-items:center;border:1px dashed rgba(148,163,184,.35);border-radius:14px;color:#94a3b8;background:rgba(2,6,23,.45)}.startStageColumn{min-width:0}@media(max-width:960px){.flattenPreviewPanel{margin:10px 8px 0!important;padding:10px!important;border-radius:16px!important}.flattenPreviewEmpty{height:120px!important}}\n`;
+  css += `\n.flattenPreviewPanel{margin-top:12px;border:1px solid rgba(148,163,184,.25);background:rgba(15,23,42,.72);border-radius:22px;padding:14px}.flattenPreviewPanel img{max-width:100%;width:auto;margin:0 auto;display:block;border-radius:14px;background:#020617}.flattenPreviewEmpty{height:160px;display:grid;place-items:center;border:1px dashed rgba(148,163,184,.35);border-radius:14px;color:#94a3b8;background:rgba(2,6,23,.45)}.startStageColumn{min-width:0}@media(max-width:960px){.flattenPreviewPanel{margin:10px 8px 0!important;padding:10px!important;border-radius:16px!important}.flattenPreviewPanel img{max-width:100%!important;width:auto!important}.flattenPreviewEmpty{height:120px!important}}\n`;
+} else {
+  css = css.replaceAll(".flattenPreviewPanel img{width:100%;display:block;border-radius:14px;background:#020617}", ".flattenPreviewPanel img{max-width:100%;width:auto;margin:0 auto;display:block;border-radius:14px;background:#020617}");
+  css = css.replaceAll(".flattenPreviewPanel img{width:100%!important;", ".flattenPreviewPanel img{max-width:100%!important;width:auto!important;");
 }
 writeFileSync(cssPath, css);
