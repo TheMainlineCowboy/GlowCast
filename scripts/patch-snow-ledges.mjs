@@ -17,30 +17,66 @@ if (start !== -1 && end !== -1) {
     `function createLedgesFromZones(zones: ProjectZone[], canvasWidth: number, canvasHeight: number): SnowLedge[] {
   const ledges: SnowLedge[] = [];
 
-  zones.filter((zone) => zone.included && (zone.shape ?? "rectangle") === "rectangle").forEach((zone) => {
-    const x1Raw = (zone.x / 100) * canvasWidth;
-    const y = (zone.y / 100) * canvasHeight;
-    const x2Raw = ((zone.x + zone.width) / 100) * canvasWidth;
+  const addLedge = (x1Raw: number, y1: number, x2Raw: number, y2: number) => {
     const dx = x2Raw - x1Raw;
-
+    const dy = y2 - y1;
     if (Math.abs(dx) < 0.001) return;
 
     const xMin = Math.min(x1Raw, x2Raw);
     const xMax = Math.max(x1Raw, x2Raw);
-    const slope = 0;
-    const intercept = y;
+    const slope = dy / dx;
+    const intercept = y1 - slope * x1Raw;
+    const len = Math.max(1, Math.sqrt(dx * dx + dy * dy));
 
     ledges.push({
       x1: xMin,
-      y1: y,
+      y1,
       x2: xMax,
-      y2: y,
+      y2,
       slope,
       intercept,
-      normalX: 0,
-      normalY: 1,
+      normalX: -dy / len,
+      normalY: dx / len,
       accumulation: new Array(Math.max(1, Math.floor(xMax - xMin))).fill(0)
     });
+  };
+
+  zones.filter((zone) => zone.included).forEach((zone) => {
+    const shape = zone.shape ?? "rectangle";
+
+    if (shape === "rectangle") {
+      const x1Raw = (zone.x / 100) * canvasWidth;
+      const y = (zone.y / 100) * canvasHeight;
+      const x2Raw = ((zone.x + zone.width) / 100) * canvasWidth;
+      addLedge(x1Raw, y, x2Raw, y);
+      return;
+    }
+
+    if (shape === "circle" || shape === "oval") {
+      const x = (zone.x / 100) * canvasWidth;
+      const y = (zone.y / 100) * canvasHeight;
+      const w = (zone.width / 100) * canvasWidth;
+      const h = (zone.height / 100) * canvasHeight;
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      const rx = shape === "circle" ? Math.min(w, h) / 2 : w / 2;
+      const ry = shape === "circle" ? Math.min(w, h) / 2 : h / 2;
+      const steps = 40;
+      const points = Array.from({ length: steps + 1 }, (_, index) => {
+        const angle = Math.PI + (Math.PI * index) / steps;
+        return { x: cx + Math.cos(angle) * rx, y: cy + Math.sin(angle) * ry };
+      });
+
+      for (let index = 0; index < points.length - 1; index += 1) {
+        const p1 = points[index];
+        const p2 = points[index + 1];
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        if (Math.abs(dx) < 0.001) continue;
+        if (Math.abs(dy / dx) > 2.25) continue;
+        addLedge(p1.x, p1.y, p2.x, p2.y);
+      }
+    }
   });
 
   return ledges;
