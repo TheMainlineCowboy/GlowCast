@@ -34,20 +34,17 @@ if (!text.includes("async function generateFlattenedSurfacePreview")) {
   );
 }
 
-text = text.replace(
-  "    setSurfacePolygonClosed(false);",
-  "    setSurfacePolygonClosed(false);\n    setFlattenedSurfaceUrl(null);\n    setFlattenedSurfaceMessage(\"Flattened preview has not been generated yet.\");"
+text = text.replaceAll(
+  "setFlattenedSurfaceUrl(null);\n    setFlattenedSurfaceMessage(\"Flattened preview has not been generated yet.\");",
+  "setFlattenedSurfaceUrl(null);\n    setFlattenedSurfaceMessage(\"Flattened preview has not been generated yet.\");"
 );
 
-text = text.replace(
-  "    resetSurfacePolygon();\n    resetEdgeScanner();",
-  "    resetSurfacePolygon();\n    setFlattenedSurfaceUrl(null);\n    setFlattenedSurfaceMessage(\"Flattened preview has not been generated yet.\");\n    resetEdgeScanner();"
-);
-
-text = text.replace(
-  "              <button className=\"primary\" type=\"button\" onClick={() => setStep(\"mask\")} disabled={!surfacePolygonClosed && !projectionArea}>Continue to Mask & Edit</button>",
-  "              <button type=\"button\" onClick={generateFlattenedSurfacePreview} disabled={!imageUrl || surfacePolygonPoints.length < 4}>Flatten Surface Preview</button>\n              <button className=\"primary\" type=\"button\" onClick={() => setStep(\"mask\")} disabled={!surfacePolygonClosed && !projectionArea}>Continue to Mask & Edit</button>"
-);
+if (!text.includes("Flatten Surface Preview")) {
+  text = text.replace(
+    "              <button className=\"primary\" type=\"button\" onClick={() => { setShowSurfaceHandles(false); setSelectedTarget(\"zone\"); setSelectedZoneId(null); setStep(\"mask\"); }} disabled={!surfacePolygonClosed && !projectionArea}>Continue to Mask & Edit</button>",
+    "              <button type=\"button\" onClick={generateFlattenedSurfacePreview} disabled={!imageUrl || surfacePolygonPoints.length < 4}>Flatten Surface Preview</button>\n              <button className=\"primary\" type=\"button\" onClick={() => { setShowSurfaceHandles(false); setSelectedTarget(\"zone\"); setSelectedZoneId(null); setStep(\"mask\"); }} disabled={!surfacePolygonClosed && !projectionArea}>Continue to Mask & Edit</button>"
+  );
+}
 
 text = text.replace(
   "          {imageUrl ? stage : null}\n        </section>",
