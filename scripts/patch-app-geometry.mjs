@@ -54,17 +54,20 @@ if (!text.includes("function getCircleStageAspect")) {
     return clampZone({ x, y, width, height, shape: "circle" });
   }
 
-  function lockCircleResizeZone(original: ProjectZone, point: { x: number; y: number }, mode: ResizeMode): Pick<Zone, "x" | "y" | "width" | "height"> {
-    if (mode === "move") return clampZonePositionOnly({ x: point.x, y: point.y, width: original.width, height: original.height });
+  function lockCircleResizeZone(original: ProjectZone, start: { x: number; y: number }, point: { x: number; y: number }, mode: ResizeMode): Pick<Zone, "x" | "y" | "width" | "height"> {
+    if (mode === "move") return clampZonePositionOnly({ x: original.x + point.x - start.x, y: original.y + point.y - start.y, width: original.width, height: original.height });
     const aspect = getCircleStageAspect();
+    const dx = point.x - start.x;
+    const dy = point.y - start.y;
+    let widthDelta = 0;
+    if (mode.includes("e")) widthDelta += dx;
+    if (mode.includes("w")) widthDelta -= dx;
+    if (mode.includes("s")) widthDelta += dy / Math.max(aspect, 0.001);
+    if (mode.includes("n")) widthDelta -= dy / Math.max(aspect, 0.001);
+    const width = Math.max(2, original.width + widthDelta);
+    const height = width * aspect;
     const centerX = original.x + original.width / 2;
     const centerY = original.y + original.height / 2;
-    let width = original.width;
-    if (mode.includes("e")) width = Math.max(2, (point.x - original.x) * 2);
-    else if (mode.includes("w")) width = Math.max(2, (original.x + original.width - point.x) * 2);
-    else if (mode.includes("s")) width = Math.max(2, ((point.y - original.y) * 2) / Math.max(aspect, 0.001));
-    else if (mode.includes("n")) width = Math.max(2, ((original.y + original.height - point.y) * 2) / Math.max(aspect, 0.001));
-    const height = width * aspect;
     return clampZone({ x: centerX - width / 2, y: centerY - height / 2, width, height });
   }
 
@@ -76,7 +79,7 @@ text = text.replace("    const rect = normalizeDraftZone(draftZone);", "    cons
 
 text = text.replace(
   "    const update = action.mode === \"move\" \n      ? clampZonePositionOnly({ x, y, width: original.width, height: original.height }) \n      : clampZone({ x, y, width, height });",
-  "    const update = original.shape === \"circle\"\n      ? lockCircleResizeZone(original, point, action.mode)\n      : action.mode === \"move\" \n        ? clampZonePositionOnly({ x, y, width: original.width, height: original.height }) \n        : clampZone({ x, y, width, height });"
+  "    const update = original.shape === \"circle\"\n      ? lockCircleResizeZone(original, { x: action.startX, y: action.startY }, point, action.mode)\n      : action.mode === \"move\" \n        ? clampZonePositionOnly({ x, y, width: original.width, height: original.height }) \n        : clampZone({ x, y, width, height });"
 );
 
 if (!text.includes("function renderZoneMaskPrimitive")) {
