@@ -15,17 +15,22 @@ text = text.replace(
   "    if (resizeAction) return;\n\n    if (!drawMode && !cornerMode && !surfacePolygonMode && !(event.target as HTMLElement).closest(\".zone,.projectionBoundary,.resizeHandle\")) {\n      setSelectedTarget(\"surface\");\n      setSelectedZoneId(null);\n    }"
 );
 
-text = text.replace(
+text = text.replaceAll(
   "{zone.shape === \"triangle\" ? (",
   "{showMaskOutlines && zone.shape === \"triangle\" ? ("
 );
-text = text.replace(
+text = text.replaceAll(
   "{(zone.shape === \"circle\" || zone.shape === \"oval\") ? (",
   "{showMaskOutlines && (zone.shape === \"circle\" || zone.shape === \"oval\") ? ("
 );
-text = text.replace(
+text = text.replaceAll(
   "{zone.shape === \"freehand\" ? (",
   "{showMaskOutlines && zone.shape === \"freehand\" ? ("
+);
+
+text = text.replace(
+  "{renderHandles(\"zone\", zone)}",
+  "{showMaskOutlines ? renderHandles(\"zone\", zone) : null}"
 );
 
 text = text.replace(
