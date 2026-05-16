@@ -3,6 +3,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 const path = "src/App.tsx";
 let text = readFileSync(path, "utf8");
 
+text = text.replace('setStep("mask");', 'setStep("start");');
+
 const startBlockStart = '      {step === "start" && (';
 const startBlockEnd = '      {step === "mask" && (';
 const startStart = text.indexOf(startBlockStart);
