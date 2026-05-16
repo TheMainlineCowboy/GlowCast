@@ -89,4 +89,9 @@ text = text.replace(
   "{includedZones.map((zone) => renderZoneMaskPrimitive(zone, `pm-${zone.id}`))}"
 );
 
+text = text.replace(
+  "          {invertMode && includedZones.map((zone) => (",
+  "          {invertMode && !surfacePolygonClosed && includedZones.map((zone) => ("
+);
+
 writeFileSync(appPath, text);
