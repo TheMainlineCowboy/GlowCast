@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "node scripts/patch-app-geometry.mjs && node scripts/patch-snow-ledges.mjs && node scripts/patch-selection-cleanup.mjs && node scripts/patch-workflow-separation.mjs && tsc && vite build",
+    "build": "node scripts/patch-app-geometry.mjs && node scripts/patch-snow-ledges.mjs && node scripts/patch-selection-cleanup.mjs && node scripts/patch-workflow-separation.mjs && node scripts/patch-surface-handles-start-only.mjs && node scripts/patch-page2-surface-guide-toggle.mjs && tsc && vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
