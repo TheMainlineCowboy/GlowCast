@@ -31,10 +31,7 @@ if (!text.includes("function startSurfacePointDrag")) {
   );
 }
 
-text = text.replace(
-  "    if (resizeAction) return;",
-  "    if (resizeAction || surfacePointAction) return;"
-);
+text = text.replace("    if (resizeAction) return;", "    if (resizeAction || surfacePointAction) return;");
 
 if (!text.includes("if (surfacePointAction)")) {
   text = text.replace(
@@ -43,41 +40,23 @@ if (!text.includes("if (surfacePointAction)")) {
   );
 }
 
-text = text.replace(
-  "    setResizeAction(null);",
-  "    setResizeAction(null);\n    setSurfacePointAction(null);"
-);
+text = text.replace("    setResizeAction(null);", "    setResizeAction(null);\n    setSurfacePointAction(null);");
 
 if (!text.includes("surfacePointHandle")) {
   text = text.replace(
-    "        {surfacePolygonPoints.map((point, index) => (\n          <circle key={index} cx={point.x} cy={point.y} r={index === 0 ? 1.2 : 0.8} fill={index === 0 ? \"#facc15\" : \"#fef08a\"} />\n        ))}\n      </svg>",
-    "        {surfacePolygonPoints.map((point, index) => (\n          <circle key={index} cx={point.x} cy={point.y} r={index === 0 ? 1.2 : 0.8} fill={index === 0 ? \"#facc15\" : \"#fef08a\"} />\n        ))}\n      </svg>\n      {surfacePolygonClosed && !projectionOnly && surfacePolygonPoints.map((point, index) => (\n        <button key={\"surface-point-\" + index} type=\"button\" className=\"surfacePointHandle\" onPointerDown={(event) => startSurfacePointDrag(event, index)} aria-label={\"Move surface point \" + (index + 1)} style={{ left: point.x + \"%\", top: point.y + \"%\" }} />\n      ))}"
+    "    return (\n      <svg className=\"surfacePolygonOverlay\" viewBox=\"0 0 100 100\" preserveAspectRatio=\"none\" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 7 }}>",
+    "    return (\n      <>\n      <svg className=\"surfacePolygonOverlay\" viewBox=\"0 0 100 100\" preserveAspectRatio=\"none\" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 7 }}>"
   );
-}
-
-if (!text.includes('selectedZoneId(null);')) {
   text = text.replace(
-    "    if (resizeAction) return;",
-    "    if (resizeAction) return;\n\n    if (!drawMode && !cornerMode && !surfacePolygonMode && !(event.target as HTMLElement).closest(\".zone,.projectionBoundary,.resizeHandle\")) {\n      setSelectedTarget(\"surface\");\n      setSelectedZoneId(null);\n    }"
+    "        {surfacePolygonPoints.map((point, index) => (\n          <circle key={index} cx={point.x} cy={point.y} r={index === 0 ? 1.2 : 0.8} fill={index === 0 ? \"#facc15\" : \"#fef08a\"} />\n        ))}\n      </svg>",
+    "        {surfacePolygonPoints.map((point, index) => (\n          <circle key={index} cx={point.x} cy={point.y} r={index === 0 ? 1.2 : 0.8} fill={index === 0 ? \"#facc15\" : \"#fef08a\"} />\n        ))}\n      </svg>\n      {surfacePolygonClosed && !projectionOnly && surfacePolygonPoints.map((point, index) => (\n        <button key={\"surface-point-\" + index} type=\"button\" className=\"surfacePointHandle\" onPointerDown={(event) => startSurfacePointDrag(event, index)} aria-label={\"Move surface point \" + (index + 1)} style={{ left: point.x + \"%\", top: point.y + \"%\" }} />\n      ))}\n      </>"
   );
 }
 
-text = text.replaceAll(
-  "{zone.shape === \"triangle\" ? (",
-  "{showMaskOutlines && zone.shape === \"triangle\" ? ("
-);
-text = text.replaceAll(
-  "{(zone.shape === \"circle\" || zone.shape === \"oval\") ? (",
-  "{showMaskOutlines && (zone.shape === \"circle\" || zone.shape === \"oval\") ? ("
-);
-text = text.replaceAll(
-  "{zone.shape === \"freehand\" ? (",
-  "{showMaskOutlines && zone.shape === \"freehand\" ? ("
-);
-text = text.replaceAll(
-  "{renderHandles(\"zone\", zone)}",
-  "{showMaskOutlines ? renderHandles(\"zone\", zone) : null}"
-);
+text = text.replaceAll("{zone.shape === \"triangle\" ? (", "{showMaskOutlines && zone.shape === \"triangle\" ? (");
+text = text.replaceAll("{(zone.shape === \"circle\" || zone.shape === \"oval\") ? (", "{showMaskOutlines && (zone.shape === \"circle\" || zone.shape === \"oval\") ? (");
+text = text.replaceAll("{zone.shape === \"freehand\" ? (", "{showMaskOutlines && zone.shape === \"freehand\" ? (");
+text = text.replaceAll("{renderHandles(\"zone\", zone)}", "{showMaskOutlines ? renderHandles(\"zone\", zone) : null}");
 
 if (!text.includes("Hide Mask Outlines")) {
   text = text.replace(
