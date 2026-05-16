@@ -37,10 +37,14 @@ const shapeClass = (shape?: MaskShape) => \`shape-\${shape ?? "rectangle"}\`;`);
 
 text = text.replace("const includedZones = zones.filter((zone) => zone.included);", "const includedZones = zones.filter((zone) => zone.included).map(normalizeZoneShape);");
 
-if (!text.includes("function getCircleDraftZone")) {
-  text = text.replace("  function getPoint(event: React.PointerEvent, allowSnap = true) {", `  function getCircleDraftZone(draft: DraftZone): Omit<ProjectZone, "id" | "included"> {
+if (!text.includes("function getCircleStageAspect")) {
+  text = text.replace("  function getPoint(event: React.PointerEvent, allowSnap = true) {", `  function getCircleStageAspect() {
     const rect = surfaceRef.current?.getBoundingClientRect();
-    const aspect = rect && rect.height > 0 ? rect.width / rect.height : 1;
+    return rect && rect.height > 0 ? rect.width / rect.height : 1;
+  }
+
+  function getCircleDraftZone(draft: DraftZone): Omit<ProjectZone, "id" | "included"> {
+    const aspect = getCircleStageAspect();
     const dx = draft.currentX - draft.startX;
     const dy = draft.currentY - draft.startY;
     const width = Math.min(Math.abs(dx), Math.abs(dy) / Math.max(aspect, 0.001));
@@ -50,11 +54,40 @@ if (!text.includes("function getCircleDraftZone")) {
     return clampZone({ x, y, width, height, shape: "circle" });
   }
 
+  function lockCircleResizeZone(original: ProjectZone, point: { x: number; y: number }, mode: ResizeMode): Pick<Zone, "x" | "y" | "width" | "height"> {
+    if (mode === "move") return clampZonePositionOnly({ x: point.x, y: point.y, width: original.width, height: original.height });
+    const aspect = getCircleStageAspect();
+    const left = original.x;
+    const right = original.x + original.width;
+    const top = original.y;
+    const bottom = original.y + original.height;
+    let anchorX = left;
+    let anchorY = top;
+    if (mode.includes("w")) anchorX = right;
+    if (mode.includes("e")) anchorX = left;
+    if (mode.includes("n")) anchorY = bottom;
+    if (mode.includes("s")) anchorY = top;
+    if (mode === "n" || mode === "s") anchorX = original.x + original.width / 2;
+    if (mode === "e" || mode === "w") anchorY = original.y + original.height / 2;
+    const dx = point.x - anchorX;
+    const dy = point.y - anchorY;
+    const width = Math.max(2, Math.min(Math.abs(dx), Math.abs(dy) / Math.max(aspect, 0.001)) * 2);
+    const height = width * aspect;
+    const x = mode.includes("w") ? anchorX - width : mode.includes("e") ? anchorX : anchorX - width / 2;
+    const y = mode.includes("n") ? anchorY - height : mode.includes("s") ? anchorY : anchorY - height / 2;
+    return clampZone({ x, y, width, height });
+  }
+
   function getPoint(event: React.PointerEvent, allowSnap = true) {`);
 }
 
 text = text.replace("  const draftRect = draftZone ? normalizeDraftZone(draftZone) : null;", "  const draftRect = draftZone ? (draftZone.shape === \"circle\" ? getCircleDraftZone(draftZone) : normalizeDraftZone(draftZone)) : null;");
 text = text.replace("    const rect = normalizeDraftZone(draftZone);", "    const rect = draftZone.shape === \"circle\" ? getCircleDraftZone(draftZone) : normalizeDraftZone(draftZone);");
+
+text = text.replace(
+  "    const update = action.mode === \"move\" \n      ? clampZonePositionOnly({ x, y, width: original.width, height: original.height }) \n      : clampZone({ x, y, width, height });",
+  "    const update = original.shape === \"circle\"\n      ? lockCircleResizeZone(original, point, action.mode)\n      : action.mode === \"move\" \n        ? clampZonePositionOnly({ x, y, width: original.width, height: original.height }) \n        : clampZone({ x, y, width, height });"
+);
 
 if (!text.includes("function renderZoneMaskPrimitive")) {
   text = text.replace("  function renderPolygonProjectionLayer(extra = \"\") {", `  function renderZoneMaskPrimitive(zone: ProjectZone, key: string) {
