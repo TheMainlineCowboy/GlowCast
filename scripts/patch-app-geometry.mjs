@@ -57,25 +57,15 @@ if (!text.includes("function getCircleStageAspect")) {
   function lockCircleResizeZone(original: ProjectZone, point: { x: number; y: number }, mode: ResizeMode): Pick<Zone, "x" | "y" | "width" | "height"> {
     if (mode === "move") return clampZonePositionOnly({ x: point.x, y: point.y, width: original.width, height: original.height });
     const aspect = getCircleStageAspect();
-    const left = original.x;
-    const right = original.x + original.width;
-    const top = original.y;
-    const bottom = original.y + original.height;
-    let anchorX = left;
-    let anchorY = top;
-    if (mode.includes("w")) anchorX = right;
-    if (mode.includes("e")) anchorX = left;
-    if (mode.includes("n")) anchorY = bottom;
-    if (mode.includes("s")) anchorY = top;
-    if (mode === "n" || mode === "s") anchorX = original.x + original.width / 2;
-    if (mode === "e" || mode === "w") anchorY = original.y + original.height / 2;
-    const dx = point.x - anchorX;
-    const dy = point.y - anchorY;
-    const width = Math.max(2, Math.min(Math.abs(dx), Math.abs(dy) / Math.max(aspect, 0.001)) * 2);
+    const centerX = original.x + original.width / 2;
+    const centerY = original.y + original.height / 2;
+    let width = original.width;
+    if (mode.includes("e")) width = Math.max(2, (point.x - original.x) * 2);
+    else if (mode.includes("w")) width = Math.max(2, (original.x + original.width - point.x) * 2);
+    else if (mode.includes("s")) width = Math.max(2, ((point.y - original.y) * 2) / Math.max(aspect, 0.001));
+    else if (mode.includes("n")) width = Math.max(2, ((original.y + original.height - point.y) * 2) / Math.max(aspect, 0.001));
     const height = width * aspect;
-    const x = mode.includes("w") ? anchorX - width : mode.includes("e") ? anchorX : anchorX - width / 2;
-    const y = mode.includes("n") ? anchorY - height : mode.includes("s") ? anchorY : anchorY - height / 2;
-    return clampZone({ x, y, width, height });
+    return clampZone({ x: centerX - width / 2, y: centerY - height / 2, width, height });
   }
 
   function getPoint(event: React.PointerEvent, allowSnap = true) {`);
