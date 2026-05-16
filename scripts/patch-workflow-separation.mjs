@@ -5,6 +5,8 @@ let text = readFileSync(path, "utf8");
 
 text = text.replace('setStep("mask");', 'setStep("start");');
 
+const clearSurfaceState = 'setShowSurfaceHandles(false); setSurfacePointAction(null); setResizeAction(null); setSelectedTarget("zone"); setSelectedZoneId(null);';
+
 const startBlockStart = '      {step === "start" && (';
 const startBlockEnd = '      {step === "mask" && (';
 const startStart = text.indexOf(startBlockStart);
@@ -44,7 +46,7 @@ const newStartBlock = `      {step === "start" && (
               </button>
               <button type="button" onClick={resetSurfacePolygon} disabled={!surfacePolygonPoints.length}>Clear Projection Surface</button>
               <button type="button" onClick={() => setShowSurfaceHandles((current) => !current)} disabled={!imageUrl}>{showSurfaceHandles ? "Hide Surface Handles" : "Show Surface Handles"}</button>
-              <button className="primary" type="button" onClick={() => { setShowSurfaceHandles(false); setSelectedTarget("zone"); setSelectedZoneId(null); setStep("mask"); }} disabled={!surfacePolygonClosed && !projectionArea}>Continue to Mask & Edit</button>
+              <button className="primary" type="button" onClick={() => { ${clearSurfaceState} setStep("mask"); }} disabled={!surfacePolygonClosed && !projectionArea}>Continue to Mask & Edit</button>
               <p className="helperText">
                 {surfacePolygonMode ? "Tap the photo to outline your projection surface. Close the shape by tapping your first point." : surfacePolygonClosed ? "Surface set. Drag the yellow points to fine-tune the wall." : imageUrl ? "Draw the projection surface on the photo." : "Upload or choose a photo to begin."}
               </p>
@@ -68,21 +70,21 @@ const newMaskBlock = `      {step === "mask" && (
           <aside className="toolPanel compactPanel">
             <div className="panelBlock">
               <h2>Avoid Masks</h2>
-              <button type="button" onClick={() => { setShowSurfaceHandles(true); setSelectedTarget("surface"); setSelectedZoneId(null); setStep("start"); }}>Adjust Projection Surface</button>
+              <button type="button" onClick={() => { setSurfacePointAction(null); setResizeAction(null); setShowSurfaceHandles(true); setSelectedTarget("surface"); setSelectedZoneId(null); setStep("start"); }}>Adjust Projection Surface</button>
               <button type="button" onClick={toggleEdgeScanner} disabled={!imageUrl || edgeScanning}>{edgeScanning ? "Scanning Edges..." : showEdges ? "Hide Edge Scanner" : "Show Edge Scanner"}</button>
               <label className="toggle"><input type="checkbox" checked={snapEnabled} onChange={(event) => setSnapEnabled(event.target.checked)} /> Magnetic snap</label>
               <div className="shapeToolRow">
                 {shapeOptions.map((shape) => (
-                  <button key={shape.id} className={drawShape === shape.id ? "activeEffect" : ""} onClick={() => { setShowSurfaceHandles(false); setSelectedTarget("zone"); setSelectedZoneId(null); setDrawShape(shape.id); setDrawMode(true); setProjectionOnly(false); setCornerMode(false); setCornerPoints([]); setSurfacePolygonMode(false); }}>
+                  <button key={shape.id} className={drawShape === shape.id ? "activeEffect" : ""} onClick={() => { ${clearSurfaceState} setDrawShape(shape.id); setDrawMode(true); setProjectionOnly(false); setCornerMode(false); setCornerPoints([]); setSurfacePolygonMode(false); }}>
                     {shape.name}
                   </button>
                 ))}
               </div>
-              <button onClick={() => { setShowSurfaceHandles(false); setSelectedTarget("zone"); setSelectedZoneId(null); setDrawMode((value) => !value); setProjectionOnly(false); setCornerMode(false); setCornerPoints([]); setSurfacePolygonMode(false); }} disabled={!imageUrl}>
+              <button onClick={() => { ${clearSurfaceState} setDrawMode((value) => !value); setProjectionOnly(false); setCornerMode(false); setCornerPoints([]); setSurfacePolygonMode(false); }} disabled={!imageUrl}>
                 {drawMode ? <MousePointer2 size={18} /> : <Pencil size={18} />}
                 {drawMode ? "Drawing " + drawShape : "Draw Avoid Zone"}
               </button>
-              <button onClick={() => { setShowSurfaceHandles(false); setSelectedTarget("zone"); setSelectedZoneId(null); addZone(drawShape); }} disabled={!imageUrl || cornerMode || surfacePolygonMode}><Plus size={18} /> Add {drawShape} Zone</button>
+              <button onClick={() => { ${clearSurfaceState} addZone(drawShape); }} disabled={!imageUrl || cornerMode || surfacePolygonMode}><Plus size={18} /> Add {drawShape} Zone</button>
               <button className="primary" onClick={() => { setProjectionOnly((value) => !value); }} disabled={!hasProject}>
                 {projectionOnly ? <EyeOff size={18} /> : <Eye size={18} />}
                 {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}
