@@ -52,7 +52,7 @@ if (start !== -1 && end !== -1) {
     '    }',
     '',
     '    if (shape === "circle" || shape === "oval") {',
-    '      const geometry = zoneToGeometryPoints(zone, 96).map((point) => ({',
+    '      const geometry = zoneToGeometryPoints(zone, 144).map((point) => ({',
     '        x: (point.x / 100) * canvasWidth,',
     '        y: (point.y / 100) * canvasHeight',
     '      }));',
