@@ -38,4 +38,16 @@ if (!finishBlock.includes("setDrawMode(false);")) {
 }
 
 text = before + finishBlock + after;
+
+if (!text.includes("DRAW_MODE:")) {
+  const stageMarker = "          {imageUrl && (\n            <img ref={imageRef} className=\"referencePhoto\" src={imageUrl} alt=\"Projection surface\" draggable={false} />\n          )}";
+  const hud = "          <div style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(0,0,0,.82)', color: drawMode ? '#ff3333' : '#33ff33', padding: '6px 12px', borderRadius: 4, fontSize: 12, fontFamily: 'monospace', zIndex: 99999, border: '1px solid ' + (drawMode ? '#ff3333' : '#33ff33'), pointerEvents: 'none' }}>DRAW_MODE: {drawMode ? 'ON' : 'OFF'}</div>\n" + stageMarker;
+  if (!text.includes(stageMarker)) throw new Error("Could not locate stage marker for DRAW_MODE HUD.");
+  text = text.replace(stageMarker, hud);
+}
+
+if (!text.includes("DRAW_MODE:")) {
+  throw new Error("DRAW_MODE HUD verification failed.");
+}
+
 writeFileSync(appPath, text);
