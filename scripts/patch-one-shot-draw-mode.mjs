@@ -46,8 +46,18 @@ if (!text.includes("DRAW_MODE:")) {
   text = text.replace(stageMarker, hud);
 }
 
+if (!text.includes("DEBUG BUILD: DRAW MODE TEST")) {
+  text = text.replace(
+    "<h1>GlowCast MVP Prototype</h1>",
+    "<h1>GlowCast MVP Prototype</h1>\n        <strong style={{ color: '#ff3333', fontFamily: 'monospace' }}>DEBUG BUILD: DRAW MODE TEST 20b4b46</strong>"
+  );
+}
+
 if (!text.includes("DRAW_MODE:")) {
   throw new Error("DRAW_MODE HUD verification failed.");
+}
+if (!text.includes("DEBUG BUILD: DRAW MODE TEST")) {
+  throw new Error("Debug build label verification failed.");
 }
 
 writeFileSync(appPath, text);
