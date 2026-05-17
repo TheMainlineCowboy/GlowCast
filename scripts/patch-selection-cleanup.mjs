@@ -41,6 +41,7 @@ if (!text.includes("if (surfacePointAction)")) {
 }
 
 text = text.replace("    setResizeAction(null);", "    setResizeAction(null);\n    setSurfacePointAction(null);");
+text = text.replace("    setSelectedZoneId(id);\n  }", "    setSelectedZoneId(id);\n    setDrawMode(false);\n  }");
 
 if (!text.includes("surfacePointHandle")) {
   text = text.replace(
