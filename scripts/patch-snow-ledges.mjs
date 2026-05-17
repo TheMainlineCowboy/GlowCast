@@ -59,7 +59,7 @@ if (start !== -1 && end !== -1) {
     '      if (geometry.length < 2) return;',
     '      const minY = Math.min(...geometry.map((point) => point.y));',
     '      const maxY = Math.max(...geometry.map((point) => point.y));',
-    '      const topBand = minY + (maxY - minY) * 0.68;',
+    '      const topBand = minY + (maxY - minY) * 0.74;',
     '',
     '      for (let index = 0; index < geometry.length; index += 1) {',
     '        const p1 = geometry[index];',
