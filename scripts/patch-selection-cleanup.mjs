@@ -41,7 +41,7 @@ if (!text.includes("if (surfacePointAction)")) {
 }
 
 text = text.replace("    setResizeAction(null);", "    setResizeAction(null);\n    setSurfacePointAction(null);");
-text = text.replace("    setSelectedZoneId(id);\n  }", "    setSelectedZoneId(id);\n    setDrawMode(false);\n  }");
+text = text.replace("    if (!draftZone) return;", "    if (!draftZone) { setDrawMode(false); return; }");
 text = text.replace("    if (rect.width < 2 || rect.height < 2) return;", "    if (rect.width < 2 || rect.height < 2) { setDrawMode(false); return; }");
 text = text.replace("    setSelectedTarget(\"zone\");\n    setSelectedZoneId(id);\n  }\n\n  async function openProjectorMode", "    setSelectedTarget(\"zone\");\n    setSelectedZoneId(id);\n    setDrawMode(false);\n  }\n\n  async function openProjectorMode");
 
