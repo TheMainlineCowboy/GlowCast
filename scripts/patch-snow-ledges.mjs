@@ -52,22 +52,11 @@ if (start !== -1 && end !== -1) {
     '    }',
     '',
     '    if (shape === "circle" || shape === "oval") {',
-    '      const geometry = zoneToGeometryPoints(zone, 192).map((point) => ({',
-    '        x: (point.x / 100) * canvasWidth,',
-    '        y: (point.y / 100) * canvasHeight',
-    '      }));',
-    '      if (geometry.length < 2) return;',
-    '      const minY = Math.min(...geometry.map((point) => point.y));',
-    '      const maxY = Math.max(...geometry.map((point) => point.y));',
-    '      const topBand = minY + (maxY - minY) * 0.78;',
-    '',
-    '      for (let index = 0; index < geometry.length; index += 1) {',
-    '        const p1 = geometry[index];',
-    '        const p2 = geometry[(index + 1) % geometry.length];',
-    '        if (p1.y > topBand || p2.y > topBand) continue;',
-    '        if (Math.abs(p2.x - p1.x) < 0.001) continue;',
-    '        addLedge(p1.x, p1.y, p2.x, p2.y);',
-    '      }',
+    '      const x1Raw = (zone.x / 100) * canvasWidth;',
+    '      const y = (zone.y / 100) * canvasHeight;',
+    '      const x2Raw = ((zone.x + zone.width) / 100) * canvasWidth;',
+    '      addLedge(x1Raw, y, x2Raw, y);',
+    '      return;',
     '    }',
     '  });',
     '',
@@ -79,5 +68,11 @@ if (start !== -1 && end !== -1) {
 
   source = source.slice(0, start) + block + source.slice(end);
 }
+
+source = source.replace(
+  'ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";',
+  'ctx.strokeStyle = "rgba(0, 255, 255, 0.95)";'
+);
+source = source.replace('ctx.lineWidth = 3;', 'ctx.lineWidth = 6;');
 
 writeFileSync(path, source);
