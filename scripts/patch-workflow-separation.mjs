@@ -85,6 +85,12 @@ const newMaskBlock = `      {step === "mask" && (
                 {drawMode ? "Drawing " + drawShape : "Draw Avoid Zone"}
               </button>
               <button onClick={() => { ${clearSurfaceState} addZone(drawShape); }} disabled={!imageUrl || cornerMode || surfacePolygonMode}><Plus size={18} /> Add {drawShape} Zone</button>
+              <button type="button" onClick={() => setShowSetupLayers((current) => !current)} disabled={!imageUrl} className={!showSetupLayers ? "activeEffect" : ""}>
+                {showSetupLayers ? "Hide Setup Layers" : "Show Setup Layers"}
+              </button>
+              <button type="button" onClick={() => setNightPreview((current) => !current)} disabled={!imageUrl} className={nightPreview ? "activeEffect" : ""}>
+                {nightPreview ? "Day Preview" : "Night Preview"}
+              </button>
               <button className="primary" onClick={() => { setProjectionOnly((value) => !value); }} disabled={!hasProject}>
                 {projectionOnly ? <EyeOff size={18} /> : <Eye size={18} />}
                 {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}
