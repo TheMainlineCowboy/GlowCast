@@ -43,7 +43,7 @@ if (!source.includes("function createMasksFromEdges")) {
     setSelectedZoneId(generated[0]?.id ?? null);
     setProjectionOnly(false);
     setDrawMode(false);
-    setDetectMessage(`Created ${generated.length} editable mask candidates from scanned edges. Tap a mask to adjust or disable it.`);
+    setDetectMessage("Created " + generated.length + " editable mask candidates from scanned edges. Tap a mask to adjust or disable it.");
   }
 
 `;
