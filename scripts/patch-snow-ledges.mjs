@@ -126,6 +126,45 @@ if (start >= 0 && end > start) {
 }
 
 source = source.replace(
+  `    const activeLedges = createLedgesFromZones(ledges, rect.width, rect.height);`,
+  `    const activeLedges = createLedgesFromZones(ledges, rect.width, rect.height);
+
+    const drawShapeSnowRidges = () => {
+      ledges.filter((zone) => zone.included).forEach((zone) => {
+        const shape = zone.shape ?? "rectangle";
+        if (shape === "rectangle") return;
+        const x = (zone.x / 100) * rect.width;
+        const y = (zone.y / 100) * rect.height;
+        const w = (zone.width / 100) * rect.width;
+        const h = (zone.height / 100) * rect.height;
+        const cx = x + w / 2;
+        const cy = y + h / 2;
+        ctx.save();
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = "rgba(255,255,255,0.42)";
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        if (shape === "circle" || shape === "oval") {
+          ctx.ellipse(cx, cy, w / 2, h / 2, 0, Math.PI * 1.04, Math.PI * 1.96);
+        } else if (shape === "triangle") {
+          ctx.moveTo(cx, y + 2);
+          ctx.lineTo(x + w - 3, y + h - 2);
+          ctx.moveTo(cx, y + 2);
+          ctx.lineTo(x + 3, y + h - 2);
+        } else {
+          ctx.ellipse(cx, cy, w / 2, h / 2, 0, Math.PI * 1.08, Math.PI * 1.92);
+        }
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(255,255,255,0.92)";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.restore();
+      });
+    };`
+);
+
+source = source.replace(
   `            const dist = Math.abs(f.y - surfaceY);
 
             if (dist < 3) {`,
@@ -152,6 +191,12 @@ source = source.replace(
         ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
         ctx.lineWidth = 4;
         ctx.stroke();`
+);
+
+source = source.replace(
+  `      frameId = requestAnimationFrame(render);`,
+  `      drawShapeSnowRidges();
+      frameId = requestAnimationFrame(render);`
 );
 
 writeFileSync(appPath, source);
