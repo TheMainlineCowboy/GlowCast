@@ -19,6 +19,17 @@ source = source.replaceAll("!projectionOnly && !cornerMode && !surfacePolygonMod
 source = source.replaceAll("showSetupLayers && showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode", "showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode");
 source = source.replace("projectionArea && showSurfaceHandles && showSetupLayers", "projectionArea && showSetupLayers && showSurfaceHandles");
 
+const largeLayers = `
+              <button type="button" onClick={() => setShowSetupLayers((current) => !current)} disabled={!imageUrl} className={!showSetupLayers ? "activeEffect" : ""}>
+                {showSetupLayers ? "Hide Setup Layers" : "Show Setup Layers"}
+              </button>`;
+const largeNight = `
+              <button type="button" onClick={() => setNightPreview((current) => !current)} disabled={!imageUrl} className={nightPreview ? "activeEffect" : ""}>
+                {nightPreview ? "Day Preview" : "Night Preview"}
+              </button>`;
+source = source.replaceAll(largeLayers, "");
+source = source.replaceAll(largeNight, "");
+
 if (!source.includes("stagePreviewControls")) {
   const stageOpen = '    <div className={`stage ${projectionOnly ? "projectionOnly" : ""} ${nightPreview ? "nightPreview" : ""}`}> ';
   const stageOpenAlt = '    <div className={`stage ${projectionOnly ? "projectionOnly" : ""} ${nightPreview ? "nightPreview" : ""}`}>';
