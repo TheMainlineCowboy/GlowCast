@@ -126,7 +126,6 @@ if (start >= 0 && end > start) {
 }
 
 source = source.replace(
-  `    const activeLedges = createLedgesFromZones(ledges, rect.width, rect.height);`,
   `    const activeLedges = createLedgesFromZones(ledges, rect.width, rect.height);
 
     const drawShapeSnowRidges = () => {
@@ -161,7 +160,8 @@ source = source.replace(
         ctx.stroke();
         ctx.restore();
       });
-    };`
+    };`,
+  `    const activeLedges = createLedgesFromZones(ledges, rect.width, rect.height);`
 );
 
 source = source.replace(
@@ -176,13 +176,26 @@ source = source.replace(
 
 source = source.replace(
   `                l.accumulation[idx] = Math.min(15, l.accumulation[idx] + 0.05);`,
-  `                l.accumulation[idx] = Math.min(24, l.accumulation[idx] + 0.18);`
+  `                l.accumulation[idx] = Math.min(18, l.accumulation[idx] + 0.08);`
+);
+
+source = source.replace(
+  `                l.accumulation[idx] = Math.min(24, l.accumulation[idx] + 0.18);`,
+  `                l.accumulation[idx] = Math.min(18, l.accumulation[idx] + 0.08);`
 );
 
 source = source.replace(
   `        ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
         ctx.lineWidth = 3;
         ctx.stroke();`,
+  `        ctx.strokeStyle = "rgba(255, 255, 255, 0.78)";
+        ctx.lineWidth = 3;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();`
+);
+
+source = source.replace(
   `        ctx.strokeStyle = "rgba(255, 255, 255, 0.42)";
         ctx.lineWidth = 9;
         ctx.lineCap = "round";
@@ -190,13 +203,18 @@ source = source.replace(
         ctx.stroke();
         ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
         ctx.lineWidth = 4;
+        ctx.stroke();`,
+  `        ctx.strokeStyle = "rgba(255, 255, 255, 0.78)";
+        ctx.lineWidth = 3;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
         ctx.stroke();`
 );
 
 source = source.replace(
-  `      frameId = requestAnimationFrame(render);`,
   `      drawShapeSnowRidges();
-      frameId = requestAnimationFrame(render);`
+      frameId = requestAnimationFrame(render);`,
+  `      frameId = requestAnimationFrame(render);`
 );
 
 writeFileSync(appPath, source);
