@@ -10,6 +10,20 @@ if (start >= 0 && end > start) {
 
 type SnowSurfaceKind = "line" | "ellipse";
 
+type SnowSettings = {
+  density: number;
+  speed: number;
+  accumulation: number;
+  wind: number;
+};
+
+const defaultSnowSettings: SnowSettings = {
+  density: 50,
+  speed: 50,
+  accumulation: 50,
+  wind: 50
+};
+
 type SnowSurface = {
   kind: SnowSurfaceKind;
   surfaceId: number;
@@ -62,11 +76,13 @@ class SnowFlake {
     this.drift = Math.random() * 0.7 - 0.35;
   }
 
-  update(height: number, width: number) {
+  update(height: number, width: number, settings: SnowSettings) {
     this.previousY = this.y;
-    this.y += this.speed;
-    this.x += this.drift;
-    if (this.y > height || this.x < -20 || this.x > width + 20) this.reset(width);
+    const speedFactor = 0.35 + settings.speed / 42;
+    const windPush = (settings.wind - 50) / 42;
+    this.y += this.speed * speedFactor;
+    this.x += this.drift + windPush;
+    if (this.y > height || this.x < -30 || this.x > width + 30) this.reset(width);
   }
 }
 
@@ -115,7 +131,7 @@ function surfaceY(surface: SnowSurface, x: number) {
   return surface.slope * x + surface.intercept;
 }
 
-function settleDeposit(x: number, y: number, r: number, deposits: SnowDeposit[], surfaceId: number) {
+function settleDeposit(x: number, y: number, r: number, deposits: SnowDeposit[], surfaceId: number, settings: SnowSettings) {
   let sx = x;
   let sy = y;
   const neighbors = deposits.filter((p) => p.surfaceId === surfaceId).slice(-100);
@@ -123,17 +139,17 @@ function settleDeposit(x: number, y: number, r: number, deposits: SnowDeposit[],
     const dx = sx - p.x;
     const dy = sy - p.y;
     const d = Math.max(0.01, Math.hypot(dx, dy));
-    const min = (r + p.r) * 0.7;
+    const min = (r + p.r) * (0.52 + settings.accumulation / 280);
     if (d < min) {
-      const push = (min - d) * 0.34;
+      const push = (min - d) * (0.22 + settings.accumulation / 420);
       sx += (dx >= 0 ? 1 : -1) * push;
       sy -= push * 0.17;
     }
   });
-  return { x: sx, y: sy, crowded: neighbors.length > 65 };
+  return { x: sx, y: sy, crowded: neighbors.length > Math.max(35, 95 - settings.accumulation) };
 }
 
-function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
+function CanvasSnowLayer({ ledges, settings = defaultSnowSettings }: { ledges: ProjectZone[]; settings?: SnowSettings }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -148,17 +164,18 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
     canvas.height = rect.height * dpr;
     ctx.scale(dpr, dpr);
 
-    const flakes = Array.from({ length: 275 }, () => new SnowFlake(rect.width));
+    const flakeCount = Math.max(40, Math.round(55 + settings.density * 4.4));
+    const flakes = Array.from({ length: flakeCount }, () => new SnowFlake(rect.width));
     const surfaces = snowSurfacesFromZones(ledges, rect.width, rect.height);
     const deposits: SnowDeposit[] = [];
-    const maxDeposits = 900;
+    const maxDeposits = Math.round(240 + settings.accumulation * 14);
 
     let frameId: number;
     const render = () => {
       ctx.clearRect(0, 0, rect.width, rect.height);
 
       flakes.forEach((flake) => {
-        flake.update(rect.height, rect.width);
+        flake.update(rect.height, rect.width, settings);
         let landed = false;
 
         for (const surface of surfaces) {
@@ -166,19 +183,21 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
           const y = surfaceY(surface, flake.x);
           if (!(flake.previousY <= y + 2 && flake.y >= y - 8) && Math.abs(flake.y - y) >= 8) continue;
 
-          const r = flake.radius * (1.25 + Math.random() * 0.75);
-          const settled = settleDeposit(flake.x, y - r * 0.35, r, deposits, surface.surfaceId);
+          const accumulationFactor = 0.62 + settings.accumulation / 58;
+          const r = flake.radius * accumulationFactor * (0.9 + Math.random() * 0.55);
+          const settled = settleDeposit(flake.x, y - r * 0.35, r, deposits, surface.surfaceId, settings);
           const nearEdge = flake.x < surface.x1 + 12 || flake.x > surface.x2 - 12;
           const direction = surface.steep ? (surface.slope >= 0 ? 1 : -1) : (flake.x < (surface.x1 + surface.x2) / 2 ? -1 : 1);
-          const shouldDrop = surface.steep || (settled.crowded && nearEdge && Math.random() < 0.42);
+          const overflowChance = Math.max(0.08, settings.accumulation / 210);
+          const shouldDrop = surface.steep || (settled.crowded && nearEdge && Math.random() < overflowChance);
           deposits.push({
             x: settled.x,
             y: settled.y,
             r,
-            opacity: 0.68 + Math.random() * 0.24,
+            opacity: 0.62 + Math.random() * 0.28,
             surfaceId: surface.surfaceId,
-            vx: shouldDrop ? direction * (0.18 + Math.random() * 0.18) : 0,
-            vy: shouldDrop ? 0.18 + Math.random() * 0.22 : 0
+            vx: shouldDrop ? direction * (0.12 + settings.wind / 360 + Math.random() * 0.16) : 0,
+            vy: shouldDrop ? 0.13 + settings.speed / 300 + Math.random() * 0.18 : 0
           });
           if (deposits.length > maxDeposits) deposits.splice(0, deposits.length - maxDeposits);
           flake.reset(rect.width);
@@ -221,7 +240,7 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
 
     render();
     return () => cancelAnimationFrame(frameId);
-  }, [ledges]);
+  }, [ledges, settings.density, settings.speed, settings.accumulation, settings.wind]);
 
   return (
     <canvas
