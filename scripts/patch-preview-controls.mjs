@@ -3,40 +3,57 @@ import { readFileSync, writeFileSync } from "node:fs";
 const appPath = "src/App.tsx";
 let source = readFileSync(appPath, "utf8");
 
-source = source.replace(
-  "const [showSurfaceHandles, setShowSurfaceHandles] = useState(true);",
-  "const [showSurfaceHandles, setShowSurfaceHandles] = useState(true);\n  const [showSetupLayers, setShowSetupLayers] = useState(true);\n  const [nightPreview, setNightPreview] = useState(false);"
-);
+if (!source.includes("const [showSetupLayers, setShowSetupLayers]")) {
+  source = source.replace(
+    "const [showSurfaceHandles, setShowSurfaceHandles] = useState(true);",
+    "const [showSurfaceHandles, setShowSurfaceHandles] = useState(true);\n  const [showSetupLayers, setShowSetupLayers] = useState(true);\n  const [nightPreview, setNightPreview] = useState(false);"
+  );
+}
 
-source = source.replace(
-  '<main className="projectorMode" >',
-  '<main className={`projectorMode ${nightPreview ? "nightPreview" : ""}`} >'
-);
+if (!source.includes('projectorMode ${nightPreview ? "nightPreview"')) {
+  source = source.replace(
+    '<main className="projectorMode" >',
+    '<main className={`projectorMode ${nightPreview ? "nightPreview" : ""}`} >'
+  );
+}
 
-source = source.replace(
-  '<div className={`stage ${projectionOnly ? "projectionOnly" : ""}`}>',
-  '<div className={`stage ${projectionOnly ? "projectionOnly" : ""} ${nightPreview ? "nightPreview" : ""}`}>'
-);
+if (!source.includes('stage ${projectionOnly ? "projectionOnly" : ""} ${nightPreview')) {
+  source = source.replace(
+    '<div className={`stage ${projectionOnly ? "projectionOnly" : ""}`}>',
+    '<div className={`stage ${projectionOnly ? "projectionOnly" : ""} ${nightPreview ? "nightPreview" : ""}`}>'
+  );
+}
 
-source = source.replace(
-  'className={`surfaceLayer ${drawMode ? "drawMode" : ""} ${surfacePolygonMode ? "polygonMode" : ""}`}',
-  'className={`surfaceLayer ${drawMode ? "drawMode" : ""} ${surfacePolygonMode ? "polygonMode" : ""} ${!showSetupLayers ? "hideSetupLayers" : ""} ${nightPreview ? "nightPreviewSurface" : ""}`}'
-);
+if (!source.includes('hideSetupLayers')) {
+  source = source.replace(
+    'className={`surfaceLayer ${drawMode ? "drawMode" : ""} ${surfacePolygonMode ? "polygonMode" : ""}`}',
+    'className={`surfaceLayer ${drawMode ? "drawMode" : ""} ${surfacePolygonMode ? "polygonMode" : ""} ${!showSetupLayers ? "hideSetupLayers" : ""} ${nightPreview ? "nightPreviewSurface" : ""}`}'
+  );
+}
 
+source = source.replaceAll(
+  "showSetupLayers && showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode",
+  "showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode"
+);
 source = source.replaceAll(
   "!projectionOnly && !cornerMode && !surfacePolygonMode",
   "showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode"
 );
-
+source = source.replaceAll(
+  "showSetupLayers && showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode",
+  "showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode"
+);
 source = source.replace(
   "projectionArea && showSurfaceHandles && showSetupLayers",
   "projectionArea && showSetupLayers && showSurfaceHandles"
 );
 
-source = source.replace(
-  '{showSurfaceHandles ? "Hide Surface Handles" : "Show Surface Handles"}\n              </button>',
-  '{showSurfaceHandles ? "Hide Surface Handles" : "Show Surface Handles"}\n              </button>\n              <button type="button" onClick={() => setShowSetupLayers((current) => !current)} disabled={!imageUrl} className={!showSetupLayers ? "activeEffect" : ""} >\n                {showSetupLayers ? "Hide Setup Layers" : "Show Setup Layers"}\n              </button>\n              <button type="button" onClick={() => setNightPreview((current) => !current)} disabled={!imageUrl} className={nightPreview ? "activeEffect" : ""} >\n                {nightPreview ? "Day Preview" : "Night Preview"}\n              </button>'
-);
+if (!source.includes("Night Preview")) {
+  source = source.replace(
+    '{showSurfaceHandles ? "Hide Surface Handles" : "Show Surface Handles"}\n              </button>',
+    '{showSurfaceHandles ? "Hide Surface Handles" : "Show Surface Handles"}\n              </button>\n              <button type="button" onClick={() => setShowSetupLayers((current) => !current)} disabled={!imageUrl} className={!showSetupLayers ? "activeEffect" : ""} >\n                {showSetupLayers ? "Hide Setup Layers" : "Show Setup Layers"}\n              </button>\n              <button type="button" onClick={() => setNightPreview((current) => !current)} disabled={!imageUrl} className={nightPreview ? "activeEffect" : ""} >\n                {nightPreview ? "Day Preview" : "Night Preview"}\n              </button>'
+  );
+}
 
 writeFileSync(appPath, source);
 
