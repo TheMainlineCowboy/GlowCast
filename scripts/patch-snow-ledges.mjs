@@ -118,18 +118,19 @@ function surfaceY(surface: SnowSurface, x: number) {
 function settleDeposit(x: number, y: number, r: number, deposits: SnowDeposit[], surfaceId: number) {
   let sx = x;
   let sy = y;
-  deposits.filter((p) => p.surfaceId === surfaceId).slice(-80).forEach((p) => {
+  const neighbors = deposits.filter((p) => p.surfaceId === surfaceId).slice(-100);
+  neighbors.forEach((p) => {
     const dx = sx - p.x;
     const dy = sy - p.y;
     const d = Math.max(0.01, Math.hypot(dx, dy));
     const min = (r + p.r) * 0.7;
     if (d < min) {
-      const push = (min - d) * 0.32;
+      const push = (min - d) * 0.34;
       sx += (dx >= 0 ? 1 : -1) * push;
-      sy -= push * 0.16;
+      sy -= push * 0.17;
     }
   });
-  return { x: sx, y: sy };
+  return { x: sx, y: sy, crowded: neighbors.length > 65 };
 }
 
 function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
@@ -150,7 +151,7 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
     const flakes = Array.from({ length: 275 }, () => new SnowFlake(rect.width));
     const surfaces = snowSurfacesFromZones(ledges, rect.width, rect.height);
     const deposits: SnowDeposit[] = [];
-    const maxDeposits = 850;
+    const maxDeposits = 900;
 
     let frameId: number;
     const render = () => {
@@ -167,8 +168,18 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
 
           const r = flake.radius * (1.25 + Math.random() * 0.75);
           const settled = settleDeposit(flake.x, y - r * 0.35, r, deposits, surface.surfaceId);
-          const direction = surface.slope >= 0 ? 1 : -1;
-          deposits.push({ x: settled.x, y: settled.y, r, opacity: 0.68 + Math.random() * 0.24, surfaceId: surface.surfaceId, vx: surface.steep ? direction * 0.1 : 0, vy: surface.steep ? 0.035 : 0 });
+          const nearEdge = flake.x < surface.x1 + 12 || flake.x > surface.x2 - 12;
+          const direction = surface.steep ? (surface.slope >= 0 ? 1 : -1) : (flake.x < (surface.x1 + surface.x2) / 2 ? -1 : 1);
+          const shouldDrop = surface.steep || (settled.crowded && nearEdge && Math.random() < 0.42);
+          deposits.push({
+            x: settled.x,
+            y: settled.y,
+            r,
+            opacity: 0.68 + Math.random() * 0.24,
+            surfaceId: surface.surfaceId,
+            vx: shouldDrop ? direction * (0.18 + Math.random() * 0.18) : 0,
+            vy: shouldDrop ? 0.18 + Math.random() * 0.22 : 0
+          });
           if (deposits.length > maxDeposits) deposits.splice(0, deposits.length - maxDeposits);
           flake.reset(rect.width);
           landed = true;
@@ -183,11 +194,17 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
         }
       });
 
-      deposits.forEach((p) => {
+      for (let i = deposits.length - 1; i >= 0; i -= 1) {
+        const p = deposits[i];
         p.x += p.vx;
         p.y += p.vy;
-        p.vx *= 0.986;
-        p.vy *= 0.986;
+        p.vx *= 0.988;
+        p.vy = p.vy ? Math.min(1.4, p.vy * 0.99 + 0.012) : 0;
+        if (p.vy > 0.28) p.opacity *= 0.996;
+        if (p.y > rect.height + 30 || p.opacity < 0.05) {
+          deposits.splice(i, 1);
+          continue;
+        }
         const glow = p.r * 1.65;
         const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glow);
         g.addColorStop(0, "rgba(255,255,255," + p.opacity + ")");
@@ -197,7 +214,7 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
         ctx.beginPath();
         ctx.arc(p.x, p.y, glow, 0, Math.PI * 2);
         ctx.fill();
-      });
+      }
 
       frameId = requestAnimationFrame(render);
     };
