@@ -19,35 +19,25 @@ source = source.replaceAll("!projectionOnly && !cornerMode && !surfacePolygonMod
 source = source.replaceAll("showSetupLayers && showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode", "showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode");
 source = source.replace("projectionArea && showSurfaceHandles && showSetupLayers", "projectionArea && showSetupLayers && showSurfaceHandles");
 
-const contentControls = `
-            <button type="button" onClick={() => setShowSetupLayers((current) => !current)} disabled={!imageUrl} className={!showSetupLayers ? "activeEffect" : ""} >
-              {showSetupLayers ? "Hide Setup Layers" : "Show Setup Layers"}
-            </button>
-            <button type="button" onClick={() => setNightPreview((current) => !current)} disabled={!imageUrl} className={nightPreview ? "activeEffect" : ""} >
-              {nightPreview ? "Day Preview" : "Night Preview"}
-            </button>`;
-
-if (!source.includes("Night Preview")) {
-  const target = `            <button className="primary" onClick={() => setProjectionOnly((value) => !value)} >
-              {projectionOnly ? <EyeOff size={18} /> : <Eye size={18} />}
-              {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}
-            </button>`;
-  source = source.replace(target, target + contentControls);
-}
-
-if (!source.includes("Mask page preview controls")) {
-  const addZoneButton = `              <button onClick={() => addZone(drawShape)} disabled={!imageUrl || cornerMode || surfacePolygonMode} >
-                <Plus size={18} /> Add {drawShape} Zone
-              </button>`;
-  const maskControls = `
-              {/* Mask page preview controls */}
-              <button type="button" onClick={() => setShowSetupLayers((current) => !current)} disabled={!imageUrl} className={!showSetupLayers ? "activeEffect" : ""} >
-                {showSetupLayers ? "Hide Setup Layers" : "Show Setup Layers"}
-              </button>
-              <button type="button" onClick={() => setNightPreview((current) => !current)} disabled={!imageUrl} className={nightPreview ? "activeEffect" : ""} >
-                {nightPreview ? "Day Preview" : "Night Preview"}
-              </button>`;
-  source = source.replace(addZoneButton, addZoneButton + maskControls);
+if (!source.includes("stagePreviewControls")) {
+  const stageOpen = '    <div className={`stage ${projectionOnly ? "projectionOnly" : ""} ${nightPreview ? "nightPreview" : ""}`}> ';
+  const stageOpenAlt = '    <div className={`stage ${projectionOnly ? "projectionOnly" : ""} ${nightPreview ? "nightPreview" : ""}`}>';
+  const controls = `
+      {(step === "mask" || step === "content") && imageUrl && (
+        <div className="stagePreviewControls">
+          <button type="button" onClick={() => setShowSetupLayers((current) => !current)} className={!showSetupLayers ? "activeEffect" : ""}>
+            {showSetupLayers ? "Layers" : "Layers Off"}
+          </button>
+          <button type="button" onClick={() => setNightPreview((current) => !current)} className={nightPreview ? "activeEffect" : ""}>
+            {nightPreview ? "Day" : "Night"}
+          </button>
+        </div>
+      )}`;
+  if (source.includes(stageOpenAlt)) {
+    source = source.replace(stageOpenAlt, stageOpenAlt + controls);
+  } else {
+    source = source.replace(stageOpen, stageOpen + controls);
+  }
 }
 
 writeFileSync(appPath, source);
@@ -59,6 +49,9 @@ const previewCss = `
 /* Preview controls patch */
 .resizeHandle,.surfacePointHandle{width:12px!important;height:12px!important;min-width:12px!important;min-height:12px!important;border-width:2px!important;}
 @media (pointer:coarse){.resizeHandle,.surfacePointHandle{width:15px!important;height:15px!important;min-width:15px!important;min-height:15px!important;}}
+.stagePreviewControls{display:flex;gap:8px;justify-content:flex-end;align-items:center;margin:0 0 8px 0;position:relative;z-index:30;}
+.stagePreviewControls button{padding:6px 10px!important;min-height:0!important;border-radius:999px!important;font-size:12px!important;line-height:1!important;background:rgba(15,23,42,.82)!important;border:1px solid rgba(148,163,184,.45)!important;color:#e5e7eb!important;box-shadow:0 8px 24px rgba(0,0,0,.22)!important;}
+.stagePreviewControls button.activeEffect{background:rgba(37,99,235,.92)!important;border-color:rgba(191,219,254,.75)!important;color:white!important;}
 .surfaceLayer.hideSetupLayers .zone,.surfaceLayer.hideSetupLayers .draftZone,.surfaceLayer.hideSetupLayers .projectionBoundary,.surfaceLayer.hideSetupLayers .edgeOverlay,.surfaceLayer.hideSetupLayers .surfacePolygonOverlay,.surfaceLayer.hideSetupLayers .surfacePointHandle,.surfaceLayer.hideSetupLayers .resizeHandle{display:none!important;visibility:hidden!important;pointer-events:none!important;}
 .stage.nightPreview,.projectorMode.nightPreview{background:radial-gradient(circle at 50% 30%,#0b1630 0%,#030713 58%,#01030a 100%)!important;}
 .stage.nightPreview .surfaceLayer,.projectorMode.nightPreview .projectorCanvas{background:#020617!important;box-shadow:inset 0 0 160px rgba(0,0,0,.82),0 0 45px rgba(29,78,216,.18)!important;}
