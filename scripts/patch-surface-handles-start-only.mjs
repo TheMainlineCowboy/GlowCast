@@ -33,6 +33,26 @@ text = text.replace(
   '    setSelectedTarget("zone");\n    setSelectedZoneId(id);\n    setDrawMode(false);\n  }\n\n  async function openProjectorMode()'
 );
 
+text = text.replace(
+  `    if (
+      !imageUrl || !drawMode || projectionOnly || (event.target as HTMLElement).closest(".zone,.projectionBoundary")
+    ) {
+      return;
+    }
+    const point = getPoint(event);`,
+  `    const clickedEditable = (event.target as HTMLElement).closest(".zone,.projectionBoundary,.resizeHandle");
+    if (!imageUrl || projectionOnly || clickedEditable) {
+      return;
+    }
+    if (!drawMode) {
+      setSelectedTarget("zone");
+      setSelectedZoneId(null);
+      setDraftZone(null);
+      return;
+    }
+    const point = getPoint(event);`
+);
+
 writeFileSync(appPath, text);
 
 const cssPath = "styles.css";
