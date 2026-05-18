@@ -42,7 +42,7 @@ function makeCandidate(minX: number, maxX: number, minY: number, maxY: number, c
   const width = clamp((maxX - minX + 1) * cellSize + padding * 2, 0, 100 - x);
   const height = clamp((maxY - minY + 1) * cellSize + padding * 2, 0, 100 - y);
   const area = width * height;
-  if (count < 3 || width < 1.8 || height < 1.8 || area < 6 || area > 2200) return null;
+  if (count < 3 || width < 1.8 || height < 1.8 || area < 6 || area > 1800) return null;
   return {
     x: Number(x.toFixed(2)),
     y: Number(y.toFixed(2)),
@@ -50,73 +50,6 @@ function makeCandidate(minX: number, maxX: number, minY: number, maxY: number, c
     height: Number(height.toFixed(2)),
     confidence: Number(Math.min(0.99, count / Math.max(8, area)).toFixed(2))
   };
-}
-
-function rectangleOutlineCandidates(edgePoints: EdgePoint[], limit: number): EdgeMaskCandidate[] {
-  const cell = 2;
-  const cols = Math.ceil(100 / cell);
-  const rows = Math.ceil(100 / cell);
-  const grid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => 0));
-
-  for (const point of edgePoints) {
-    const x = Math.min(cols - 1, Math.max(0, Math.floor(point.x / cell)));
-    const y = Math.min(rows - 1, Math.max(0, Math.floor(point.y / cell)));
-    grid[y][x] += point.strength;
-  }
-
-  const rowScore = grid.map((row) => row.reduce((sum, value) => sum + value, 0));
-  const colScore = Array.from({ length: cols }, (_, x) => grid.reduce((sum, row) => sum + row[x], 0));
-  const rowThreshold = Math.max(...rowScore) * 0.18;
-  const colThreshold = Math.max(...colScore) * 0.18;
-  const strongRows = rowScore.map((score, index) => score > rowThreshold ? index : -1).filter((index) => index >= 0);
-  const strongCols = colScore.map((score, index) => score > colThreshold ? index : -1).filter((index) => index >= 0);
-  const candidates: EdgeMaskCandidate[] = [];
-
-  for (let ri = 0; ri < strongRows.length; ri += 1) {
-    for (let rj = ri + 1; rj < strongRows.length; rj += 1) {
-      const top = strongRows[ri];
-      const bottom = strongRows[rj];
-      const h = (bottom - top) * cell;
-      if (h < 6 || h > 70) continue;
-
-      for (let ci = 0; ci < strongCols.length; ci += 1) {
-        for (let cj = ci + 1; cj < strongCols.length; cj += 1) {
-          const left = strongCols[ci];
-          const right = strongCols[cj];
-          const w = (right - left) * cell;
-          if (w < 6 || w > 70) continue;
-
-          let topHits = 0;
-          let bottomHits = 0;
-          let leftHits = 0;
-          let rightHits = 0;
-          for (let x = left; x <= right; x += 1) {
-            topHits += grid[top]?.[x] ?? 0;
-            bottomHits += grid[bottom]?.[x] ?? 0;
-          }
-          for (let y = top; y <= bottom; y += 1) {
-            leftHits += grid[y]?.[left] ?? 0;
-            rightHits += grid[y]?.[right] ?? 0;
-          }
-
-          const edgeScore = topHits + bottomHits + leftHits + rightHits;
-          const perimeter = Math.max(1, (w + h) * 2);
-          const confidence = Math.min(0.98, edgeScore / (perimeter * 160));
-          if (confidence < 0.2) continue;
-
-          candidates.push({
-            x: Number(clamp(left * cell - 1).toFixed(2)),
-            y: Number(clamp(top * cell - 1).toFixed(2)),
-            width: Number(clamp(w + 2, 0, 100 - left * cell).toFixed(2)),
-            height: Number(clamp(h + 2, 0, 100 - top * cell).toFixed(2)),
-            confidence: Number(confidence.toFixed(2))
-          });
-        }
-      }
-    }
-  }
-
-  return uniqueCandidates(candidates, limit);
 }
 
 function clusterCandidates(edgePoints: EdgePoint[], limit: number): EdgeMaskCandidate[] {
@@ -189,10 +122,8 @@ function coarseFallback(edgePoints: EdgePoint[], limit: number): EdgeMaskCandida
     });
 }
 
-export function edgePointsToMaskCandidates(edgePoints: EdgePoint[], limit = 24): EdgeMaskCandidate[] {
+export function edgePointsToMaskCandidates(edgePoints: EdgePoint[], limit = 18): EdgeMaskCandidate[] {
   if (!edgePoints.length) return [];
-  const rectangles = rectangleOutlineCandidates(edgePoints, Math.ceil(limit * 0.65));
   const clusters = clusterCandidates(edgePoints, limit);
-  const combined = uniqueCandidates([...rectangles, ...clusters], limit);
-  return combined.length ? combined : coarseFallback(edgePoints, limit);
+  return clusters.length ? clusters : coarseFallback(edgePoints, Math.min(limit, 8));
 }
