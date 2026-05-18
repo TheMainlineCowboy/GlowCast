@@ -67,20 +67,32 @@ const escEffect = `  useEffect(() => {
     const onMaskEditKey = (event: KeyboardEvent) => {
       const target = event.target;
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
-      if (event.key !== "Escape") return;
-      setSelectedTarget("zone");
-      setSelectedZoneId(null);
-      setDraftZone(null);
-      setResizeAction(null);
-      setDrawMode(false);
+
+      if (event.key === "Escape") {
+        setSelectedTarget("zone");
+        setSelectedZoneId(null);
+        setDraftZone(null);
+        setResizeAction(null);
+        setDrawMode(false);
+        return;
+      }
+
+      if (event.key === "Delete" && selectedTarget === "zone" && selectedZoneId !== null) {
+        event.preventDefault();
+        setZones((current) => current.filter((zone) => zone.id !== selectedZoneId));
+        setSelectedZoneId(null);
+        setSelectedTarget("zone");
+      }
     };
 
     window.addEventListener("keydown", onMaskEditKey);
     return () => { window.removeEventListener("keydown", onMaskEditKey); };
-  }, []);
+  }, [selectedTarget, selectedZoneId]);
 `;
 
-if (!text.includes("onMaskEditKey") && text.includes(fullscreenEffect)) {
+if (!text.includes("event.key === \"Delete\"") && text.includes("onMaskEditKey")) {
+  text = text.replace(/  useEffect\(\(\) => \{\n    const onMaskEditKey = \(event: KeyboardEvent\) => \{[\s\S]*?  \}, \[\]\);\n/, escEffect);
+} else if (!text.includes("onMaskEditKey") && text.includes(fullscreenEffect)) {
   text = text.replace(fullscreenEffect, fullscreenEffect + "\n" + escEffect);
 }
 
