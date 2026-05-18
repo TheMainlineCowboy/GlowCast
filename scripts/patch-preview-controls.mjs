@@ -10,35 +10,14 @@ if (!source.includes("const [showSetupLayers, setShowSetupLayers]")) {
   );
 }
 
-source = source.replace(
-  '<main className="projectorMode" >',
-  '<main className={`projectorMode ${nightPreview ? "nightPreview" : ""}`} >'
-);
-source = source.replace(
-  '<div className={`stage ${projectionOnly ? "projectionOnly" : ""}`}>',
-  '<div className={`stage ${projectionOnly ? "projectionOnly" : ""} ${nightPreview ? "nightPreview" : ""}`}>'
-);
-source = source.replace(
-  'className={`surfaceLayer ${drawMode ? "drawMode" : ""} ${surfacePolygonMode ? "polygonMode" : ""}`}',
-  'className={`surfaceLayer ${drawMode ? "drawMode" : ""} ${surfacePolygonMode ? "polygonMode" : ""} ${!showSetupLayers ? "hideSetupLayers" : ""} ${nightPreview ? "nightPreviewSurface" : ""}`}'
-);
+source = source.replace('<main className="projectorMode" >', '<main className={`projectorMode ${nightPreview ? "nightPreview" : ""}`} >');
+source = source.replace('<div className={`stage ${projectionOnly ? "projectionOnly" : ""}`}>', '<div className={`stage ${projectionOnly ? "projectionOnly" : ""} ${nightPreview ? "nightPreview" : ""}`}>');
+source = source.replace('className={`surfaceLayer ${drawMode ? "drawMode" : ""} ${surfacePolygonMode ? "polygonMode" : ""}`}', 'className={`surfaceLayer ${drawMode ? "drawMode" : ""} ${surfacePolygonMode ? "polygonMode" : ""} ${!showSetupLayers ? "hideSetupLayers" : ""} ${nightPreview ? "nightPreviewSurface" : ""}`}');
 
-source = source.replaceAll(
-  "showSetupLayers && showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode",
-  "showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode"
-);
-source = source.replaceAll(
-  "!projectionOnly && !cornerMode && !surfacePolygonMode",
-  "showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode"
-);
-source = source.replaceAll(
-  "showSetupLayers && showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode",
-  "showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode"
-);
-source = source.replace(
-  "projectionArea && showSurfaceHandles && showSetupLayers",
-  "projectionArea && showSetupLayers && showSurfaceHandles"
-);
+source = source.replaceAll("showSetupLayers && showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode", "showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode");
+source = source.replaceAll("!projectionOnly && !cornerMode && !surfacePolygonMode", "showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode");
+source = source.replaceAll("showSetupLayers && showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode", "showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode");
+source = source.replace("projectionArea && showSurfaceHandles && showSetupLayers", "projectionArea && showSetupLayers && showSurfaceHandles");
 
 const contentControls = `
             <button type="button" onClick={() => setShowSetupLayers((current) => !current)} disabled={!imageUrl} className={!showSetupLayers ? "activeEffect" : ""} >
@@ -48,11 +27,15 @@ const contentControls = `
               {nightPreview ? "Day Preview" : "Night Preview"}
             </button>`;
 
+if (!source.includes("Night Preview")) {
+  const target = `            <button className="primary" onClick={() => setProjectionOnly((value) => !value)} >
+              {projectionOnly ? <EyeOff size={18} /> : <Eye size={18} />}
+              {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}
+            </button>`;
+  source = source.replace(target, target + contentControls);
+}
+
 if (!source.includes("Mask page preview controls")) {
-  const maskTarget = `              <button className="primary" onClick={() => { setProjectionOnly((value) => !value); }} disabled={!hasProject} >
-                {projectionOnly ? <EyeOff size={18} /> : <Eye size={18} />}
-                {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}
-              </button>`;
   const maskControls = `
               {/* Mask page preview controls */}
               <button type="button" onClick={() => setShowSetupLayers((current) => !current)} disabled={!imageUrl} className={!showSetupLayers ? "activeEffect" : ""} >
@@ -61,15 +44,10 @@ if (!source.includes("Mask page preview controls")) {
               <button type="button" onClick={() => setNightPreview((current) => !current)} disabled={!imageUrl} className={nightPreview ? "activeEffect" : ""} >
                 {nightPreview ? "Day Preview" : "Night Preview"}
               </button>`;
-  source = source.replace(maskTarget, maskTarget + maskControls);
-}
-
-if (!source.includes("Night Preview")) {
-  const target = `            <button className="primary" onClick={() => setProjectionOnly((value) => !value)} >
-              {projectionOnly ? <EyeOff size={18} /> : <Eye size={18} />}
-              {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}
-            </button>`;
-  source = source.replace(target, target + contentControls);
+  source = source.replace(
+    /(\s*<button className="primary" onClick=\{\(\) => \{ setProjectionOnly\(\(value\) => !value\); \}\} disabled=\{!hasProject\} >[\s\S]*?Preview Animation Only"\}\s*<\/button>)/,
+    "$1" + maskControls
+  );
 }
 
 writeFileSync(appPath, source);
