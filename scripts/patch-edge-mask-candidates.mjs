@@ -19,9 +19,26 @@ if (!source.includes("function createMasksFromEdges")) {
       return;
     }
 
-    const candidates = edgePointsToMaskCandidates(edgePoints, 16);
+    const sourceArea = projectionArea;
+    const scopedEdgePoints = sourceArea
+      ? edgePoints.filter((point) => point.x >= sourceArea.x && point.x <= sourceArea.x + sourceArea.width && point.y >= sourceArea.y && point.y <= sourceArea.y + sourceArea.height)
+      : edgePoints;
+
+    if (!scopedEdgePoints.length) {
+      setDetectMessage("No scanned edge points were found inside the selected projection surface.");
+      return;
+    }
+
+    const candidates = edgePointsToMaskCandidates(scopedEdgePoints, 14)
+      .filter((candidate) => !sourceArea || (
+        candidate.x >= sourceArea.x &&
+        candidate.y >= sourceArea.y &&
+        candidate.x + candidate.width <= sourceArea.x + sourceArea.width &&
+        candidate.y + candidate.height <= sourceArea.y + sourceArea.height
+      ));
+
     if (!candidates.length) {
-      setDetectMessage("No strong edge regions were found for automatic masks. Manual masks are still available.");
+      setDetectMessage("No strong edge regions were found inside the projection surface. Manual masks are still available.");
       return;
     }
 
@@ -43,7 +60,7 @@ if (!source.includes("function createMasksFromEdges")) {
     setSelectedZoneId(generated[0]?.id ?? null);
     setProjectionOnly(false);
     setDrawMode(false);
-    setDetectMessage("Created " + generated.length + " editable mask candidates from scanned edges. Tap a mask to adjust or disable it.");
+    setDetectMessage("Created " + generated.length + " editable mask candidates inside the projection surface.");
   }
 
 `;
