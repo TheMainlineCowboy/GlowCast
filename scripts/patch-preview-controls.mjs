@@ -36,6 +36,9 @@ if (!source.includes("Night Preview")) {
 }
 
 if (!source.includes("Mask page preview controls")) {
+  const addZoneButton = `              <button onClick={() => addZone(drawShape)} disabled={!imageUrl || cornerMode || surfacePolygonMode} >
+                <Plus size={18} /> Add {drawShape} Zone
+              </button>`;
   const maskControls = `
               {/* Mask page preview controls */}
               <button type="button" onClick={() => setShowSetupLayers((current) => !current)} disabled={!imageUrl} className={!showSetupLayers ? "activeEffect" : ""} >
@@ -44,10 +47,7 @@ if (!source.includes("Mask page preview controls")) {
               <button type="button" onClick={() => setNightPreview((current) => !current)} disabled={!imageUrl} className={nightPreview ? "activeEffect" : ""} >
                 {nightPreview ? "Day Preview" : "Night Preview"}
               </button>`;
-  source = source.replace(
-    /(\s*<button onClick=\{\(\) => addZone\(drawShape\)\} disabled=\{!imageUrl \|\| cornerMode \|\| surfacePolygonMode\} >[\s\S]*?Add \{drawShape\} Zone[\s\S]*?<\/button>)/,
-    "$1" + maskControls
-  );
+  source = source.replace(addZoneButton, addZoneButton + maskControls);
 }
 
 writeFileSync(appPath, source);
