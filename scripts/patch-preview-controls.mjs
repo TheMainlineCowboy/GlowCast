@@ -40,19 +40,36 @@ source = source.replace(
   "projectionArea && showSetupLayers && showSurfaceHandles"
 );
 
-if (!source.includes("Night Preview")) {
-  const target = `            <button className="primary" onClick={() => setProjectionOnly((value) => !value)} >
-              {projectionOnly ? <EyeOff size={18} /> : <Eye size={18} />}
-              {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}
-            </button>`;
-  const replacement = `${target}
+const controls = `
             <button type="button" onClick={() => setShowSetupLayers((current) => !current)} disabled={!imageUrl} className={!showSetupLayers ? "activeEffect" : ""} >
               {showSetupLayers ? "Hide Setup Layers" : "Show Setup Layers"}
             </button>
             <button type="button" onClick={() => setNightPreview((current) => !current)} disabled={!imageUrl} className={nightPreview ? "activeEffect" : ""} >
               {nightPreview ? "Day Preview" : "Night Preview"}
             </button>`;
-  source = source.replace(target, replacement);
+
+if (!source.includes("Night Preview")) {
+  const target = `            <button className="primary" onClick={() => setProjectionOnly((value) => !value)} >
+              {projectionOnly ? <EyeOff size={18} /> : <Eye size={18} />}
+              {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}
+            </button>`;
+  source = source.replace(target, target + controls);
+}
+
+if (!source.includes("Mask page preview controls")) {
+  const maskTarget = `              <button className="primary" onClick={() => { setProjectionOnly((value) => !value); }} disabled={!hasProject} >
+                {projectionOnly ? <EyeOff size={18} /> : <Eye size={18} />}
+                {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}
+              </button>`;
+  const maskControls = `
+              {/* Mask page preview controls */}
+              <button type="button" onClick={() => setShowSetupLayers((current) => !current)} disabled={!imageUrl} className={!showSetupLayers ? "activeEffect" : ""} >
+                {showSetupLayers ? "Hide Setup Layers" : "Show Setup Layers"}
+              </button>
+              <button type="button" onClick={() => setNightPreview((current) => !current)} disabled={!imageUrl} className={nightPreview ? "activeEffect" : ""} >
+                {nightPreview ? "Day Preview" : "Night Preview"}
+              </button>`;
+  source = source.replace(maskTarget, maskTarget + maskControls);
 }
 
 writeFileSync(appPath, source);
