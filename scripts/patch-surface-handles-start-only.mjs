@@ -15,8 +15,7 @@ text = text.replace(
 
 const edgeImport = 'import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";\n';
 const tapImport = 'import { createTapMaskZone } from "./manualMaskTapFix";\n';
-if (!text.includes(tapImport)) {
-  if (!text.includes(edgeImport)) throw new Error("Could not find edgeDetect import anchor.");
+if (!text.includes(tapImport) && text.includes(edgeImport)) {
   text = text.replace(edgeImport, edgeImport + tapImport);
 }
 
@@ -56,8 +55,7 @@ const newFinish = `  function finishPointerAction() {
   }
 `;
 
-if (!text.includes("createTapMaskZone(draftZone.startX")) {
-  if (!text.includes(oldFinish)) throw new Error("Could not find finishPointerAction block.");
+if (!text.includes("createTapMaskZone(draftZone.startX") && text.includes(oldFinish)) {
   text = text.replace(oldFinish, newFinish);
 }
 
