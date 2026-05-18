@@ -24,7 +24,7 @@ function overlaps(a: EdgeMaskCandidate, b: EdgeMaskCandidate) {
 
 function uniqueCandidates(candidates: EdgeMaskCandidate[], limit: number) {
   const sorted = candidates
-    .filter((c) => c.width > 1.6 && c.height > 1.6)
+    .filter((c) => c.width > 2.5 && c.height > 2.5)
     .sort((a, b) => b.confidence - a.confidence);
   const unique: EdgeMaskCandidate[] = [];
   for (const candidate of sorted) {
@@ -36,27 +36,30 @@ function uniqueCandidates(candidates: EdgeMaskCandidate[], limit: number) {
 }
 
 function makeCandidate(minX: number, maxX: number, minY: number, maxY: number, cellSize: number, count: number): EdgeMaskCandidate | null {
-  const padding = 1.2;
+  const padding = 0.9;
   const x = clamp(minX * cellSize - padding);
   const y = clamp(minY * cellSize - padding);
   const width = clamp((maxX - minX + 1) * cellSize + padding * 2, 0, 100 - x);
   const height = clamp((maxY - minY + 1) * cellSize + padding * 2, 0, 100 - y);
   const area = width * height;
-  if (count < 3 || width < 1.8 || height < 1.8 || area < 6 || area > 1800) return null;
+  const density = count / Math.max(1, area);
+
+  if (count < 6 || width < 2.5 || height < 2.5 || area < 12 || area > 900 || density < 0.08) return null;
+
   return {
     x: Number(x.toFixed(2)),
     y: Number(y.toFixed(2)),
     width: Number(width.toFixed(2)),
     height: Number(height.toFixed(2)),
-    confidence: Number(Math.min(0.99, count / Math.max(8, area)).toFixed(2))
+    confidence: Number(Math.min(0.99, density).toFixed(2))
   };
 }
 
 function clusterCandidates(edgePoints: EdgePoint[], limit: number): EdgeMaskCandidate[] {
-  const cellSize = 3;
+  const cellSize = 2.25;
   const occupied = new Set<string>();
   const strengths = edgePoints.map((point) => point.strength).sort((a, b) => a - b);
-  const dynamicThreshold = Math.max(48, strengths[Math.floor(strengths.length * 0.52)] ?? 48);
+  const dynamicThreshold = Math.max(62, strengths[Math.floor(strengths.length * 0.68)] ?? 62);
 
   for (const point of edgePoints) {
     if (point.strength < dynamicThreshold) continue;
@@ -100,30 +103,7 @@ function clusterCandidates(edgePoints: EdgePoint[], limit: number): EdgeMaskCand
   return uniqueCandidates(candidates, limit);
 }
 
-function coarseFallback(edgePoints: EdgePoint[], limit: number): EdgeMaskCandidate[] {
-  const grid = new Map<string, number>();
-  const coarse = 10;
-  for (const point of edgePoints) {
-    const key = `${Math.floor(point.x / coarse)},${Math.floor(point.y / coarse)}`;
-    grid.set(key, (grid.get(key) ?? 0) + 1);
-  }
-  return [...grid.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([key, count]) => {
-      const [gx, gy] = key.split(",").map(Number);
-      return {
-        x: clamp(gx * coarse),
-        y: clamp(gy * coarse),
-        width: clamp(coarse, 0, 100 - gx * coarse),
-        height: clamp(coarse, 0, 100 - gy * coarse),
-        confidence: Number(Math.min(0.99, count / 120).toFixed(2))
-      };
-    });
-}
-
-export function edgePointsToMaskCandidates(edgePoints: EdgePoint[], limit = 18): EdgeMaskCandidate[] {
+export function edgePointsToMaskCandidates(edgePoints: EdgePoint[], limit = 12): EdgeMaskCandidate[] {
   if (!edgePoints.length) return [];
-  const clusters = clusterCandidates(edgePoints, limit);
-  return clusters.length ? clusters : coarseFallback(edgePoints, Math.min(limit, 8));
+  return clusterCandidates(edgePoints, limit);
 }
