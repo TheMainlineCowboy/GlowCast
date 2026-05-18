@@ -10,26 +10,18 @@ if (!source.includes("const [showSetupLayers, setShowSetupLayers]")) {
   );
 }
 
-if (!source.includes('projectorMode ${nightPreview ? "nightPreview"')) {
-  source = source.replace(
-    '<main className="projectorMode" >',
-    '<main className={`projectorMode ${nightPreview ? "nightPreview" : ""}`} >'
-  );
-}
-
-if (!source.includes('stage ${projectionOnly ? "projectionOnly" : ""} ${nightPreview')) {
-  source = source.replace(
-    '<div className={`stage ${projectionOnly ? "projectionOnly" : ""}`}>',
-    '<div className={`stage ${projectionOnly ? "projectionOnly" : ""} ${nightPreview ? "nightPreview" : ""}`}>'
-  );
-}
-
-if (!source.includes('hideSetupLayers')) {
-  source = source.replace(
-    'className={`surfaceLayer ${drawMode ? "drawMode" : ""} ${surfacePolygonMode ? "polygonMode" : ""}`}',
-    'className={`surfaceLayer ${drawMode ? "drawMode" : ""} ${surfacePolygonMode ? "polygonMode" : ""} ${!showSetupLayers ? "hideSetupLayers" : ""} ${nightPreview ? "nightPreviewSurface" : ""}`}'
-  );
-}
+source = source.replace(
+  '<main className="projectorMode" >',
+  '<main className={`projectorMode ${nightPreview ? "nightPreview" : ""}`} >'
+);
+source = source.replace(
+  '<div className={`stage ${projectionOnly ? "projectionOnly" : ""}`}>',
+  '<div className={`stage ${projectionOnly ? "projectionOnly" : ""} ${nightPreview ? "nightPreview" : ""}`}>'
+);
+source = source.replace(
+  'className={`surfaceLayer ${drawMode ? "drawMode" : ""} ${surfacePolygonMode ? "polygonMode" : ""}`}',
+  'className={`surfaceLayer ${drawMode ? "drawMode" : ""} ${surfacePolygonMode ? "polygonMode" : ""} ${!showSetupLayers ? "hideSetupLayers" : ""} ${nightPreview ? "nightPreviewSurface" : ""}`}'
+);
 
 source = source.replaceAll(
   "showSetupLayers && showSetupLayers && !projectionOnly && !cornerMode && !surfacePolygonMode",
@@ -49,10 +41,18 @@ source = source.replace(
 );
 
 if (!source.includes("Night Preview")) {
-  source = source.replace(
-    '{showSurfaceHandles ? "Hide Surface Handles" : "Show Surface Handles"}\n              </button>',
-    '{showSurfaceHandles ? "Hide Surface Handles" : "Show Surface Handles"}\n              </button>\n              <button type="button" onClick={() => setShowSetupLayers((current) => !current)} disabled={!imageUrl} className={!showSetupLayers ? "activeEffect" : ""} >\n                {showSetupLayers ? "Hide Setup Layers" : "Show Setup Layers"}\n              </button>\n              <button type="button" onClick={() => setNightPreview((current) => !current)} disabled={!imageUrl} className={nightPreview ? "activeEffect" : ""} >\n                {nightPreview ? "Day Preview" : "Night Preview"}\n              </button>'
-  );
+  const target = `            <button className="primary" onClick={() => setProjectionOnly((value) => !value)} >
+              {projectionOnly ? <EyeOff size={18} /> : <Eye size={18} />}
+              {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}
+            </button>`;
+  const replacement = `${target}
+            <button type="button" onClick={() => setShowSetupLayers((current) => !current)} disabled={!imageUrl} className={!showSetupLayers ? "activeEffect" : ""} >
+              {showSetupLayers ? "Hide Setup Layers" : "Show Setup Layers"}
+            </button>
+            <button type="button" onClick={() => setNightPreview((current) => !current)} disabled={!imageUrl} className={nightPreview ? "activeEffect" : ""} >
+              {nightPreview ? "Day Preview" : "Night Preview"}
+            </button>`;
+  source = source.replace(target, replacement);
 }
 
 writeFileSync(appPath, source);
