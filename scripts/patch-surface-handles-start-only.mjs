@@ -53,6 +53,37 @@ text = text.replace(
     const point = getPoint(event);`
 );
 
+const fullscreenEffect = `  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) setProjectorMode(false);
+    };
+
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => { document.removeEventListener("fullscreenchange", onFullscreenChange); };
+  }, []);
+`;
+
+const escEffect = `  useEffect(() => {
+    const onMaskEditKey = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
+      if (event.key !== "Escape") return;
+      setSelectedTarget("zone");
+      setSelectedZoneId(null);
+      setDraftZone(null);
+      setResizeAction(null);
+      setDrawMode(false);
+    };
+
+    window.addEventListener("keydown", onMaskEditKey);
+    return () => { window.removeEventListener("keydown", onMaskEditKey); };
+  }, []);
+`;
+
+if (!text.includes("onMaskEditKey") && text.includes(fullscreenEffect)) {
+  text = text.replace(fullscreenEffect, fullscreenEffect + "\n" + escEffect);
+}
+
 writeFileSync(appPath, text);
 
 const cssPath = "styles.css";
