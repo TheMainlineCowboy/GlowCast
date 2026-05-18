@@ -2,20 +2,20 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 const appPath = "src/App.tsx";
 let source = readFileSync(appPath, "utf8");
-
 const start = source.indexOf("// --- SNOW ENGINE START ---");
 const end = source.indexOf("// --- SNOW ENGINE END ---", start);
 
 if (start >= 0 && end > start) {
   const snowEngine = `// --- SNOW ENGINE START ---
 
-type SnowLedgeKind = "line" | "ellipse";
+type SnowSurfaceKind = "line" | "ellipse";
 
-interface SnowLedge {
-  kind: SnowLedgeKind;
+type SnowSurface = {
+  kind: SnowSurfaceKind;
+  surfaceId: number;
   x1: number;
-  y1: number;
   x2: number;
+  y1: number;
   y2: number;
   slope: number;
   intercept: number;
@@ -23,8 +23,18 @@ interface SnowLedge {
   cy?: number;
   rx?: number;
   ry?: number;
-  accumulation: number[];
-}
+  steep?: boolean;
+};
+
+type SnowDeposit = {
+  x: number;
+  y: number;
+  r: number;
+  opacity: number;
+  surfaceId: number;
+  vx: number;
+  vy: number;
+};
 
 class SnowFlake {
   x: number;
@@ -36,94 +46,90 @@ class SnowFlake {
 
   constructor(width: number) {
     this.x = Math.random() * width;
-    this.y = Math.random() * -100;
+    this.y = -10 - Math.random() * 100;
     this.previousY = this.y;
-    this.radius = Math.random() * 2 + 1;
-    this.speed = Math.random() * 1 + 0.5;
-    this.drift = Math.random() * 0.5 - 0.25;
+    this.radius = 1 + Math.random() * 2;
+    this.speed = 0.65 + Math.random() * 1.25;
+    this.drift = Math.random() * 0.7 - 0.35;
+  }
+
+  reset(width: number) {
+    this.x = Math.random() * width;
+    this.y = -10 - Math.random() * 100;
+    this.previousY = this.y;
+    this.radius = 1 + Math.random() * 2;
+    this.speed = 0.65 + Math.random() * 1.25;
+    this.drift = Math.random() * 0.7 - 0.35;
   }
 
   update(height: number, width: number) {
     this.previousY = this.y;
     this.y += this.speed;
     this.x += this.drift;
-    if (this.y > height) {
-      this.y = -10;
-      this.previousY = this.y;
-      this.x = Math.random() * width;
-    }
+    if (this.y > height || this.x < -20 || this.x > width + 20) this.reset(width);
   }
 }
 
-function createLedgesFromZones(zones: ProjectZone[], canvasWidth: number, canvasHeight: number): SnowLedge[] {
-  const ledges: SnowLedge[] = [];
-
-  const addLine = (x1: number, y1: number, x2: number, y2: number) => {
+function snowSurfacesFromZones(zones: ProjectZone[], canvasWidth: number, canvasHeight: number): SnowSurface[] {
+  const surfaces: SnowSurface[] = [];
+  const addLine = (zoneId: number, x1: number, y1: number, x2: number, y2: number, steep = false) => {
     const dx = x2 - x1;
     if (Math.abs(dx) < 0.001) return;
-    const xMin = Math.min(x1, x2);
-    const xMax = Math.max(x1, x2);
     const slope = (y2 - y1) / dx;
     const intercept = y1 - slope * x1;
-    ledges.push({
-      kind: "line",
-      x1: xMin,
-      y1,
-      x2: xMax,
-      y2,
-      slope,
-      intercept,
-      accumulation: new Array(Math.max(1, Math.floor(xMax - xMin))).fill(0)
-    });
+    surfaces.push({ kind: "line", surfaceId: zoneId, x1: Math.min(x1, x2), x2: Math.max(x1, x2), y1, y2, slope, intercept, steep });
   };
 
   zones.filter((zone) => zone.included).forEach((zone) => {
     const shape = zone.shape ?? "rectangle";
-    const x = (zone.x / 100) * canvasWidth;
-    const y = (zone.y / 100) * canvasHeight;
-    const w = (zone.width / 100) * canvasWidth;
-    const h = (zone.height / 100) * canvasHeight;
+    const x = zone.x / 100 * canvasWidth;
+    const y = zone.y / 100 * canvasHeight;
+    const w = zone.width / 100 * canvasWidth;
+    const h = zone.height / 100 * canvasHeight;
 
     if (shape === "circle" || shape === "oval") {
       const cx = x + w / 2;
       const cy = y + h / 2;
       const rx = Math.max(1, w / 2);
       const ry = Math.max(1, h / 2);
-      ledges.push({
-        kind: "ellipse",
-        x1: cx - rx,
-        y1: y,
-        x2: cx + rx,
-        y2: y,
-        slope: 0,
-        intercept: y,
-        cx,
-        cy,
-        rx,
-        ry,
-        accumulation: new Array(Math.max(1, Math.floor(rx * 2))).fill(0)
-      });
+      surfaces.push({ kind: "ellipse", surfaceId: zone.id, x1: cx - rx, x2: cx + rx, y1: y, y2: y, slope: 0, intercept: y, cx, cy, rx, ry });
       return;
     }
 
     if (shape === "triangle") {
-      addLine(x + w / 2, y, x + w, y + h);
-      addLine(x, y + h, x + w / 2, y);
+      addLine(zone.id, x + w / 2, y, x + w, y + h, true);
+      addLine(zone.id, x, y + h, x + w / 2, y, true);
       return;
     }
 
-    addLine(x, y, x + w, y);
+    addLine(zone.id, x, y, x + w, y);
   });
-
-  return ledges;
+  return surfaces;
 }
 
-function surfaceYAt(ledge: SnowLedge, x: number) {
-  if (ledge.kind === "ellipse" && ledge.cx !== undefined && ledge.cy !== undefined && ledge.rx && ledge.ry) {
-    const normalized = Math.max(-1, Math.min(1, (x - ledge.cx) / ledge.rx));
-    return ledge.cy - ledge.ry * Math.sqrt(Math.max(0, 1 - normalized * normalized));
+function surfaceY(surface: SnowSurface, x: number) {
+  if (surface.kind === "ellipse" && surface.cx !== undefined && surface.cy !== undefined && surface.rx && surface.ry) {
+    const n = Math.max(-1, Math.min(1, (x - surface.cx) / surface.rx));
+    return surface.cy - surface.ry * Math.sqrt(Math.max(0, 1 - n * n));
   }
-  return ledge.slope * x + ledge.intercept;
+  return surface.slope * x + surface.intercept;
+}
+
+function settleDeposit(x: number, y: number, r: number, deposits: SnowDeposit[], surfaceId: number) {
+  let sx = x;
+  let sy = y;
+  deposits.filter((p) => p.surfaceId === surfaceId).slice(-80).forEach((p) => {
+    const dx = sx - p.x;
+    const dy = sy - p.y;
+    const d = Math.max(0.01, Math.hypot(dx, dy));
+    const min = (r + p.r) * 0.7;
+    if (d < min) {
+      const push = (min - d) * 0.32;
+      sx += (dx >= 0 ? 1 : -1) * push;
+      sy -= push * 0.16;
+    }
+  });
+  return { x: sx, y: sy };
 }
 
 function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
@@ -141,8 +147,10 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
     canvas.height = rect.height * dpr;
     ctx.scale(dpr, dpr);
 
-    const flakes = Array.from({ length: 250 }, () => new SnowFlake(rect.width));
-    const activeLedges = createLedgesFromZones(ledges, rect.width, rect.height);
+    const flakes = Array.from({ length: 275 }, () => new SnowFlake(rect.width));
+    const surfaces = snowSurfacesFromZones(ledges, rect.width, rect.height);
+    const deposits: SnowDeposit[] = [];
+    const maxDeposits = 850;
 
     let frameId: number;
     const render = () => {
@@ -150,48 +158,45 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
 
       flakes.forEach((flake) => {
         flake.update(rect.height, rect.width);
+        let landed = false;
 
-        activeLedges.forEach((ledge) => {
-          if (flake.x < ledge.x1 || flake.x > ledge.x2) return;
-          const surfaceY = surfaceYAt(ledge, flake.x);
-          const crossed = flake.previousY <= surfaceY + 2 && flake.y >= surfaceY - 8;
-          const close = Math.abs(flake.y - surfaceY) < 10;
-          if (!crossed && !close) return;
+        for (const surface of surfaces) {
+          if (flake.x < surface.x1 || flake.x > surface.x2) continue;
+          const y = surfaceY(surface, flake.x);
+          if (!(flake.previousY <= y + 2 && flake.y >= y - 8) && Math.abs(flake.y - y) >= 8) continue;
 
-          const idx = Math.floor(flake.x - ledge.x1);
-          if (ledge.accumulation[idx] === undefined) return;
-          ledge.accumulation[idx] = Math.min(20, ledge.accumulation[idx] + 0.12);
-          flake.y = -10;
-          flake.previousY = flake.y;
-          flake.x = Math.random() * rect.width;
-        });
+          const r = flake.radius * (1.25 + Math.random() * 0.75);
+          const settled = settleDeposit(flake.x, y - r * 0.35, r, deposits, surface.surfaceId);
+          const direction = surface.slope >= 0 ? 1 : -1;
+          deposits.push({ x: settled.x, y: settled.y, r, opacity: 0.68 + Math.random() * 0.24, surfaceId: surface.surfaceId, vx: surface.steep ? direction * 0.1 : 0, vy: surface.steep ? 0.035 : 0 });
+          if (deposits.length > maxDeposits) deposits.splice(0, deposits.length - maxDeposits);
+          flake.reset(rect.width);
+          landed = true;
+          break;
+        }
 
-        ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-        ctx.beginPath();
-        ctx.arc(flake.x, flake.y, flake.radius, 0, Math.PI * 2);
-        ctx.fill();
+        if (!landed) {
+          ctx.fillStyle = "rgba(255, 255, 255, 0.78)";
+          ctx.beginPath();
+          ctx.arc(flake.x, flake.y, flake.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
       });
 
-      activeLedges.forEach((ledge) => {
+      deposits.forEach((p) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.986;
+        p.vy *= 0.986;
+        const glow = p.r * 1.65;
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glow);
+        g.addColorStop(0, "rgba(255,255,255," + p.opacity + ")");
+        g.addColorStop(0.48, "rgba(255,255,255," + p.opacity * 0.7 + ")");
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = g;
         ctx.beginPath();
-        let started = false;
-        ledge.accumulation.forEach((height, index) => {
-          if (height <= 0.05) return;
-          const px = ledge.x1 + index;
-          const py = surfaceYAt(ledge, px);
-          const oy = py - height;
-          if (!started) {
-            ctx.moveTo(px, oy);
-            started = true;
-          } else {
-            ctx.lineTo(px, oy);
-          }
-        });
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.82)";
-        ctx.lineWidth = 3;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.stroke();
+        ctx.arc(p.x, p.y, glow, 0, Math.PI * 2);
+        ctx.fill();
       });
 
       frameId = requestAnimationFrame(render);
@@ -205,15 +210,7 @@ function CanvasSnowLayer({ ledges }: { ledges: ProjectZone[] }) {
     <canvas
       ref={canvasRef}
       className="snowCanvasLayer"
-      style={{
-        width: "100%",
-        height: "100%",
-        position: "absolute",
-        top: 0,
-        left: 0,
-        zIndex: 10,
-        pointerEvents: "none"
-      }}
+      style={{ width: "100%", height: "100%", position: "absolute", top: 0, left: 0, zIndex: 10, pointerEvents: "none" }}
     />
   );
 }
