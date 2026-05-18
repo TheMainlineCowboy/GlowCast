@@ -1,5 +1,6 @@
 import type { Zone } from "./detection";
-import type { MaskShape } from "./App";
+
+type MaskShape = "rectangle" | "circle" | "oval" | "triangle" | "freehand";
 
 const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min, value));
 
