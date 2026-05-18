@@ -1,1 +1,18 @@
-.shape-circle,.maskCutout.shape-circle,.zoneProjection.shape-circle,.projectorMaskCutout.shape-circle,.projectorCanvas .projectorMaskCutout.shape-circle,.zone.shape-circle,.draftZone.shape-circle{border-radius:999px!important;clip-path:none!important}.zoneShapeOutline{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:1}.zoneShapeOutline polygon,.zoneShapeOutline ellipse,.zoneShapeOutline path{fill:transparent!important;stroke:#fef08a!important;stroke-width:5;vector-effect:non-scaling-stroke}.zone.shape-circle>.zoneShapeOutline ellipse,.draftZone.shape-circle>.zoneShapeOutline ellipse{rx:49;ry:49}.surfaceLayer.hideMaskOutlines .zone{border-color:transparent!important;outline:0!important;box-shadow:none!important;background:transparent!important}.surfaceLayer.hideMaskOutlines .zoneShapeOutline{display:none!important}.surfaceLayer.hideMaskOutlines .zone span{opacity:.45}.surfaceLayer.hideMaskOutlines .draftZone{border-color:transparent!important;background:transparent!important}.surfaceLayer.hideMaskOutlines .resizeHandle{display:none!important}
+.shape-circle,.maskCutout.shape-circle,.zoneProjection.shape-circle,.projectorMaskCutout.shape-circle,.projectorCanvas .projectorMaskCutout.shape-circle,.zone.shape-circle,.draftZone.shape-circle{border-radius:999px!important;clip-path:none!important}
+.zoneShapeOutline{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:1}
+.zoneShapeOutline polygon,.zoneShapeOutline ellipse,.zoneShapeOutline path{fill:transparent!important;stroke:#fef08a!important;stroke-width:5;vector-effect:non-scaling-stroke}
+.zone.shape-circle>.zoneShapeOutline ellipse,.draftZone.shape-circle>.zoneShapeOutline ellipse{rx:49;ry:49}
+.zone.shape-oval,.zone.shape-circle,.draftZone.shape-oval,.draftZone.shape-circle{border-color:transparent!important;background:transparent!important;box-shadow:none!important}
+.zone.shape-oval.selected,.zone.shape-circle.selected{outline:0!important;box-shadow:none!important}
+.zone.shape-oval .zoneShapeOutline ellipse,.zone.shape-circle .zoneShapeOutline ellipse,.draftZone.shape-oval .zoneShapeOutline ellipse,.draftZone.shape-circle .zoneShapeOutline ellipse{stroke:#fef08a!important;stroke-width:6!important}
+.zone.shape-triangle,.draftZone.shape-triangle{border-color:transparent!important;background:transparent!important;box-shadow:none!important}
+.zone.shape-triangle.selected{outline:0!important;box-shadow:none!important}
+.zone.shape-triangle .zoneShapeOutline polygon,.draftZone.shape-triangle .zoneShapeOutline polygon{stroke:#fef08a!important;stroke-width:6!important}
+.zone.shape-freehand,.draftZone.shape-freehand{border-color:transparent!important;background:transparent!important;box-shadow:none!important}
+.zone.shape-freehand.selected{outline:0!important;box-shadow:none!important}
+.zone.shape-freehand .zoneShapeOutline path,.draftZone.shape-freehand .zoneShapeOutline path{stroke:#fef08a!important;stroke-width:6!important}
+.surfaceLayer.hideMaskOutlines .zone{border-color:transparent!important;outline:0!important;box-shadow:none!important;background:transparent!important}
+.surfaceLayer.hideMaskOutlines .zoneShapeOutline{display:none!important}
+.surfaceLayer.hideMaskOutlines .zone span{opacity:.45}
+.surfaceLayer.hideMaskOutlines .draftZone{border-color:transparent!important;background:transparent!important}
+.surfaceLayer.hideMaskOutlines .resizeHandle{display:none!important}
