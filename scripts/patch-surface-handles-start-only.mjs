@@ -13,55 +13,24 @@ text = text.replace(
   '{step === "start" && projectionArea && showSurfaceHandles && !projectionOnly && !cornerMode && !surfacePolygonMode ? ('
 );
 
-const edgeImport = 'import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";\n';
-const tapImport = 'import { createTapMaskZone } from "./manualMaskTapFix";\n';
-if (!text.includes(tapImport) && text.includes(edgeImport)) {
-  text = text.replace(edgeImport, edgeImport + tapImport);
-}
-
-const oldFinish = `  function finishPointerAction() {
-    setResizeAction(null);
-
-    if (!draftZone) return;
-    const rect = normalizeDraftZone(draftZone);
-    setDraftZone(null);
-    if (rect.width < 2 || rect.height < 2) return;
-    const id = Date.now();
-    setZones((current) => [
-      ...current,
-      { id, ...rect, included: true, label: \`manual \${draftZone.shape} avoid zone\` }
-    ]);
-    setSelectedTarget("zone");
-    setSelectedZoneId(id);
-  }
-`;
-
-const newFinish = `  function finishPointerAction() {
-    setResizeAction(null);
-
-    if (!draftZone) return;
-    const rect = normalizeDraftZone(draftZone);
-    const zone = rect.width < 2 || rect.height < 2
-      ? createTapMaskZone(draftZone.startX, draftZone.startY, draftZone.shape)
-      : rect;
-    setDraftZone(null);
-    const id = Date.now();
-    setZones((current) => [
-      ...current,
-      { id, ...zone, included: true, label: \`manual \${draftZone.shape} avoid zone\` }
-    ]);
-    setSelectedTarget("zone");
-    setSelectedZoneId(id);
-  }
-`;
-
-if (!text.includes("createTapMaskZone(draftZone.startX") && text.includes(oldFinish)) {
-  text = text.replace(oldFinish, newFinish);
-}
+text = text.replace(
+  'import { createTapMaskZone } from "./manualMaskTapFix";\n',
+  ''
+);
 
 text = text.replace(
-  '    setSelectedTarget("zone");\n    setSelectedZoneId(id);\n    setDrawMode(false);\n    setCornerMode(false);',
-  '    setSelectedTarget("zone");\n    setSelectedZoneId(id);\n    setDrawMode(true);\n    setCornerMode(false);'
+  /    const rect = normalizeDraftZone\(draftZone\);\n    const zone = rect\.width < 2 \|\| rect\.height < 2\n      \? createTapMaskZone\(draftZone\.startX, draftZone\.startY, draftZone\.shape\)\n      : rect;\n    setDraftZone\(null\);\n    const id = Date\.now\(\);\n    setZones\(\(current\) => \[\n      \.\.\.current,\n      \{ id, \.\.\.zone, included: true, label: `manual \$\{draftZone\.shape\} avoid zone` \}\n    \]\);/g,
+  '    const rect = normalizeDraftZone(draftZone);\n    setDraftZone(null);\n    if (rect.width < 2 || rect.height < 2) return;\n    const id = Date.now();\n    setZones((current) => [\n      ...current,\n      { id, ...rect, included: true, label: `manual ${draftZone.shape} avoid zone` }\n    ]);'
+);
+
+text = text.replace(
+  '    setSelectedTarget("zone");\n    setSelectedZoneId(id);\n    setDrawMode(true);\n    setCornerMode(false);',
+  '    setSelectedTarget("zone");\n    setSelectedZoneId(id);\n    setDrawMode(false);\n    setCornerMode(false);'
+);
+
+text = text.replace(
+  '    setSelectedTarget("zone");\n    setSelectedZoneId(id);\n  }\n\n  async function openProjectorMode()',
+  '    setSelectedTarget("zone");\n    setSelectedZoneId(id);\n    setDrawMode(false);\n  }\n\n  async function openProjectorMode()'
 );
 
 writeFileSync(appPath, text);
