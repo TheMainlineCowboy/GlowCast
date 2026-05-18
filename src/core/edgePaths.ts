@@ -1,6 +1,6 @@
 import type { EdgePoint } from "../edgeDetect";
 
-export type PathPoint = { x: number; y: number; strength?: number };
+export type PathPoint = { x: number; y: number; strength: number };
 export type EdgePath = PathPoint[];
 
 export type EdgePathConfig = {
@@ -71,7 +71,7 @@ export function buildEdgePaths(edgePoints: EdgePoint[], config: Partial<EdgePath
 
   const strengths = edgePoints.map((point) => point.strength).sort((a, b) => a - b);
   const threshold = Math.max(48, strengths[Math.floor(strengths.length * 0.42)] ?? 48);
-  const points = edgePoints
+  const points: PathPoint[] = edgePoints
     .filter((point) => point.strength >= threshold)
     .map((point) => ({ x: point.x, y: point.y, strength: point.strength }));
 
@@ -86,7 +86,7 @@ export function buildEdgePaths(edgePoints: EdgePoint[], config: Partial<EdgePath
   const visited = new Set<PathPoint>();
   const paths: EdgePath[] = [];
 
-  const nearestUnvisited = (from: PathPoint) => {
+  const nearestUnvisited = (from: PathPoint): PathPoint | null => {
     let best: PathPoint | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
     for (const key of neighboringKeys(keyFor(from, cfg.cellSize), cfg.maxNeighborCells)) {
@@ -109,7 +109,7 @@ export function buildEdgePaths(edgePoints: EdgePoint[], config: Partial<EdgePath
     const path: EdgePath = [seed];
     visited.add(seed);
 
-    let tip = seed;
+    let tip: PathPoint = seed;
     while (true) {
       const next = nearestUnvisited(tip);
       if (!next) break;
@@ -118,7 +118,7 @@ export function buildEdgePaths(edgePoints: EdgePoint[], config: Partial<EdgePath
       tip = next;
     }
 
-    let head = seed;
+    let head: PathPoint = seed;
     while (true) {
       const previous = nearestUnvisited(head);
       if (!previous) break;
