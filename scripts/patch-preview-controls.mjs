@@ -45,7 +45,7 @@ if (!source.includes("Mask page preview controls")) {
                 {nightPreview ? "Day Preview" : "Night Preview"}
               </button>`;
   source = source.replace(
-    /(\s*<button className="primary" onClick=\{\(\) => \{ setProjectionOnly\(\(value\) => !value\); \}\} disabled=\{!hasProject\} >[\s\S]*?Preview Animation Only"\}\s*<\/button>)/,
+    /(\s*<button onClick=\{\(\) => addZone\(drawShape\)\} disabled=\{!imageUrl \|\| cornerMode \|\| surfacePolygonMode\} >[\s\S]*?Add \{drawShape\} Zone[\s\S]*?<\/button>)/,
     "$1" + maskControls
   );
 }
