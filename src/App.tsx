@@ -1,3 +1,4 @@
+/* ONE_SHOT_DRAW_DIRECT */
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Download,
@@ -1077,10 +1078,16 @@ export default function App() {
   function finishPointerAction() {
     setResizeAction(null);
 
-    if (!draftZone) return;
+    if (!draftZone) {
+      setDrawMode(false);
+      return;
+    }
     const rect = normalizeDraftZone(draftZone);
     setDraftZone(null);
-    if (rect.width < 2 || rect.height < 2) return;
+    if (rect.width < 2 || rect.height < 2) {
+      setDrawMode(false);
+      return;
+    }
     const id = Date.now();
     setZones((current) => [
       ...current,
@@ -1088,6 +1095,7 @@ export default function App() {
     ]);
     setSelectedTarget("zone");
     setSelectedZoneId(id);
+    setDrawMode(false);
   }
 
   async function openProjectorMode() {
@@ -1598,56 +1606,4 @@ export default function App() {
               <button onClick={() => setProjectionContent("video")} disabled={!videoUrl} className={projectionContent === "video" ? "activeEffect" : ""} >
                 Fill Surface With Video
               </button>
-            </div>
-            <div className="panelBlock">
-              <h2>Built-in Effects</h2>
-              <div className="effectList">
-                {effects.map((effect) => (
-                  <button key={effect.id} className={activeEffect === effect.id ? "activeEffect" : ""} onClick={() => { setActiveEffect(effect.id); setProjectionContent("effect"); }} >
-                    {effect.name}
-                    <span>{effect.description}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button className="primary" onClick={() => setProjectionOnly((value) => !value)} >
-              {projectionOnly ? <EyeOff size={18} /> : <Eye size={18} />}
-              {projectionOnly ? "Show Setup Layers" : "Preview Animation Only"}
-            </button>
-          </aside>
-          {stage}
-        </section>
-      )}
 
-      {step === "export" && (
-        <section className="workspace">
-          <aside className="toolPanel">
-            <div className="panelBlock">
-              <h2>Export / Projector</h2>
-              <button className="primary" onClick={() => setProjectionOnly(true)}>
-                <Eye size={18} /> Preview Projection Output
-              </button>
-              <button className="primary" onClick={openProjectorMode} disabled={!hasProject} >
-                <Eye size={18} /> Open Fullscreen Projector
-              </button>
-              <button className="primary" onClick={exportAlignmentGuide} disabled={!imageUrl} >
-                <Download size={18} /> Export Alignment Template
-              </button>
-              <button onClick={exportProjectFile} disabled={!hasProject}>
-                <Save size={18} /> Save Project File
-              </button>
-              <button onClick={() => importProjectRef.current?.click()}>
-                <FolderOpen size={18} /> Load Project File
-              </button>
-              <input ref={importProjectRef} className="hiddenInput" type="file" accept="application/json,.json" onChange={importProjectFile} />
-              <p className="helperText">
-                Fullscreen projector mode shows only animation/video output. The reference photo and setup boxes stay hidden.
-              </p>
-            </div>
-          </aside>
-          {stage}
-        </section>
-      )}
-    </main>
-  );
-}
