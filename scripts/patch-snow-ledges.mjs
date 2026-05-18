@@ -91,7 +91,8 @@ if (start >= 0 && end > start) {
 
   zones.filter((zone) => zone.included).forEach((zone) => {
     const shape = zone.shape ?? "rectangle";
-    const steps = shape === "circle" || shape === "oval" ? 192 : shape === "freehand" ? 96 : 8;
+    const isRound = shape === "circle" || shape === "oval";
+    const steps = isRound ? 384 : shape === "freehand" ? 128 : 8;
     const points = zoneToGeometryPoints(zone, steps).map((point) => ({
       x: (point.x / 100) * canvasWidth,
       y: (point.y / 100) * canvasHeight
@@ -100,7 +101,8 @@ if (start >= 0 && end > start) {
 
     const minY = Math.min(...points.map((point) => point.y));
     const maxY = Math.max(...points.map((point) => point.y));
-    const cutoff = shape === "rectangle" ? minY + 1 : minY + Math.max(1, maxY - minY) * 0.62;
+    const height = Math.max(1, maxY - minY);
+    const cutoff = shape === "rectangle" ? minY + 1 : minY + height * (isRound ? 0.74 : 0.62);
 
     for (let index = 0; index < points.length; index += 1) {
       const current = points[index];
@@ -109,7 +111,7 @@ if (start >= 0 && end > start) {
       const dy = next.y - current.y;
       const middleY = (current.y + next.y) / 2;
       if (Math.abs(dx) < 0.001) continue;
-      if (Math.abs(dy / dx) > 4.5) continue;
+      if (!isRound && Math.abs(dy / dx) > 4.5) continue;
       if (middleY > cutoff) continue;
       addLedge(current, next);
     }
@@ -127,10 +129,10 @@ source = source.replace(
   `            const dist = Math.abs(f.y - surfaceY);
 
             if (dist < 3) {`,
-  `            const crossedSurface = f.previousY <= surfaceY + 2 && f.y >= surfaceY - 5;
+  `            const crossedSurface = f.previousY <= surfaceY + 2 && f.y >= surfaceY - 7;
             const dist = Math.abs(f.y - surfaceY);
 
-            if (crossedSurface || dist < 8) {`
+            if (crossedSurface || dist < 10) {`
 );
 
 writeFileSync(appPath, source);
