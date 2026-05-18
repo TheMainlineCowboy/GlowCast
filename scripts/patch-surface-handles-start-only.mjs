@@ -63,7 +63,7 @@ const fullscreenEffect = `  useEffect(() => {
   }, []);
 `;
 
-const escEffect = `  useEffect(() => {
+const keyboardEffect = `  useEffect(() => {
     const onMaskEditKey = (event: KeyboardEvent) => {
       const target = event.target;
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
@@ -82,6 +82,23 @@ const escEffect = `  useEffect(() => {
         setZones((current) => current.filter((zone) => zone.id !== selectedZoneId));
         setSelectedZoneId(null);
         setSelectedTarget("zone");
+        return;
+      }
+
+      const arrowStep = event.shiftKey ? 1 : 0.25;
+      const arrowMoves: Record<string, { x: number; y: number }> = {
+        ArrowUp: { x: 0, y: -arrowStep },
+        ArrowDown: { x: 0, y: arrowStep },
+        ArrowLeft: { x: -arrowStep, y: 0 },
+        ArrowRight: { x: arrowStep, y: 0 }
+      };
+      const move = arrowMoves[event.key];
+      if (move && selectedTarget === "zone" && selectedZoneId !== null) {
+        event.preventDefault();
+        setZones((current) => current.map((zone) => {
+          if (zone.id !== selectedZoneId) return zone;
+          return clampZonePositionOnly({ ...zone, x: zone.x + move.x, y: zone.y + move.y });
+        }));
       }
     };
 
@@ -90,10 +107,10 @@ const escEffect = `  useEffect(() => {
   }, [selectedTarget, selectedZoneId]);
 `;
 
-if (!text.includes("event.key === \"Delete\"") && text.includes("onMaskEditKey")) {
-  text = text.replace(/  useEffect\(\(\) => \{\n    const onMaskEditKey = \(event: KeyboardEvent\) => \{[\s\S]*?  \}, \[\]\);\n/, escEffect);
-} else if (!text.includes("onMaskEditKey") && text.includes(fullscreenEffect)) {
-  text = text.replace(fullscreenEffect, fullscreenEffect + "\n" + escEffect);
+if (text.includes("onMaskEditKey")) {
+  text = text.replace(/  useEffect\(\(\) => \{\n    const onMaskEditKey = \(event: KeyboardEvent\) => \{[\s\S]*?  \}, \[selectedTarget, selectedZoneId\]\);\n/, keyboardEffect);
+} else if (text.includes(fullscreenEffect)) {
+  text = text.replace(fullscreenEffect, fullscreenEffect + "\n" + keyboardEffect);
 }
 
 writeFileSync(appPath, text);
