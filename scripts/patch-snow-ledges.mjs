@@ -135,4 +135,23 @@ source = source.replace(
             if (crossedSurface || dist < 10) {`
 );
 
+source = source.replace(
+  `                l.accumulation[idx] = Math.min(15, l.accumulation[idx] + 0.05);`,
+  `                l.accumulation[idx] = Math.min(24, l.accumulation[idx] + 0.18);`
+);
+
+source = source.replace(
+  `        ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
+        ctx.lineWidth = 3;
+        ctx.stroke();`,
+  `        ctx.strokeStyle = "rgba(255, 255, 255, 0.42)";
+        ctx.lineWidth = 9;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+        ctx.lineWidth = 4;
+        ctx.stroke();`
+);
+
 writeFileSync(appPath, source);
