@@ -1,3 +1,4 @@
+import "./patch-polygon-mask-shapes.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const appPath = "src/App.tsx";
