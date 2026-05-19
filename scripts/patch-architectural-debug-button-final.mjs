@@ -18,7 +18,7 @@ if (!s.includes("Analyze Structural Candidates")) {
                 <input type="checkbox" checked={architecturalDebug} onChange={(event) => setArchitecturalDebug(event.target.checked)} disabled={!architecturalResult} /> Show candidate debug
               </label>
               <p className="helperText">
-                {architecturalResult ? `Debug found ${architecturalResult.lines.length} lines / ${architecturalResult.candidates.length} boxes.` : "Structural debug has not run yet."}
+                {architecturalResult ? "Debug found " + architecturalResult.lines.length + " lines / " + architecturalResult.candidates.length + " boxes." : "Structural debug has not run yet."}
               </p>`;
       s = s.slice(0, insertAt) + controls + s.slice(insertAt);
     }
