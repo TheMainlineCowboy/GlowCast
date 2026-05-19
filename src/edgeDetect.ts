@@ -49,10 +49,10 @@ export async function scanImageEdges(imageUrl: string): Promise<EdgeScanResult> 
   }
 
   const edgeImage = edgeCtx.createImageData(width, height);
-  const edgePoints: EdgePoint[] = [];
+  const rawEdges: EdgePoint[] = [];
 
-  const threshold = 72;
-  const step = Math.max(1, Math.floor(Math.max(width, height) / 1200));
+  const threshold = 48;
+  const step = 1;
 
   for (let y = 1; y < height - 1; y += step) {
     for (let x = 1; x < width - 1; x += step) {
@@ -78,22 +78,21 @@ export async function scanImageEdges(imageUrl: string): Promise<EdgeScanResult> 
 
       if (strength > threshold) {
         const pixel = index * 4;
-
         edgeImage.data[pixel] = 34;
         edgeImage.data[pixel + 1] = 211;
         edgeImage.data[pixel + 2] = 238;
         edgeImage.data[pixel + 3] = clampByte(Math.min(255, strength));
 
-        edgePoints.push({
-          x: (x / width) * 100,
-          y: (y / height) * 100,
-          strength
-        });
+        rawEdges.push({ x: (x / width) * 100, y: (y / height) * 100, strength });
       }
     }
   }
 
   edgeCtx.putImageData(edgeImage, 0, 0);
+
+  const maxPoints = 9000;
+  const stride = Math.max(1, Math.ceil(rawEdges.length / maxPoints));
+  const edgePoints = rawEdges.filter((_, index) => index % stride === 0);
 
   return {
     width,
