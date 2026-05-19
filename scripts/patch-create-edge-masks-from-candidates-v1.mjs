@@ -31,7 +31,7 @@ if (!s.includes('function createMasksFromEdges()')) {
         shape: "rectangle"
       }));
     if (!usable.length) {
-      setDetectMessage("No usable edge masks found yet. Try the night/day edge view or adjust the projection surface.");
+      setDetectMessage("No usable edge masks found yet. Analyzer saw " + result.lines.length + " lines and " + result.candidates.length + " boxes.");
       return;
     }
     setZones((current) => [...current.filter((zone) => zone.label !== "edge mask"), ...usable]);
@@ -47,7 +47,20 @@ if (!s.includes('function createMasksFromEdges()')) {
 
 s = s.replaceAll('Edge Masks Disabled', 'Create Edge Masks');
 
-// Force the visible edge-mask button to call the real mask creation handler.
+const createButton = `
+              <button type="button" onClick={createMasksFromEdges} disabled={!showEdges || !edgePoints.length || projectionOnly}>
+                Create Edge Masks
+              </button>`;
+
+if (!s.includes('onClick={createMasksFromEdges}')) {
+  const marker = `              <label className="flex items-center gap-2 text-sm text-slate-200">
+                <input type="checkbox" checked={snapEnabled} onChange={(event) => setSnapEnabled(event.target.checked)} /> Magnetic snap
+              </label>`;
+  if (s.includes(marker)) {
+    s = s.replace(marker, createButton + "\n" + marker);
+  }
+}
+
 s = s.replace(/<button type="button" onClick=\{[^}]+\} disabled=\{!imageUrl\}\>\s*Create Edge Masks\s*<\/button>/g, '<button type="button" onClick={createMasksFromEdges} disabled={!showEdges || !edgePoints.length || projectionOnly}>\n                Create Edge Masks\n              </button>');
 s = s.replace(/<button type="button" onClick=\{createMasksFromEdges\} disabled=\{!imageUrl\}\>\s*Create Edge Masks\s*<\/button>/g, '<button type="button" onClick={createMasksFromEdges} disabled={!showEdges || !edgePoints.length || projectionOnly}>\n                Create Edge Masks\n              </button>');
 
