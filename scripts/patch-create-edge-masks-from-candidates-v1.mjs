@@ -47,4 +47,8 @@ if (!s.includes('function createMasksFromEdges()')) {
 
 s = s.replaceAll('Edge Masks Disabled', 'Create Edge Masks');
 
+// Force the visible edge-mask button to call the real mask creation handler.
+s = s.replace(/<button type="button" onClick=\{[^}]+\} disabled=\{!imageUrl\}\>\s*Create Edge Masks\s*<\/button>/g, '<button type="button" onClick={createMasksFromEdges} disabled={!showEdges || !edgePoints.length || projectionOnly}>\n                Create Edge Masks\n              </button>');
+s = s.replace(/<button type="button" onClick=\{createMasksFromEdges\} disabled=\{!imageUrl\}\>\s*Create Edge Masks\s*<\/button>/g, '<button type="button" onClick={createMasksFromEdges} disabled={!showEdges || !edgePoints.length || projectionOnly}>\n                Create Edge Masks\n              </button>');
+
 writeFileSync(p, s);
