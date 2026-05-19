@@ -62,10 +62,10 @@ s = s.replace(
 
 s = s.replace(
   '    if (!draftZone) return;\n    const rect = normalizeDraftZone(draftZone);\n    setDraftZone(null);\n    if (rect.width < 2 || rect.height < 2) return;',
-  '    if (!draftZone) return;\n    const activeDraft = draftZone;\n    const rect = normalizeDraftZone(activeDraft);\n    setDraftZone(null);\n    if (guidedEdgeMode) {\n      createGuidedEdgeMaskFromDraft(activeDraft);\n      setGuidedEdgeMode(false);\n      return;\n    }\n    if (rect.width < 2 || rect.height < 2) return;'
+  '    if (!draftZone) return;\n    const rect = normalizeDraftZone(draftZone);\n    if (guidedEdgeMode) {\n      createGuidedEdgeMaskFromDraft(draftZone);\n      setGuidedEdgeMode(false);\n      setDraftZone(null);\n      return;\n    }\n    setDraftZone(null);\n    if (rect.width < 2 || rect.height < 2) return;'
 );
 
-s = s.replace('`manual ${draftZone.shape} avoid zone`', '`manual ${activeDraft.shape} avoid zone`');
+s = s.replace('`manual ${activeDraft.shape} avoid zone`', '`manual ${draftZone.shape} avoid zone`');
 
 s = s.replace(
   '              <label className="flex items-center gap-2 text-sm text-slate-200">\n                <input type="checkbox" checked={snapEnabled} onChange={(event) => setSnapEnabled(event.target.checked)} /> Magnetic snap\n              </label>',
