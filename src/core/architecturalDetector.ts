@@ -63,9 +63,9 @@ function scopedPoints(edgePoints: EdgePoint[], options: DetectorOptions) {
 function buildLineSegments(points: EdgePoint[], orientation: StructuralOrientation, options: DetectorOptions): LineSegment[] {
   if (!points.length) return [];
   const bounds = options.bounds ?? { x: 0, y: 0, width: 100, height: 100 };
-  const minLength = Math.max(5.5, (orientation === "horizontal" ? bounds.width : bounds.height) * 0.09);
-  const binSize = 1.15;
-  const runGap = 2.15;
+  const minLength = Math.max(3.2, (orientation === "horizontal" ? bounds.width : bounds.height) * 0.045);
+  const binSize = 1.9;
+  const runGap = 7.5;
   const bins = new Map<number, EdgePoint[]>();
 
   for (const point of points) {
@@ -81,7 +81,7 @@ function buildLineSegments(points: EdgePoint[], orientation: StructuralOrientati
     let run: EdgePoint[] = [];
 
     const flush = () => {
-      if (run.length < 5) {
+      if (run.length < 3) {
         run = [];
         return;
       }
@@ -127,15 +127,15 @@ function buildLineSegments(points: EdgePoint[], orientation: StructuralOrientati
     flush();
   }
 
-  return lines.sort((a, b) => b.length * b.strength - a.length * a.strength).slice(0, options.maxLines ?? 80);
+  return lines.sort((a, b) => b.length * b.strength - a.length * a.strength).slice(0, options.maxLines ?? 140);
 }
 
-function lineNearHorizontal(line: LineSegment, x1: number, x2: number, tolerance = 2.3) {
+function lineNearHorizontal(line: LineSegment, x1: number, x2: number, tolerance = 4.5) {
   if (line.orientation !== "horizontal") return false;
   return line.x1 <= x1 + tolerance && line.x2 >= x2 - tolerance;
 }
 
-function lineNearVertical(line: LineSegment, y1: number, y2: number, tolerance = 2.3) {
+function lineNearVertical(line: LineSegment, y1: number, y2: number, tolerance = 4.5) {
   if (line.orientation !== "vertical") return false;
   return line.y1 <= y1 + tolerance && line.y2 >= y2 - tolerance;
 }
@@ -144,21 +144,21 @@ function scoreCandidate(bounds: Bounds, lines: LineSegment[], surfaceBounds: Bou
   const area = bounds.width * bounds.height;
   const surfaceArea = Math.max(1, surfaceBounds.width * surfaceBounds.height);
   const aspect = bounds.width / Math.max(0.01, bounds.height);
-  if (area < surfaceArea * 0.012 || area > surfaceArea * 0.32) return null;
-  if (bounds.width < 7 || bounds.height < 7) return null;
-  if (aspect < 0.35 || aspect > 3.8) return null;
+  if (area < surfaceArea * 0.006 || area > surfaceArea * 0.38) return null;
+  if (bounds.width < 5.5 || bounds.height < 5.5) return null;
+  if (aspect < 0.25 || aspect > 4.6) return null;
 
-  const top = lines.find((line) => Math.abs(line.y1 - bounds.y) < 2.5 && lineNearHorizontal(line, bounds.x, bounds.x + bounds.width));
-  const bottom = lines.find((line) => Math.abs(line.y1 - (bounds.y + bounds.height)) < 2.5 && lineNearHorizontal(line, bounds.x, bounds.x + bounds.width));
-  const left = lines.find((line) => Math.abs(line.x1 - bounds.x) < 2.5 && lineNearVertical(line, bounds.y, bounds.y + bounds.height));
-  const right = lines.find((line) => Math.abs(line.x1 - (bounds.x + bounds.width)) < 2.5 && lineNearVertical(line, bounds.y, bounds.y + bounds.height));
+  const top = lines.find((line) => Math.abs(line.y1 - bounds.y) < 5.5 && lineNearHorizontal(line, bounds.x, bounds.x + bounds.width));
+  const bottom = lines.find((line) => Math.abs(line.y1 - (bounds.y + bounds.height)) < 5.5 && lineNearHorizontal(line, bounds.x, bounds.x + bounds.width));
+  const left = lines.find((line) => Math.abs(line.x1 - bounds.x) < 5.5 && lineNearVertical(line, bounds.y, bounds.y + bounds.height));
+  const right = lines.find((line) => Math.abs(line.x1 - (bounds.x + bounds.width)) < 5.5 && lineNearVertical(line, bounds.y, bounds.y + bounds.height));
   const contributingLines = [top, bottom, left, right].filter(Boolean).length;
   if (contributingLines < 2) return null;
 
   let score = contributingLines * 18;
   if (contributingLines >= 3) score += 20;
-  if (aspect >= 0.65 && aspect <= 2.4) score += 18;
-  if (area >= surfaceArea * 0.025 && area <= surfaceArea * 0.18) score += 14;
+  if (aspect >= 0.55 && aspect <= 2.8) score += 18;
+  if (area >= surfaceArea * 0.018 && area <= surfaceArea * 0.22) score += 14;
 
   return {
     id: `arch-${Math.round(bounds.x * 10)}-${Math.round(bounds.y * 10)}-${Math.round(bounds.width * 10)}-${Math.round(bounds.height * 10)}`,
@@ -193,15 +193,15 @@ export function detectArchitecturalCandidates(edgePoints: EdgePoint[], options: 
 
   for (const top of horizontal) {
     for (const bottom of horizontal) {
-      if (bottom.y1 <= top.y1 + 5) continue;
+      if (bottom.y1 <= top.y1 + 4.5) continue;
       const y = top.y1;
       const height = bottom.y1 - top.y1;
-      if (height < 7 || height > bounds.height * 0.75) continue;
+      if (height < 5.5 || height > bounds.height * 0.82) continue;
       for (const left of vertical) {
-        if (!lineNearVertical(left, y, y + height, 4.2)) continue;
+        if (!lineNearVertical(left, y, y + height, 7.5)) continue;
         for (const right of vertical) {
-          if (right.x1 <= left.x1 + 7) continue;
-          if (!lineNearVertical(right, y, y + height, 4.2)) continue;
+          if (right.x1 <= left.x1 + 5.5) continue;
+          if (!lineNearVertical(right, y, y + height, 7.5)) continue;
           const x = left.x1;
           const width = right.x1 - left.x1;
           const candidate = scoreCandidate({ x, y, width, height }, lines, bounds);
@@ -214,7 +214,7 @@ export function detectArchitecturalCandidates(edgePoints: EdgePoint[], options: 
   const candidates = proposals
     .sort((a, b) => b.score - a.score)
     .filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlapRatio(other, candidate) > 0.68 && other.score >= candidate.score) === -1)
-    .slice(0, 16);
+    .slice(0, 20);
 
-  return { lines: lines.slice(0, 120), candidates };
+  return { lines: lines.slice(0, 160), candidates };
 }
