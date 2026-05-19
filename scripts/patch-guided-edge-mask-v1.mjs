@@ -21,14 +21,10 @@ if (!s.includes("function createGuidedEdgeMaskFromDraft")) {
       setDetectMessage("No scanner edge points were found inside that selection. Try drawing closer around the highlighted scanner lines.");
       return false;
     }
-    const strengths = pointsInside.map((point) => point.strength).sort((a, b) => a - b);
-    const threshold = Math.max(35, strengths[Math.floor(strengths.length * 0.35)] ?? 35);
-    const strongPoints = pointsInside.filter((point) => point.strength >= threshold);
-    const local = strongPoints.length >= 4 ? strongPoints : pointsInside;
-    const minX = Math.min(...local.map((point) => point.x));
-    const maxX = Math.max(...local.map((point) => point.x));
-    const minY = Math.min(...local.map((point) => point.y));
-    const maxY = Math.max(...local.map((point) => point.y));
+    const minX = Math.min(...pointsInside.map((point) => point.x));
+    const maxX = Math.max(...pointsInside.map((point) => point.x));
+    const minY = Math.min(...pointsInside.map((point) => point.y));
+    const maxY = Math.max(...pointsInside.map((point) => point.y));
     const pad = 0.9;
     const x = clamp(minX - pad);
     const y = clamp(minY - pad);
@@ -43,12 +39,22 @@ if (!s.includes("function createGuidedEdgeMaskFromDraft")) {
     setSelectedTarget("zone");
     setSelectedZoneId(id);
     setProjectionOnly(false);
-    setDetectMessage("Created a guided edge mask from " + local.length + " scanner edge points.");
+    setDetectMessage("Created a guided edge mask from " + pointsInside.length + " scanner edge points.");
     return true;
   }
 
   function createMasksFromEdges() {`);
 }
+
+s = s.replace(
+  '  function createMasksFromEdges() {\n    if (!edgePoints.length) {',
+  '  function createMasksFromEdges() {\n    setGuidedEdgeMode(true);\n    setDrawMode(false);\n    setProjectionOnly(false);\n    setDetectMessage("Global edge mask guessing is disabled. Drag around one scanner-detected window or object.");\n    if (!edgePoints.length) {'
+);
+
+s = s.replace(
+  '    const candidates = edgePointsToMaskCandidates(scopedEdgePoints, 12).filter((candidate) => {',
+  '    const candidates = [] as ReturnType<typeof edgePointsToMaskCandidates>;\n    /* disabled global guessing */\n    edgePointsToMaskCandidates(scopedEdgePoints, 12).filter((candidate) => {'
+);
 
 s = s.replace(
   '    if (\n      !imageUrl || !drawMode || projectionOnly || (event.target as HTMLElement).closest(".zone,.projectionBoundary")\n    ) {',
@@ -68,6 +74,11 @@ s = s.replace(
 s = s.replace('`manual ${activeDraft.shape} avoid zone`', '`manual ${draftZone.shape} avoid zone`');
 
 s = s.replace(
+  '              <button type="button" onClick={toggleEdgeScanner} disabled={!imageUrl || edgeScanning}',
+  '              <button type="button" onClick={toggleEdgeScanner} disabled={!imageUrl || edgeScanning}'
+);
+
+s = s.replace(
   '              <label className="flex items-center gap-2 text-sm text-slate-200">\n                <input type="checkbox" checked={snapEnabled} onChange={(event) => setSnapEnabled(event.target.checked)} /> Magnetic snap\n              </label>',
   '              <label className="flex items-center gap-2 text-sm text-slate-200">\n                <input type="checkbox" checked={snapEnabled} onChange={(event) => setSnapEnabled(event.target.checked)} /> Magnetic snap\n              </label>\n              <button type="button" onClick={() => { setGuidedEdgeMode((value) => !value); setDrawMode(false); setProjectionOnly(false); setCornerMode(false); setCornerPoints([]); setSurfacePolygonMode(false); setDetectMessage("Drag around one scanner-detected window or object. The mask will tighten to edge points inside your selection."); }} disabled={!imageUrl || !showEdges || !edgePoints.length} className={guidedEdgeMode ? "activeStep" : ""} >\n                {guidedEdgeMode ? "Selecting Scanned Object" : "Select Scanned Object"}\n              </button>'
 );
@@ -76,5 +87,7 @@ s = s.replace(
   'cornerMode ? `Corner ${Math.min(cornerPoints.length + 1, 4)} of 4: ${cornerNames[cornerPoints.length] ?? "complete"}` : drawMode ? `Drag directly on the photo to draw a ${drawShape} avoid mask.` : detectMessage',
   'cornerMode ? `Corner ${Math.min(cornerPoints.length + 1, 4)} of 4: ${cornerNames[cornerPoints.length] ?? "complete"}` : guidedEdgeMode ? "Drag around one scanner-detected object to create a tightened edge mask." : drawMode ? `Drag directly on the photo to draw a ${drawShape} avoid mask.` : detectMessage'
 );
+
+s = s.replaceAll('Create Edge Masks', 'Use Guided Edge Masks');
 
 writeFileSync(appPath, s);
