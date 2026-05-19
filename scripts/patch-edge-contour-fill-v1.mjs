@@ -59,15 +59,15 @@ function createEdgeRegionCanvasUrl(edgePoints: EdgePoint[], sourceWidth: number,
     const y = Math.max(0, Math.min(height - 1, Math.round((point.y / 100) * height)));
     edges[y * width + x] = 1;
   }
-  const closedEdges = growPixels(edges, width, height, 3);
+  const closedEdges = growPixels(edges, width, height, 2);
   const outside = outsidePixels(closedEdges, width, height);
   const raw = new Uint8Array(width * height);
   for (let i = 0; i < raw.length; i += 1) raw[i] = !closedEdges[i] && !outside[i] ? 1 : 0;
 
   const visited = new Uint8Array(width * height);
   const keep = new Uint8Array(width * height);
-  const minArea = Math.max(20, Math.round(width * height * 0.00025));
-  const maxArea = Math.round(width * height * 0.24);
+  const minBoxArea = Math.max(900, Math.round(width * height * 0.006));
+  const maxBoxArea = Math.round(width * height * 0.16);
   for (let start = 0; start < raw.length; start += 1) {
     if (!raw[start] || visited[start]) continue;
     const queue = [start];
@@ -89,12 +89,13 @@ function createEdgeRegionCanvasUrl(edgePoints: EdgePoint[], sourceWidth: number,
         queue.push(n);
       }
     }
-    const area = pixels.length;
     const bw = maxX - minX + 1;
     const bh = maxY - minY + 1;
+    const boxArea = bw * bh;
     const aspect = bw / Math.max(1, bh);
-    const fill = area / Math.max(1, bw * bh);
-    if (area >= minArea && area <= maxArea && bw >= 5 && bh >= 5 && aspect >= 0.18 && aspect <= 5.5 && fill >= 0.18) {
+    const fill = pixels.length / Math.max(1, boxArea);
+    const touchesEdge = minX <= 1 || minY <= 1 || maxX >= width - 2 || maxY >= height - 2;
+    if (!touchesEdge && boxArea >= minBoxArea && boxArea <= maxBoxArea && bw >= 24 && bh >= 24 && aspect >= 0.45 && aspect <= 2.6 && fill >= 0.35) {
       for (const px of pixels) keep[px] = 1;
     }
   }
