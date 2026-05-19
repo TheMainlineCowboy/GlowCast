@@ -2,6 +2,24 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 const appPath = "src/App.tsx";
 let source = readFileSync(appPath, "utf8");
+
+if (!source.includes("function zonePointClipPath")) {
+  const anchor = "  function createMasksFromEdges() {";
+  const helper = [
+    '  function zonePointClipPath(zone: ProjectZone) {',
+    '    if (!zone.points || zone.points.length < 3) return undefined;',
+    '    const points = zone.points.map((point) => {',
+    '      const localX = zone.width > 0 ? ((point.x - zone.x) / zone.width) * 100 : 0;',
+    '      const localY = zone.height > 0 ? ((point.y - zone.y) / zone.height) * 100 : 0;',
+    '      return clamp(localX) + "% " + clamp(localY) + "%";',
+    '    });',
+    '    return "polygon(" + points.join(",") + ")";',
+    '  }',
+    ''
+  ].join("\n");
+  source = source.replace(anchor, helper + anchor);
+}
+
 const start = source.indexOf("  function createMasksFromEdges() {");
 const end = source.indexOf("\n  async function toggleEdgeScanner() {", start);
 
@@ -43,5 +61,8 @@ if (start >= 0 && end > start) {
     ''
   ].join("\n");
   source = source.slice(0, start) + replacement + source.slice(end);
-  writeFileSync(appPath, source);
 }
+
+source = source.replaceAll('clipPath: `polygon(${zone.points.map((p) => `${p.x}% ${p.y}%`).join(",")})`', 'clipPath: zonePointClipPath(zone)');
+
+writeFileSync(appPath, source);
