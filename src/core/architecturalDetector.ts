@@ -26,9 +26,9 @@ function scopedPoints(edgePoints: EdgePoint[], options: DetectorOptions) {
 
 function buildLineSegments(points: EdgePoint[], orientation: StructuralOrientation, options: DetectorOptions): LineSegment[] {
   const bounds = options.bounds ?? { x: 0, y: 0, width: 100, height: 100 };
-  const minLength = Math.max(2.2, (orientation === "horizontal" ? bounds.width : bounds.height) * 0.032);
-  const binSize = 2.4;
-  const runGap = 11;
+  const minLength = Math.max(2.0, (orientation === "horizontal" ? bounds.width : bounds.height) * 0.028);
+  const binSize = 2.5;
+  const runGap = 12;
   const bins = new Map<number, EdgePoint[]>();
   for (const point of points) {
     const key = Math.round((orientation === "horizontal" ? point.y : point.x) / binSize);
@@ -58,7 +58,7 @@ function buildLineSegments(points: EdgePoint[], orientation: StructuralOrientati
     }
     flush();
   }
-  return lines.sort((a, b) => b.length * b.strength - a.length * a.strength).slice(0, options.maxLines ?? 200);
+  return lines.sort((a, b) => b.length * b.strength - a.length * a.strength).slice(0, options.maxLines ?? 220);
 }
 
 function overlapRatio(a: CandidateProposal, b: CandidateProposal) {
@@ -68,60 +68,58 @@ function overlapRatio(a: CandidateProposal, b: CandidateProposal) {
   return smaller > 0 ? (ix * iy) / smaller : 0;
 }
 
-function touchesSurfaceEdge(bounds: Bounds, surface: Bounds) {
-  const marginX = Math.max(2.5, surface.width * 0.035);
-  const marginY = Math.max(2.5, surface.height * 0.035);
-  return bounds.x <= surface.x + marginX || bounds.y <= surface.y + marginY || bounds.x + bounds.width >= surface.x + surface.width - marginX || bounds.y + bounds.height >= surface.y + surface.height - marginY;
+function wallSized(bounds: Bounds, surface: Bounds) {
+  return bounds.width > surface.width * 0.58 || bounds.height > surface.height * 0.58 || bounds.width * bounds.height > surface.width * surface.height * 0.24;
 }
 
 function makeCandidate(bounds: Bounds, surface: Bounds, contributingLines: number): CandidateProposal | null {
-  if (touchesSurfaceEdge(bounds, surface)) return null;
+  if (wallSized(bounds, surface)) return null;
   const surfaceArea = Math.max(1, surface.width * surface.height);
   const area = bounds.width * bounds.height;
   const aspect = bounds.width / Math.max(0.01, bounds.height);
-  if (area < surfaceArea * 0.0012 || area > surfaceArea * 0.18) return null;
-  if (bounds.width < 2.8 || bounds.height < 2.8) return null;
-  if (aspect < 0.2 || aspect > 5.5) return null;
+  if (area < surfaceArea * 0.0008 || area > surfaceArea * 0.22) return null;
+  if (bounds.width < 2.4 || bounds.height < 2.4) return null;
+  if (aspect < 0.16 || aspect > 6.4) return null;
   let score = contributingLines * 18;
   if (contributingLines >= 3) score += 18;
-  if (aspect >= 0.42 && aspect <= 3.4) score += 20;
-  if (area >= surfaceArea * 0.007 && area <= surfaceArea * 0.12) score += 16;
+  if (aspect >= 0.38 && aspect <= 3.8) score += 20;
+  if (area >= surfaceArea * 0.004 && area <= surfaceArea * 0.14) score += 16;
   return { id: `arch-${Math.round(bounds.x * 10)}-${Math.round(bounds.y * 10)}-${Math.round(bounds.width * 10)}-${Math.round(bounds.height * 10)}`, x: Number(bounds.x.toFixed(2)), y: Number(bounds.y.toFixed(2)), width: Number(bounds.width.toFixed(2)), height: Number(bounds.height.toFixed(2)), score: Math.min(99, Math.round(score)), contributingLines, status: score >= 70 ? "high" : "low" };
 }
 
-function addObjectScaleLineCandidates(lines: LineSegment[], surface: Bounds, proposals: CandidateProposal[]) {
-  const strong = lines.filter((line) => line.x1 > surface.x + surface.width * 0.06 && line.x2 < surface.x + surface.width * 0.94 && line.y1 > surface.y + surface.height * 0.06 && line.y2 < surface.y + surface.height * 0.94).slice(0, 100);
-  for (const line of strong) {
-    const longSide = line.length;
-    const shortSide = Math.max(Math.min(surface.width, surface.height) * 0.085, longSide * 0.55);
-    if (line.orientation === "horizontal") {
-      const c = makeCandidate({ x: line.x1, y: line.y1 - shortSide / 2, width: longSide, height: shortSide }, surface, 1);
-      if (c) proposals.push(c);
-    } else {
-      const c = makeCandidate({ x: line.x1 - shortSide / 2, y: line.y1, width: shortSide, height: longSide }, surface, 1);
-      if (c) proposals.push(c);
-    }
+function addGuaranteedLineCandidates(lines: LineSegment[], surface: Bounds, proposals: CandidateProposal[]) {
+  const topLines = lines.filter((line) => !wallSized({ x: line.x1, y: line.y1, width: Math.max(1, line.x2 - line.x1), height: Math.max(1, line.y2 - line.y1) }, surface)).slice(0, 80);
+  const minSide = Math.min(surface.width, surface.height);
+  for (const line of topLines) {
+    const longSide = Math.max(line.length, minSide * 0.05);
+    const shortSide = Math.max(minSide * 0.06, Math.min(minSide * 0.18, longSide * 0.75));
+    const centerX = (line.x1 + line.x2) / 2;
+    const centerY = (line.y1 + line.y2) / 2;
+    const bounds = line.orientation === "horizontal"
+      ? { x: centerX - longSide / 2, y: centerY - shortSide / 2, width: longSide, height: shortSide }
+      : { x: centerX - shortSide / 2, y: centerY - longSide / 2, width: shortSide, height: longSide };
+    const c = makeCandidate(bounds, surface, 1);
+    if (c) proposals.push(c);
   }
 }
 
 function addComponentCandidates(points: EdgePoint[], surface: Bounds, proposals: CandidateProposal[]) {
-  const cell = Math.max(3, Math.min(surface.width, surface.height) * 0.055);
+  const cell = Math.max(2.5, Math.min(surface.width, surface.height) * 0.045);
   const buckets = new Map<string, EdgePoint[]>();
   for (const p of points) {
-    if (p.x <= surface.x + surface.width * 0.05 || p.x >= surface.x + surface.width * 0.95 || p.y <= surface.y + surface.height * 0.05 || p.y >= surface.y + surface.height * 0.95) continue;
     const key = `${Math.floor((p.x - surface.x) / cell)},${Math.floor((p.y - surface.y) / cell)}`;
     const list = buckets.get(key) ?? [];
     list.push(p);
     buckets.set(key, list);
   }
-  const pad = Math.max(2.5, Math.min(surface.width, surface.height) * 0.04);
+  const pad = Math.max(2, Math.min(surface.width, surface.height) * 0.035);
   for (const list of buckets.values()) {
     if (list.length < 2) continue;
     const xs = list.map((p) => p.x), ys = list.map((p) => p.y);
-    const x = Math.max(surface.x, Math.min(...xs) - pad);
-    const y = Math.max(surface.y, Math.min(...ys) - pad);
-    const w = Math.min(surface.x + surface.width, Math.max(...xs) + pad) - x;
-    const h = Math.min(surface.y + surface.height, Math.max(...ys) + pad) - y;
+    const x = Math.min(...xs) - pad;
+    const y = Math.min(...ys) - pad;
+    const w = Math.max(...xs) - Math.min(...xs) + pad * 2;
+    const h = Math.max(...ys) - Math.min(...ys) + pad * 2;
     const c = makeCandidate({ x, y, width: w, height: h }, surface, 1);
     if (c) proposals.push(c);
   }
@@ -129,11 +127,11 @@ function addComponentCandidates(points: EdgePoint[], surface: Bounds, proposals:
 
 function addPairCandidates(horizontal: LineSegment[], vertical: LineSegment[], surface: Bounds, proposals: CandidateProposal[]) {
   for (const h of horizontal) for (const v of vertical) {
-    const near = v.x1 >= h.x1 - 8 && v.x1 <= h.x2 + 8 && h.y1 >= v.y1 - 8 && h.y1 <= v.y2 + 8;
+    const near = v.x1 >= h.x1 - 10 && v.x1 <= h.x2 + 10 && h.y1 >= v.y1 - 10 && h.y1 <= v.y2 + 10;
     if (!near) continue;
-    const w = Math.max(5, Math.min(h.length * 1.35, surface.width * 0.25));
-    const hgt = Math.max(5, Math.min(v.length * 1.35, surface.height * 0.25));
-    const c = makeCandidate({ x: Math.max(surface.x, v.x1 - w / 2), y: Math.max(surface.y, h.y1 - hgt / 2), width: w, height: hgt }, surface, 2);
+    const w = Math.max(4.5, Math.min(h.length * 1.45, surface.width * 0.22));
+    const hgt = Math.max(4.5, Math.min(v.length * 1.45, surface.height * 0.22));
+    const c = makeCandidate({ x: v.x1 - w / 2, y: h.y1 - hgt / 2, width: w, height: hgt }, surface, 2);
     if (c) proposals.push(c);
   }
 }
@@ -146,8 +144,8 @@ export function detectArchitecturalCandidates(edgePoints: EdgePoint[], options: 
   const lines = [...horizontal, ...vertical];
   const proposals: CandidateProposal[] = [];
   addPairCandidates(horizontal, vertical, surface, proposals);
-  addObjectScaleLineCandidates(lines, surface, proposals);
+  addGuaranteedLineCandidates(lines, surface, proposals);
   addComponentCandidates(points, surface, proposals);
-  const candidates = proposals.sort((a, b) => b.score - a.score).filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlapRatio(other, candidate) > 0.5 && other.score >= candidate.score) === -1).slice(0, 36);
-  return { lines: lines.slice(0, 200), candidates };
+  const candidates = proposals.sort((a, b) => b.score - a.score).filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlapRatio(other, candidate) > 0.42 && other.score >= candidate.score) === -1).slice(0, 48);
+  return { lines: lines.slice(0, 220), candidates };
 }
