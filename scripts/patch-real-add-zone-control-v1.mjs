@@ -2,10 +2,6 @@ import fs from 'node:fs';
 const p = 'src/App.tsx';
 let s = fs.readFileSync(p, 'utf8');
 
-const marker = `              <button type="button" onClick={toggleEdgeScanner} disabled={!imageUrl || edgeScanning} className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg disabled:opacity-50" >
-                {edgeScanning ? "Scanning Edges..." : showEdges ? "Hide Edge Scanner" : "Show Edge Scanner"}
-              </button>`;
-
 const insert = `
               <button type="button" className="primary" onClick={() => addZone("rectangle")} disabled={!imageUrl || cornerMode || surfacePolygonMode}>
                 REAL ADD ZONE CONTROL
@@ -13,8 +9,18 @@ const insert = `
               <p className="helperText">Zone count: {zones.length}</p>`;
 
 if (!s.includes('REAL ADD ZONE CONTROL')) {
-  if (!s.includes(marker)) throw new Error('scanner button marker not found');
-  s = s.replace(marker, marker + insert);
+  const addZoneText = '<Plus size={18} /> Add {drawShape} Zone';
+  const textIndex = s.indexOf(addZoneText);
+  if (textIndex >= 0) {
+    const buttonStart = s.lastIndexOf('<button', textIndex);
+    if (buttonStart >= 0) {
+      s = s.slice(0, buttonStart) + insert + '\n' + s.slice(buttonStart);
+    } else {
+      console.warn('REAL ADD ZONE CONTROL skipped: button start not found');
+    }
+  } else {
+    console.warn('REAL ADD ZONE CONTROL skipped: Add Zone text not found');
+  }
 }
 
 fs.writeFileSync(p, s);
