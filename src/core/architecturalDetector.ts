@@ -195,19 +195,19 @@ function componentBox(points: EdgePoint[], surface: Bounds): ComponentBox | null
   return { points, x, y, width, height, cx: x + width / 2, cy: y + height / 2 };
 }
 
-function boxToCandidate(box: ComponentBox, allPoints: EdgePoint[], lines: LineSegment[], surface: Bounds, index: number): CandidateProposal | null {
+function boxToCandidate(box: ComponentBox, allPoints: EdgePoint[], lines: LineSegment[], surface: Bounds, id: string): CandidateProposal | null {
   const { x, y, width, height } = box;
   const area = width * height;
   const surfaceArea = surface.width * surface.height;
   const aspect = width / Math.max(0.001, height);
 
   if (width < surface.width * 0.08 || height < surface.height * 0.08) return null;
-  if (width > surface.width * 0.46 || height > surface.height * 0.46) return null;
-  if (area < surfaceArea * 0.012 || area > surfaceArea * 0.18) return null;
-  if (aspect < 0.45 || aspect > 3.20) return null;
+  if (width > surface.width * 0.52 || height > surface.height * 0.78) return null;
+  if (area < surfaceArea * 0.012 || area > surfaceArea * 0.26) return null;
+  if (aspect < 0.22 || aspect > 4.50) return null;
 
-  const marginX = surface.width * 0.018;
-  const marginY = surface.height * 0.018;
+  const marginX = surface.width * 0.008;
+  const marginY = surface.height * 0.012;
   if (x <= surface.x + marginX || y <= surface.y + marginY || x + width >= surface.x + surface.width - marginX || y + height >= surface.y + surface.height - marginY) return null;
 
   const border = perimeterSupport(allPoints, x, y, width, height);
@@ -217,18 +217,23 @@ function boxToCandidate(box: ComponentBox, allPoints: EdgePoint[], lines: LineSe
   const points = countPoints(allPoints, x, y, width, height);
   const density = box.points.length / Math.max(1, area);
   const isArchLike = aspect >= 1.15 && height <= surface.height * 0.27 && y <= surface.y + surface.height * 0.45;
+  const isDoorLike = aspect >= 0.22 && aspect <= 0.78 && height >= surface.height * 0.30;
+  const isWideWindow = aspect > 1.90 && aspect <= 4.50 && height <= surface.height * 0.28;
   const isRectLike = aspect >= 0.55 && aspect <= 1.90;
-  if (!isArchLike && !isRectLike) return null;
+  if (!isArchLike && !isDoorLike && !isWideWindow && !isRectLike) return null;
 
   if (isRectLike) {
     if (border.count < 5 || border.sides < 2) return null;
     if (interior.count < 3 || interior.xBands < 2 || interior.yBands < 2) return null;
     if (hLines < 1 || vLines < 1 || hLines + vLines < 3) return null;
   }
-
-  if (isArchLike) {
+  if (isArchLike || isWideWindow) {
     if (interior.count < 2 || interior.xBands < 2) return null;
     if (hLines < 1 || vLines < 1) return null;
+  }
+  if (isDoorLike) {
+    if (border.count < 5 || border.sides < 2) return null;
+    if (vLines < 2 || hLines < 1) return null;
   }
 
   const isolatedSpeckleRatio = box.points.length / Math.max(1, points.count);
@@ -238,18 +243,69 @@ function boxToCandidate(box: ComponentBox, allPoints: EdgePoint[], lines: LineSe
   const score = Math.round(box.points.length * 2.5 + border.count * 1.9 + interior.count * 2.7 + hLines * 11 + vLines * 11 + Math.min(20, density * 140) - specklePenalty);
   if (score < 38) return null;
 
-  return { id: `edge-component-${index}`, x: Number(x.toFixed(2)), y: Number(y.toFixed(2)), width: Number(width.toFixed(2)), height: Number(height.toFixed(2)), score, contributingLines: hLines + vLines, status: score >= 70 ? "high" : "low" };
+  return { id, x: Number(x.toFixed(2)), y: Number(y.toFixed(2)), width: Number(width.toFixed(2)), height: Number(height.toFixed(2)), score, contributingLines: hLines + vLines, status: score >= 70 ? "high" : "low" };
 }
 
 function componentCandidates(points: EdgePoint[], lines: LineSegment[], surface: Bounds) {
   return connectedEdgeComponents(points, surface)
     .map((component) => componentBox(component, surface))
     .filter((box): box is ComponentBox => Boolean(box))
-    .map((box, index) => boxToCandidate(box, points, lines, surface, index))
+    .map((box, index) => boxToCandidate(box, points, lines, surface, `edge-component-${index}`))
     .filter((candidate): candidate is CandidateProposal => Boolean(candidate))
     .sort((a, b) => b.score - a.score)
     .filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.35 && other.score >= candidate.score) === -1)
     .slice(0, 8);
+}
+
+function linePairCandidates(points: EdgePoint[], lines: LineSegment[], surface: Bounds) {
+  const horizontal = lines.filter((line) => line.orientation === "horizontal" && line.length >= surface.width * 0.07).slice(0, 40);
+  const vertical = lines.filter((line) => line.orientation === "vertical" && line.length >= surface.height * 0.08).slice(0, 40);
+  const candidates: CandidateProposal[] = [];
+  let id = 0;
+
+  for (const left of vertical) {
+    for (const right of vertical) {
+      const lx = (left.x1 + left.x2) / 2;
+      const rx = (right.x1 + right.x2) / 2;
+      if (rx <= lx) continue;
+      const x = lx;
+      const width = rx - lx;
+      if (width < surface.width * 0.08 || width > surface.width * 0.36) continue;
+      const y = Math.max(Math.min(left.y1, right.y1) - surface.height * 0.015, surface.y);
+      const bottom = Math.min(Math.max(left.y2, right.y2) + surface.height * 0.015, surface.y + surface.height);
+      const height = bottom - y;
+      if (height < surface.height * 0.16 || height > surface.height * 0.78) continue;
+      const aspect = width / Math.max(0.001, height);
+      const doorLike = aspect >= 0.22 && aspect <= 0.85 && height >= surface.height * 0.28;
+      const windowLike = aspect >= 0.55 && aspect <= 1.95 && height <= surface.height * 0.45;
+      if (!doorLike && !windowLike) continue;
+      const box = { points: points.filter((p) => p.x >= x && p.x <= x + width && p.y >= y && p.y <= y + height), x, y, width, height, cx: x + width / 2, cy: y + height / 2 };
+      const candidate = boxToCandidate(box, points, lines, surface, `line-pair-${id++}`);
+      if (candidate) candidates.push({ ...candidate, score: candidate.score + 8 });
+    }
+  }
+
+  for (const top of horizontal) {
+    for (const bottomLine of horizontal) {
+      const ty = (top.y1 + top.y2) / 2;
+      const by = (bottomLine.y1 + bottomLine.y2) / 2;
+      if (by <= ty) continue;
+      const y = ty;
+      const height = by - ty;
+      if (height < surface.height * 0.08 || height > surface.height * 0.30) continue;
+      const x = Math.max(Math.min(top.x1, bottomLine.x1) - surface.width * 0.012, surface.x);
+      const right = Math.min(Math.max(top.x2, bottomLine.x2) + surface.width * 0.012, surface.x + surface.width);
+      const width = right - x;
+      if (width < surface.width * 0.12 || width > surface.width * 0.48) continue;
+      const aspect = width / Math.max(0.001, height);
+      if (aspect < 1.15 || aspect > 4.80) continue;
+      const box = { points: points.filter((p) => p.x >= x && p.x <= x + width && p.y >= y && p.y <= y + height), x, y, width, height, cx: x + width / 2, cy: y + height / 2 };
+      const candidate = boxToCandidate(box, points, lines, surface, `line-wide-${id++}`);
+      if (candidate) candidates.push({ ...candidate, score: candidate.score + 6 });
+    }
+  }
+
+  return candidates;
 }
 
 export function detectArchitecturalCandidates(edgePoints: EdgePoint[], options: DetectorOptions = {}): ArchitecturalDetectionResult {
@@ -258,5 +314,9 @@ export function detectArchitecturalCandidates(edgePoints: EdgePoint[], options: 
   const horizontal = buildLineSegments(points, "horizontal", options);
   const vertical = buildLineSegments(points, "vertical", options);
   const lines = [...horizontal, ...vertical].slice(0, 160);
-  return { lines, candidates: componentCandidates(points, lines, surface) };
+  const candidates = [...componentCandidates(points, lines, surface), ...linePairCandidates(points, lines, surface)]
+    .sort((a, b) => b.score - a.score)
+    .filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.38 && other.score >= candidate.score) === -1)
+    .slice(0, 10);
+  return { lines, candidates };
 }
