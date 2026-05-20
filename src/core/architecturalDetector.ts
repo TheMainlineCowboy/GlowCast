@@ -82,12 +82,10 @@ function perimeterSupport(points: EdgePoint[], x: number, y: number, width: numb
 
   for (const point of points) {
     if (point.x < x || point.x > x + width || point.y < y || point.y > y + height) continue;
-
     const nearTop = Math.abs(point.y - y) <= band;
     const nearBottom = Math.abs(point.y - (y + height)) <= band;
     const nearLeft = Math.abs(point.x - x) <= band;
     const nearRight = Math.abs(point.x - (x + width)) <= band;
-
     if (nearTop || nearBottom || nearLeft || nearRight) count++;
     if (nearTop) top++;
     if (nearBottom) bottom++;
@@ -96,6 +94,27 @@ function perimeterSupport(points: EdgePoint[], x: number, y: number, width: numb
   }
 
   return { count, sides: [top, bottom, left, right].filter((value) => value >= 2).length };
+}
+
+function interiorStructure(points: EdgePoint[], x: number, y: number, width: number, height: number) {
+  const innerX = x + width * 0.18;
+  const innerY = y + height * 0.18;
+  const innerW = width * 0.64;
+  const innerH = height * 0.64;
+  let count = 0;
+  const xBands = new Set<number>();
+  const yBands = new Set<number>();
+  const quadrants = new Set<string>();
+
+  for (const point of points) {
+    if (point.x < innerX || point.x > innerX + innerW || point.y < innerY || point.y > innerY + innerH) continue;
+    count++;
+    xBands.add(Math.floor(((point.x - innerX) / innerW) * 4));
+    yBands.add(Math.floor(((point.y - innerY) / innerH) * 4));
+    quadrants.add(`${point.x < x + width / 2 ? "L" : "R"}${point.y < y + height / 2 ? "T" : "B"}`);
+  }
+
+  return { count, xBands: xBands.size, yBands: yBands.size, quadrants: quadrants.size };
 }
 
 function lineSupport(lines: LineSegment[], x: number, y: number, width: number, height: number, orientation: StructuralOrientation) {
@@ -129,18 +148,20 @@ function slidingCandidates(points: EdgePoint[], lines: LineSegment[], surface: B
         for (let x = surface.x + marginX; x <= surface.x + surface.width - width - marginX; x += stepX) {
           const support = countPoints(points, x, y, width, height);
           const border = perimeterSupport(points, x, y, width, height);
+          const interior = interiorStructure(points, x, y, width, height);
           const hLines = lineSupport(lines, x, y, width, height, "horizontal");
           const vLines = lineSupport(lines, x, y, width, height, "vertical");
           if (support.count < 7) continue;
           if (border.count < 6 || border.sides < 2) continue;
+          if (interior.count < 4 || interior.xBands < 2 || interior.yBands < 2 || interior.quadrants < 2) continue;
           if (hLines < 1 || vLines < 1) continue;
           if (hLines + vLines < 4) continue;
           const aspect = width / height;
           if (aspect < 0.65 || aspect > 2.15) continue;
           const oversizePenalty = Math.max(0, width / surface.width - 0.24) * 90;
-          const wallSpecklePenalty = Math.max(0, support.count - border.count) * 1.4;
-          const score = Math.round(border.count * 3.2 + hLines * 13 + vLines * 13 + Math.min(20, support.strength / 900) - oversizePenalty - wallSpecklePenalty);
-          if (score < 46) continue;
+          const wallSpecklePenalty = Math.max(0, support.count - border.count - interior.count) * 1.8;
+          const score = Math.round(border.count * 2.4 + interior.count * 3 + hLines * 13 + vLines * 13 + Math.min(20, support.strength / 900) - oversizePenalty - wallSpecklePenalty);
+          if (score < 48) continue;
           out.push({
             id: `slide-${id++}`,
             x: Number(x.toFixed(2)),
