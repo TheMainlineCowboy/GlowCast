@@ -177,10 +177,48 @@ function slidingCandidates(points: EdgePoint[], lines: LineSegment[], surface: B
     }
   }
 
-  return out
-    .sort((a, b) => b.score - a.score)
-    .filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.30 && other.score >= candidate.score) === -1)
-    .slice(0, 8);
+  return out;
+}
+
+function archCandidates(points: EdgePoint[], lines: LineSegment[], surface: Bounds): CandidateProposal[] {
+  const out: CandidateProposal[] = [];
+  const widths = [0.26, 0.30, 0.34, 0.38].map((n) => surface.width * n);
+  const heights = [0.16, 0.20, 0.24].map((n) => surface.height * n);
+  const stepX = surface.width * 0.035;
+  const stepY = surface.height * 0.035;
+  let id = 0;
+
+  for (const width of widths) {
+    for (const height of heights) {
+      for (let y = surface.y + surface.height * 0.08; y <= surface.y + surface.height * 0.36; y += stepY) {
+        for (let x = surface.x + surface.width * 0.18; x <= surface.x + surface.width * 0.72 - width; x += stepX) {
+          const support = countPoints(points, x, y, width, height);
+          const interior = interiorStructure(points, x, y, width, height);
+          const hLines = lineSupport(lines, x, y, width, height, "horizontal");
+          const vLines = lineSupport(lines, x, y, width, height, "vertical");
+          const aspect = width / Math.max(0.001, height);
+          if (aspect < 1.25 || aspect > 2.9) continue;
+          if (support.count < 8) continue;
+          if (interior.count < 3 || interior.xBands < 2) continue;
+          if (hLines < 1 || vLines < 1) continue;
+          const score = Math.round(support.count * 2.4 + interior.count * 3.2 + hLines * 11 + vLines * 10 + Math.min(18, support.strength / 900));
+          if (score < 55) continue;
+          out.push({
+            id: `arch-${id++}`,
+            x: Number(x.toFixed(2)),
+            y: Number(y.toFixed(2)),
+            width: Number(width.toFixed(2)),
+            height: Number(height.toFixed(2)),
+            score,
+            contributingLines: hLines + vLines,
+            status: score >= 70 ? "high" : "low"
+          });
+        }
+      }
+    }
+  }
+
+  return out;
 }
 
 export function detectArchitecturalCandidates(edgePoints: EdgePoint[], options: DetectorOptions = {}): ArchitecturalDetectionResult {
@@ -189,5 +227,9 @@ export function detectArchitecturalCandidates(edgePoints: EdgePoint[], options: 
   const horizontal = buildLineSegments(points, "horizontal", options);
   const vertical = buildLineSegments(points, "vertical", options);
   const lines = [...horizontal, ...vertical].slice(0, 160);
-  return { lines, candidates: slidingCandidates(points, lines, surface) };
+  const candidates = [...slidingCandidates(points, lines, surface), ...archCandidates(points, lines, surface)]
+    .sort((a, b) => b.score - a.score)
+    .filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.30 && other.score >= candidate.score) === -1)
+    .slice(0, 8);
+  return { lines, candidates };
 }
