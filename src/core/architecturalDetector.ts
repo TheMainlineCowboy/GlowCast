@@ -89,10 +89,10 @@ function lineSupport(lines: LineSegment[], x: number, y: number, width: number, 
 
 function slidingCandidates(points: EdgePoint[], lines: LineSegment[], surface: Bounds): CandidateProposal[] {
   const out: CandidateProposal[] = [];
-  const widths = [0.18, 0.22, 0.26, 0.31, 0.36].map((n) => surface.width * n);
-  const heights = [0.14, 0.18, 0.22, 0.27, 0.32].map((n) => surface.height * n);
-  const stepX = surface.width * 0.045;
-  const stepY = surface.height * 0.045;
+  const widths = [0.16, 0.19, 0.22, 0.25, 0.28].map((n) => surface.width * n);
+  const heights = [0.16, 0.20, 0.24, 0.28, 0.32].map((n) => surface.height * n);
+  const stepX = surface.width * 0.035;
+  const stepY = surface.height * 0.04;
   const marginX = surface.width * 0.035;
   const marginY = surface.height * 0.035;
   let id = 0;
@@ -104,12 +104,14 @@ function slidingCandidates(points: EdgePoint[], lines: LineSegment[], surface: B
           const support = countPoints(points, x, y, width, height);
           const hLines = lineSupport(lines, x, y, width, height, "horizontal");
           const vLines = lineSupport(lines, x, y, width, height, "vertical");
-          if (support.count < 8) continue;
-          if (hLines + vLines < 3) continue;
+          if (support.count < 7) continue;
+          if (hLines < 1 || vLines < 1) continue;
+          if (hLines + vLines < 4) continue;
           const aspect = width / height;
-          if (aspect < 0.55 || aspect > 2.8) continue;
-          const score = Math.round(support.count * 2.2 + hLines * 12 + vLines * 12 + Math.min(20, support.strength / 900));
-          if (score < 45) continue;
+          if (aspect < 0.65 || aspect > 2.15) continue;
+          const oversizePenalty = Math.max(0, width / surface.width - 0.24) * 90;
+          const score = Math.round(support.count * 2.2 + hLines * 13 + vLines * 13 + Math.min(20, support.strength / 900) - oversizePenalty);
+          if (score < 46) continue;
           out.push({
             id: `slide-${id++}`,
             x: Number(x.toFixed(2)),
@@ -127,7 +129,7 @@ function slidingCandidates(points: EdgePoint[], lines: LineSegment[], surface: B
 
   return out
     .sort((a, b) => b.score - a.score)
-    .filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.45 && other.score >= candidate.score) === -1)
+    .filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.30 && other.score >= candidate.score) === -1)
     .slice(0, 8);
 }
 
