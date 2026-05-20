@@ -81,7 +81,7 @@ function countPoints(points: EdgePoint[], x: number, y: number, width: number, h
 }
 
 function perimeterSupport(points: EdgePoint[], x: number, y: number, width: number, height: number) {
-  const band = Math.max(1.1, Math.min(width, height) * 0.18);
+  const band = Math.max(1.1, Math.min(width, height) * 0.16);
   let count = 0, top = 0, bottom = 0, left = 0, right = 0;
   for (const point of points) {
     if (point.x < x || point.x > x + width || point.y < y || point.y > y + height) continue;
@@ -135,9 +135,9 @@ function lineSupport(lines: LineSegment[], x: number, y: number, width: number, 
 function connectedEdgeComponents(points: EdgePoint[], surface: Bounds) {
   if (!points.length) return [] as EdgePoint[][];
   const strengths = points.map((point) => point.strength).sort((a, b) => a - b);
-  const cutoff = strengths[Math.floor(strengths.length * 0.46)] ?? 0;
+  const cutoff = strengths[Math.floor(strengths.length * 0.58)] ?? 0;
   const strongPoints = points.filter((point) => point.strength >= cutoff);
-  const cellSize = Math.max(0.85, Math.min(surface.width, surface.height) * 0.016);
+  const cellSize = Math.max(0.9, Math.min(surface.width, surface.height) * 0.018);
   const cells = new Map<string, Cell>();
 
   for (const point of strongPoints) {
@@ -151,7 +151,7 @@ function connectedEdgeComponents(points: EdgePoint[], surface: Bounds) {
 
   for (const [key, cell] of [...cells.entries()]) {
     const avg = cell.points.reduce((sum, point) => sum + point.strength, 0) / cell.points.length;
-    if (cell.points.length < 2 && avg < cutoff * 1.1) cells.delete(key);
+    if (cell.points.length < 2 && avg < cutoff * 1.25) cells.delete(key);
   }
 
   const seen = new Set<string>();
@@ -164,8 +164,8 @@ function connectedEdgeComponents(points: EdgePoint[], surface: Bounds) {
     while (stack.length) {
       const current = stack.pop()!;
       component.push(...current.points);
-      for (let dy = -3; dy <= 3; dy++) {
-        for (let dx = -3; dx <= 3; dx++) {
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
           if (dx === 0 && dy === 0) continue;
           const nextKey = `${current.gx + dx},${current.gy + dy}`;
           if (seen.has(nextKey)) continue;
@@ -182,10 +182,10 @@ function connectedEdgeComponents(points: EdgePoint[], surface: Bounds) {
 }
 
 function componentBox(points: EdgePoint[], surface: Bounds): ComponentBox | null {
-  if (points.length < 4) return null;
+  if (points.length < 7) return null;
   const xs = points.map((point) => point.x);
   const ys = points.map((point) => point.y);
-  const pad = Math.max(0.7, Math.min(surface.width, surface.height) * 0.01);
+  const pad = Math.max(0.8, Math.min(surface.width, surface.height) * 0.012);
   const x = Math.max(surface.x, quantile(xs, 0.04) - pad);
   const y = Math.max(surface.y, quantile(ys, 0.04) - pad);
   const right = Math.min(surface.x + surface.width, quantile(xs, 0.96) + pad);
@@ -195,38 +195,19 @@ function componentBox(points: EdgePoint[], surface: Bounds): ComponentBox | null
   return { points, x, y, width, height, cx: x + width / 2, cy: y + height / 2 };
 }
 
-function mergeNearbyComponents(boxes: ComponentBox[], surface: Bounds) {
-  const merged = [...boxes];
-  for (let i = 0; i < boxes.length; i++) {
-    for (let j = i + 1; j < boxes.length; j++) {
-      const a = boxes[i];
-      const b = boxes[j];
-      const gapX = Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + a.width, b.x + b.width));
-      const gapY = Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.height, b.y + b.height));
-      const alignedY = Math.abs(a.cy - b.cy) <= surface.height * 0.11;
-      const alignedX = Math.abs(a.cx - b.cx) <= surface.width * 0.11;
-      const close = gapX <= surface.width * 0.08 && gapY <= surface.height * 0.08;
-      const plausible = close || (alignedY && gapX <= surface.width * 0.16) || (alignedX && gapY <= surface.height * 0.14);
-      if (!plausible) continue;
-      merged.push(componentBox([...a.points, ...b.points], surface)!);
-    }
-  }
-  return merged;
-}
-
 function boxToCandidate(box: ComponentBox, allPoints: EdgePoint[], lines: LineSegment[], surface: Bounds, index: number): CandidateProposal | null {
   const { x, y, width, height } = box;
   const area = width * height;
   const surfaceArea = surface.width * surface.height;
   const aspect = width / Math.max(0.001, height);
 
-  if (width < surface.width * 0.07 || height < surface.height * 0.07) return null;
-  if (width > surface.width * 0.50 || height > surface.height * 0.48) return null;
-  if (area < surfaceArea * 0.009 || area > surfaceArea * 0.20) return null;
-  if (aspect < 0.40 || aspect > 3.40) return null;
+  if (width < surface.width * 0.08 || height < surface.height * 0.08) return null;
+  if (width > surface.width * 0.46 || height > surface.height * 0.46) return null;
+  if (area < surfaceArea * 0.012 || area > surfaceArea * 0.18) return null;
+  if (aspect < 0.45 || aspect > 3.20) return null;
 
-  const marginX = surface.width * 0.015;
-  const marginY = surface.height * 0.015;
+  const marginX = surface.width * 0.018;
+  const marginY = surface.height * 0.018;
   if (x <= surface.x + marginX || y <= surface.y + marginY || x + width >= surface.x + surface.width - marginX || y + height >= surface.y + surface.height - marginY) return null;
 
   const border = perimeterSupport(allPoints, x, y, width, height);
@@ -235,34 +216,39 @@ function boxToCandidate(box: ComponentBox, allPoints: EdgePoint[], lines: LineSe
   const vLines = lineSupport(lines, x, y, width, height, "vertical");
   const points = countPoints(allPoints, x, y, width, height);
   const density = box.points.length / Math.max(1, area);
-  const isArchLike = aspect >= 1.10 && height <= surface.height * 0.30 && y <= surface.y + surface.height * 0.48;
-  const isRectLike = aspect >= 0.50 && aspect <= 2.05;
+  const isArchLike = aspect >= 1.15 && height <= surface.height * 0.27 && y <= surface.y + surface.height * 0.45;
+  const isRectLike = aspect >= 0.55 && aspect <= 1.90;
   if (!isArchLike && !isRectLike) return null;
 
   if (isRectLike) {
-    if (border.count < 4 || border.sides < 2) return null;
-    if (interior.count < 2 || interior.xBands < 2 || interior.yBands < 2) return null;
+    if (border.count < 5 || border.sides < 2) return null;
+    if (interior.count < 3 || interior.xBands < 2 || interior.yBands < 2) return null;
     if (hLines < 1 || vLines < 1 || hLines + vLines < 3) return null;
   }
+
   if (isArchLike) {
     if (interior.count < 2 || interior.xBands < 2) return null;
     if (hLines < 1 || vLines < 1) return null;
   }
 
-  const specklePenalty = Math.max(0, points.count - box.points.length - border.count - interior.count) * 1.25;
-  const score = Math.round(box.points.length * 2.4 + border.count * 1.9 + interior.count * 2.7 + hLines * 11 + vLines * 11 + Math.min(20, density * 140) - specklePenalty);
-  if (score < 34) return null;
+  const isolatedSpeckleRatio = box.points.length / Math.max(1, points.count);
+  if (isolatedSpeckleRatio < 0.42) return null;
+
+  const specklePenalty = Math.max(0, points.count - box.points.length - border.count - interior.count) * 1.35;
+  const score = Math.round(box.points.length * 2.5 + border.count * 1.9 + interior.count * 2.7 + hLines * 11 + vLines * 11 + Math.min(20, density * 140) - specklePenalty);
+  if (score < 38) return null;
 
   return { id: `edge-component-${index}`, x: Number(x.toFixed(2)), y: Number(y.toFixed(2)), width: Number(width.toFixed(2)), height: Number(height.toFixed(2)), score, contributingLines: hLines + vLines, status: score >= 70 ? "high" : "low" };
 }
 
 function componentCandidates(points: EdgePoint[], lines: LineSegment[], surface: Bounds) {
-  const boxes = connectedEdgeComponents(points, surface).map((component) => componentBox(component, surface)).filter((box): box is ComponentBox => Boolean(box));
-  return mergeNearbyComponents(boxes, surface)
+  return connectedEdgeComponents(points, surface)
+    .map((component) => componentBox(component, surface))
+    .filter((box): box is ComponentBox => Boolean(box))
     .map((box, index) => boxToCandidate(box, points, lines, surface, index))
     .filter((candidate): candidate is CandidateProposal => Boolean(candidate))
     .sort((a, b) => b.score - a.score)
-    .filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.38 && other.score >= candidate.score) === -1)
+    .filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.35 && other.score >= candidate.score) === -1)
     .slice(0, 8);
 }
 
