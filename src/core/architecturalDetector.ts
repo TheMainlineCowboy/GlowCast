@@ -134,17 +134,17 @@ function lineSupport(lines: LineSegment[], x: number, y: number, width: number, 
 
 function slidingCandidates(points: EdgePoint[], lines: LineSegment[], surface: Bounds): CandidateProposal[] {
   const out: CandidateProposal[] = [];
-  const widths = [0.16, 0.19, 0.22, 0.25, 0.28].map((n) => surface.width * n);
-  const heights = [0.16, 0.20, 0.24, 0.28, 0.32].map((n) => surface.height * n);
-  const stepX = surface.width * 0.035;
-  const stepY = surface.height * 0.04;
+  const widths = [0.15, 0.17, 0.19, 0.21, 0.23].map((n) => surface.width * n);
+  const heights = [0.18, 0.21, 0.24, 0.27, 0.30].map((n) => surface.height * n);
+  const stepX = surface.width * 0.025;
+  const stepY = surface.height * 0.035;
   const marginX = surface.width * 0.035;
-  const marginY = surface.height * 0.035;
+  const marginY = surface.height * 0.22;
   let id = 0;
 
   for (const width of widths) {
     for (const height of heights) {
-      for (let y = surface.y + marginY; y <= surface.y + surface.height - height - marginY; y += stepY) {
+      for (let y = surface.y + marginY; y <= surface.y + surface.height - height - surface.height * 0.10; y += stepY) {
         for (let x = surface.x + marginX; x <= surface.x + surface.width - width - marginX; x += stepX) {
           const support = countPoints(points, x, y, width, height);
           const border = perimeterSupport(points, x, y, width, height);
@@ -157,8 +157,8 @@ function slidingCandidates(points: EdgePoint[], lines: LineSegment[], surface: B
           if (hLines < 1 || vLines < 1) continue;
           if (hLines + vLines < 4) continue;
           const aspect = width / height;
-          if (aspect < 0.65 || aspect > 2.15) continue;
-          const oversizePenalty = Math.max(0, width / surface.width - 0.24) * 90;
+          if (aspect < 0.65 || aspect > 1.75) continue;
+          const oversizePenalty = Math.max(0, width / surface.width - 0.20) * 140;
           const wallSpecklePenalty = Math.max(0, support.count - border.count - interior.count) * 1.8;
           const score = Math.round(border.count * 2.4 + interior.count * 3 + hLines * 13 + vLines * 13 + Math.min(20, support.strength / 900) - oversizePenalty - wallSpecklePenalty);
           if (score < 48) continue;
@@ -180,45 +180,52 @@ function slidingCandidates(points: EdgePoint[], lines: LineSegment[], surface: B
   return out;
 }
 
-function archCandidates(points: EdgePoint[], lines: LineSegment[], surface: Bounds): CandidateProposal[] {
-  const out: CandidateProposal[] = [];
-  const widths = [0.26, 0.30, 0.34, 0.38].map((n) => surface.width * n);
-  const heights = [0.16, 0.20, 0.24].map((n) => surface.height * n);
-  const stepX = surface.width * 0.035;
-  const stepY = surface.height * 0.035;
-  let id = 0;
+function archCandidates(points: EdgePoint[], lines: LineSegment[], surface: Bounds, rectangles: CandidateProposal[]): CandidateProposal[] {
+  const paired = rectangles
+    .filter((candidate) => candidate.y > surface.y + surface.height * 0.34)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4)
+    .sort((a, b) => a.x - b.x);
+  if (paired.length < 2) return [];
 
-  for (const width of widths) {
-    for (const height of heights) {
-      for (let y = surface.y + surface.height * 0.08; y <= surface.y + surface.height * 0.36; y += stepY) {
-        for (let x = surface.x + surface.width * 0.18; x <= surface.x + surface.width * 0.72 - width; x += stepX) {
-          const support = countPoints(points, x, y, width, height);
-          const interior = interiorStructure(points, x, y, width, height);
-          const hLines = lineSupport(lines, x, y, width, height, "horizontal");
-          const vLines = lineSupport(lines, x, y, width, height, "vertical");
-          const aspect = width / Math.max(0.001, height);
-          if (aspect < 1.25 || aspect > 2.9) continue;
-          if (support.count < 8) continue;
-          if (interior.count < 3 || interior.xBands < 2) continue;
-          if (hLines < 1 || vLines < 1) continue;
-          const score = Math.round(support.count * 2.4 + interior.count * 3.2 + hLines * 11 + vLines * 10 + Math.min(18, support.strength / 900));
-          if (score < 55) continue;
-          out.push({
-            id: `arch-${id++}`,
-            x: Number(x.toFixed(2)),
-            y: Number(y.toFixed(2)),
-            width: Number(width.toFixed(2)),
-            height: Number(height.toFixed(2)),
-            score,
-            contributingLines: hLines + vLines,
-            status: score >= 70 ? "high" : "low"
-          });
-        }
-      }
+  let bestPair: [CandidateProposal, CandidateProposal] | null = null;
+  for (let i = 0; i < paired.length; i++) {
+    for (let j = i + 1; j < paired.length; j++) {
+      const a = paired[i];
+      const b = paired[j];
+      const similarY = Math.abs(a.y - b.y) <= surface.height * 0.09;
+      const similarH = Math.abs(a.height - b.height) <= surface.height * 0.08;
+      const separated = b.x - (a.x + a.width) >= surface.width * 0.06;
+      if (similarY && similarH && separated) bestPair = [a, b];
     }
   }
+  if (!bestPair) return [];
 
-  return out;
+  const [left, right] = bestPair;
+  const pairLeft = left.x;
+  const pairRight = right.x + right.width;
+  const pairCenter = (pairLeft + pairRight) / 2;
+  const width = Math.min(surface.width * 0.34, Math.max(surface.width * 0.22, pairRight - pairLeft));
+  const height = Math.min(surface.height * 0.24, Math.max(surface.height * 0.16, left.height * 0.72));
+  const x = pairCenter - width / 2;
+  const y = Math.max(surface.y + surface.height * 0.08, left.y - height - surface.height * 0.07);
+
+  const support = countPoints(points, x, y, width, height);
+  const interior = interiorStructure(points, x, y, width, height);
+  const hLines = lineSupport(lines, x, y, width, height, "horizontal");
+  const vLines = lineSupport(lines, x, y, width, height, "vertical");
+  if (support.count < 6 || interior.count < 2 || hLines < 1 || vLines < 1) return [];
+
+  return [{
+    id: "arch-centered-0",
+    x: Number(x.toFixed(2)),
+    y: Number(y.toFixed(2)),
+    width: Number(width.toFixed(2)),
+    height: Number(height.toFixed(2)),
+    score: Math.round(support.count * 2.2 + interior.count * 3 + hLines * 10 + vLines * 9),
+    contributingLines: hLines + vLines,
+    status: "high"
+  }];
 }
 
 export function detectArchitecturalCandidates(edgePoints: EdgePoint[], options: DetectorOptions = {}): ArchitecturalDetectionResult {
@@ -227,9 +234,13 @@ export function detectArchitecturalCandidates(edgePoints: EdgePoint[], options: 
   const horizontal = buildLineSegments(points, "horizontal", options);
   const vertical = buildLineSegments(points, "vertical", options);
   const lines = [...horizontal, ...vertical].slice(0, 160);
-  const candidates = [...slidingCandidates(points, lines, surface), ...archCandidates(points, lines, surface)]
+  const rectangles = slidingCandidates(points, lines, surface)
     .sort((a, b) => b.score - a.score)
-    .filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.30 && other.score >= candidate.score) === -1)
-    .slice(0, 8);
+    .filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.28 && other.score >= candidate.score) === -1)
+    .slice(0, 4);
+  const candidates = [...rectangles, ...archCandidates(points, lines, surface, rectangles)]
+    .sort((a, b) => b.score - a.score)
+    .filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.22 && other.score >= candidate.score) === -1)
+    .slice(0, 5);
   return { lines, candidates };
 }
