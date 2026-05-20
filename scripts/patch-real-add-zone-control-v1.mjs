@@ -56,3 +56,13 @@ if (!s.includes('CREATE MASKS FROM CANDIDATES')) {
 }
 
 fs.writeFileSync(p, s);
+
+const detectorPath = 'src/core/architecturalDetector.ts';
+if (fs.existsSync(detectorPath)) {
+  let detector = fs.readFileSync(detectorPath, 'utf8');
+  detector = detector.replace(
+    'const candidates = [...componentCandidates(points, lines, surface), ...linePairCandidates(points, lines, surface), ...edgeDensityGridCandidates(points, lines, surface)]',
+    'const candidates = [...componentCandidates(points, lines, surface), ...linePairCandidates(points, lines, surface)]'
+  );
+  fs.writeFileSync(detectorPath, detector);
+}
