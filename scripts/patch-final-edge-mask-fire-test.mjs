@@ -6,17 +6,24 @@ let s = readFileSync(p, "utf8");
 if (!s.includes('function createMasksFromEdges()')) {
   s = s.replace('  function addZone(shape: MaskShape = drawShape) {', `  function createMasksFromEdges() {
     const base = projectionArea ?? defaultSurface();
-    const fallback = [
-      clampZone({ id: Date.now() + 1001, x: base.x + base.width * 0.18, y: base.y + base.height * 0.34, width: base.width * 0.24, height: base.height * 0.22, included: true, label: "edge mask", shape: "rectangle" }),
-      clampZone({ id: Date.now() + 1002, x: base.x + base.width * 0.55, y: base.y + base.height * 0.34, width: base.width * 0.24, height: base.height * 0.22, included: true, label: "edge mask", shape: "rectangle" }),
-      clampZone({ id: Date.now() + 1003, x: base.x + base.width * 0.34, y: base.y + base.height * 0.14, width: base.width * 0.30, height: base.height * 0.18, included: true, label: "edge mask", shape: "rectangle" })
-    ];
-    setZones((current) => [...current.filter((zone) => zone.label !== "edge mask"), ...fallback]);
+    const testZone = clampZone({
+      id: Date.now() + 777,
+      x: base.x + base.width * 0.25,
+      y: base.y + base.height * 0.25,
+      width: base.width * 0.5,
+      height: base.height * 0.45,
+      included: true,
+      label: "edge mask",
+      shape: "rectangle"
+    });
+    setZones([testZone]);
     setSelectedTarget("zone");
-    setSelectedZoneId(fallback[0].id);
+    setSelectedZoneId(testZone.id);
     setDrawMode(false);
     setProjectionOnly(false);
-    setDetectMessage("EDGE MASK BUTTON FIRED: created 3 test masks.");
+    setShowEdges(false);
+    setArchitecturalDebug(false);
+    setDetectMessage("EDGE MASK BUTTON FIRED - zone count should be 1.");
   }
 
   function addZone(shape: MaskShape = drawShape) {`);
@@ -27,7 +34,8 @@ s = s.replace(/<button type="button"[^>]*>\s*(Create Edge Masks|Edge Masks Disab
 const fireButton = `
               <button type="button" className="primary" onClick={createMasksFromEdges} disabled={!imageUrl}>
                 FIRE TEST EDGE MASKS
-              </button>`;
+              </button>
+              <p className="helperText">Zone count: {zones.length}</p>`;
 
 if (!s.includes('FIRE TEST EDGE MASKS')) {
   const marker = `              <button type="button" onClick={analyzeArchitecturalCandidates} disabled={!showEdges || !edgePoints.length || projectionOnly}>
