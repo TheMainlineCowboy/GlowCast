@@ -24,10 +24,22 @@ if (!s.includes('function createFixedWindowMasks()')) {
   }
 
 `;
+  if (!s.includes(marker)) throw new Error('addZone marker not found');
   s = s.replace(marker, fn + marker);
 }
 
-s = s.replace('onClick={() => addZone("rectangle")}', 'onClick={createFixedWindowMasks}');
-s = s.replace('REAL ADD ZONE CONTROL', 'CREATE FIXED WINDOW MASKS');
+const button = `
+              <button type="button" className="primary" onClick={createFixedWindowMasks} disabled={!imageUrl || cornerMode || surfacePolygonMode}>
+                CREATE FIXED WINDOW MASKS
+              </button>
+              <p className="helperText">Zone count: {zones.length}</p>`;
+
+if (!s.includes('CREATE FIXED WINDOW MASKS')) {
+  const previewText = 'Preview Animation Only';
+  const textIndex = s.indexOf(previewText);
+  const buttonStart = textIndex >= 0 ? s.lastIndexOf('<button', textIndex) : -1;
+  if (buttonStart >= 0) s = s.slice(0, buttonStart) + button + '\n' + s.slice(buttonStart);
+  else throw new Error('Preview button marker not found for fixed mask insertion');
+}
 
 fs.writeFileSync(p, s);
