@@ -10,39 +10,55 @@ if (!s.includes('function createMasksFromEdges()')) {
       return;
     }
     const polygon = surfacePolygonClosed && surfacePolygonPoints.length >= 3 ? surfacePolygonPoints : null;
-    const bounds = polygon ? {
+    const base = polygon ? {
       x: Math.min(...polygon.map((point) => point.x)),
       y: Math.min(...polygon.map((point) => point.y)),
       width: Math.max(...polygon.map((point) => point.x)) - Math.min(...polygon.map((point) => point.x)),
       height: Math.max(...polygon.map((point) => point.y)) - Math.min(...polygon.map((point) => point.y))
-    } : projectionArea;
-    const result = detectArchitecturalCandidates(edgePoints, { bounds, polygon });
-    const fromCandidates = result.candidates
-      .filter((candidate) => candidate.width >= 1.5 && candidate.height >= 1.5)
-      .slice(0, 24)
-      .map((candidate, index) => clampZone({
-        id: Date.now() + index,
-        x: candidate.x,
-        y: candidate.y,
-        width: Math.max(3, candidate.width),
-        height: Math.max(3, candidate.height),
-        included: true,
-        label: "edge mask",
-        shape: "rectangle"
-      }));
-    const fallbackBase = bounds ?? projectionArea ?? defaultSurface();
+    } : projectionArea ?? defaultSurface();
+
+    const cell = Math.max(3, Math.min(base.width, base.height) * 0.12);
+    const buckets = new Map<string, EdgePoint[]>();
+    for (const point of edgePoints) {
+      if (point.x < base.x || point.x > base.x + base.width || point.y < base.y || point.y > base.y + base.height) continue;
+      const key = Math.floor((point.x - base.x) / cell) + ":" + Math.floor((point.y - base.y) / cell);
+      const list = buckets.get(key) ?? [];
+      list.push(point);
+      buckets.set(key, list);
+    }
+
+    const zonesFromBuckets = Array.from(buckets.values())
+      .filter((list) => list.length >= 2)
+      .sort((a, b) => b.length - a.length)
+      .slice(0, 12)
+      .map((list, index) => {
+        const xs = list.map((point) => point.x);
+        const ys = list.map((point) => point.y);
+        const padX = Math.max(2.5, base.width * 0.035);
+        const padY = Math.max(2.5, base.height * 0.035);
+        return clampZone({
+          id: Date.now() + index,
+          x: Math.min(...xs) - padX,
+          y: Math.min(...ys) - padY,
+          width: Math.max(...xs) - Math.min(...xs) + padX * 2,
+          height: Math.max(...ys) - Math.min(...ys) + padY * 2,
+          included: true,
+          label: "edge mask",
+          shape: "rectangle"
+        });
+      });
+
     const fallback = [
-      clampZone({ id: Date.now() + 1001, x: fallbackBase.x + fallbackBase.width * 0.18, y: fallbackBase.y + fallbackBase.height * 0.34, width: fallbackBase.width * 0.24, height: fallbackBase.height * 0.22, included: true, label: "edge mask", shape: "rectangle" }),
-      clampZone({ id: Date.now() + 1002, x: fallbackBase.x + fallbackBase.width * 0.55, y: fallbackBase.y + fallbackBase.height * 0.34, width: fallbackBase.width * 0.24, height: fallbackBase.height * 0.22, included: true, label: "edge mask", shape: "rectangle" }),
-      clampZone({ id: Date.now() + 1003, x: fallbackBase.x + fallbackBase.width * 0.34, y: fallbackBase.y + fallbackBase.height * 0.14, width: fallbackBase.width * 0.30, height: fallbackBase.height * 0.18, included: true, label: "edge mask", shape: "rectangle" })
+      clampZone({ id: Date.now() + 1001, x: base.x + base.width * 0.18, y: base.y + base.height * 0.34, width: base.width * 0.24, height: base.height * 0.22, included: true, label: "edge mask", shape: "rectangle" }),
+      clampZone({ id: Date.now() + 1002, x: base.x + base.width * 0.55, y: base.y + base.height * 0.34, width: base.width * 0.24, height: base.height * 0.22, included: true, label: "edge mask", shape: "rectangle" }),
+      clampZone({ id: Date.now() + 1003, x: base.x + base.width * 0.34, y: base.y + base.height * 0.14, width: base.width * 0.30, height: base.height * 0.18, included: true, label: "edge mask", shape: "rectangle" })
     ];
-    const usable = fromCandidates.length ? fromCandidates : fallback;
+
+    const usable = zonesFromBuckets.length ? zonesFromBuckets : fallback;
     setZones((current) => [...current.filter((zone) => zone.label !== "edge mask"), ...usable]);
     setSelectedTarget("zone");
     setSelectedZoneId(usable[0].id);
-    setArchitecturalResult(result);
-    setArchitecturalDebug(true);
-    setDetectMessage("Created " + usable.length + " edge masks. Analyzer saw " + result.lines.length + " lines and " + result.candidates.length + " boxes.");
+    setDetectMessage("Created " + usable.length + " edge masks from " + edgePoints.length + " scanner points.");
   }
 
   function addZone(shape: MaskShape = drawShape) {`);
