@@ -9,6 +9,8 @@ export type ArchitecturalDetectionResult = { lines: LineSegment[]; candidates: C
 type Bounds = { x: number; y: number; width: number; height: number };
 type DetectorOptions = { bounds?: Bounds | null; polygon?: Point[] | null; maxLines?: number };
 
+type GridCell = { gx: number; gy: number; points: EdgePoint[] };
+
 function insidePolygon(point: { x: number; y: number }, polygon: Point[]) {
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -60,51 +62,103 @@ function overlaps(a: CandidateProposal, b: CandidateProposal) {
   return smaller > 0 ? (ix * iy) / smaller : 0;
 }
 
-function candidateFromBounds(bounds: Bounds, surface: Bounds, score: number, index: number): CandidateProposal | null {
-  const area = bounds.width * bounds.height;
+function candidateFromComponent(points: EdgePoint[], surface: Bounds, index: number): CandidateProposal | null {
+  if (points.length < 10) return null;
+
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const pad = Math.max(1.2, Math.min(surface.width, surface.height) * 0.018);
+
+  const x = Math.min(...xs) - pad;
+  const y = Math.min(...ys) - pad;
+  const width = Math.max(...xs) - Math.min(...xs) + pad * 2;
+  const height = Math.max(...ys) - Math.min(...ys) + pad * 2;
+
   const surfaceArea = surface.width * surface.height;
-  if (bounds.width < 2 || bounds.height < 2) return null;
-  if (area > surfaceArea * 0.22) return null;
-  const x = Math.max(surface.x, Math.min(surface.x + surface.width - 1, bounds.x));
-  const y = Math.max(surface.y, Math.min(surface.y + surface.height - 1, bounds.y));
-  const width = Math.max(1.5, Math.min(bounds.width, surface.x + surface.width - x));
-  const height = Math.max(1.5, Math.min(bounds.height, surface.y + surface.height - y));
-  return { id: `cand-${index}-${Math.round(x * 10)}-${Math.round(y * 10)}`, x: Number(x.toFixed(2)), y: Number(y.toFixed(2)), width: Number(width.toFixed(2)), height: Number(height.toFixed(2)), score, contributingLines: 1, status: score >= 70 ? "high" : "low" };
+  const area = width * height;
+  const aspect = width / Math.max(0.001, height);
+  const marginX = surface.width * 0.015;
+  const marginY = surface.height * 0.015;
+
+  if (width < surface.width * 0.055) return null;
+  if (height < surface.height * 0.055) return null;
+  if (width > surface.width * 0.52) return null;
+  if (height > surface.height * 0.52) return null;
+  if (area < surfaceArea * 0.008 || area > surfaceArea * 0.20) return null;
+  if (aspect < 0.35 || aspect > 3.4) return null;
+
+  const touchesSurfaceEdge =
+    x <= surface.x + marginX ||
+    y <= surface.y + marginY ||
+    x + width >= surface.x + surface.width - marginX ||
+    y + height >= surface.y + surface.height - marginY;
+  if (touchesSurfaceEdge) return null;
+
+  const densityScore = Math.min(35, points.length * 1.4);
+  const sizeScore = area >= surfaceArea * 0.018 && area <= surfaceArea * 0.12 ? 25 : 10;
+  const aspectScore = aspect >= 0.55 && aspect <= 2.6 ? 25 : 8;
+  const score = Math.round(30 + densityScore + sizeScore + aspectScore);
+
+  return {
+    id: `component-${index}-${Math.round(x * 10)}-${Math.round(y * 10)}`,
+    x: Number(Math.max(surface.x, x).toFixed(2)),
+    y: Number(Math.max(surface.y, y).toFixed(2)),
+    width: Number(Math.min(width, surface.x + surface.width - Math.max(surface.x, x)).toFixed(2)),
+    height: Number(Math.min(height, surface.y + surface.height - Math.max(surface.y, y)).toFixed(2)),
+    score,
+    contributingLines: Math.max(1, Math.round(points.length / 12)),
+    status: score >= 70 ? "high" : "low"
+  };
 }
 
-function denseComponentCandidates(points: EdgePoint[], surface: Bounds): CandidateProposal[] {
-  const cell = Math.max(1.4, Math.min(surface.width, surface.height) * 0.028);
-  const buckets = new Map<string, EdgePoint[]>();
+function componentCandidates(points: EdgePoint[], surface: Bounds): CandidateProposal[] {
+  const cell = Math.max(1.0, Math.min(surface.width, surface.height) * 0.018);
+  const occupied = new Map<string, GridCell>();
+
   for (const point of points) {
-    const key = `${Math.floor((point.x - surface.x) / cell)},${Math.floor((point.y - surface.y) / cell)}`;
-    const list = buckets.get(key) ?? [];
-    list.push(point);
-    buckets.set(key, list);
+    const gx = Math.floor((point.x - surface.x) / cell);
+    const gy = Math.floor((point.y - surface.y) / cell);
+    const key = `${gx},${gy}`;
+    const existing = occupied.get(key);
+    if (existing) existing.points.push(point);
+    else occupied.set(key, { gx, gy, points: [point] });
   }
-  const out: CandidateProposal[] = [];
-  let i = 0;
-  const pad = Math.max(1.4, Math.min(surface.width, surface.height) * 0.025);
-  for (const list of buckets.values()) {
-    const xs = list.map((p) => p.x), ys = list.map((p) => p.y);
-    const c = candidateFromBounds({ x: Math.min(...xs) - pad, y: Math.min(...ys) - pad, width: Math.max(...xs) - Math.min(...xs) + pad * 2, height: Math.max(...ys) - Math.min(...ys) + pad * 2 }, surface, 45, i++);
-    if (c) out.push(c);
-  }
-  return out;
-}
 
-function lineCandidates(lines: LineSegment[], surface: Bounds): CandidateProposal[] {
-  const out: CandidateProposal[] = [];
-  const minSide = Math.min(surface.width, surface.height);
-  for (const [i, line] of lines.slice(0, 60).entries()) {
-    const centerX = (line.x1 + line.x2) / 2;
-    const centerY = (line.y1 + line.y2) / 2;
-    const longSide = Math.max(line.length, minSide * 0.05);
-    const shortSide = Math.max(minSide * 0.045, Math.min(minSide * 0.14, longSide * 0.5));
-    const bounds = line.orientation === "horizontal" ? { x: centerX - longSide / 2, y: centerY - shortSide / 2, width: longSide, height: shortSide } : { x: centerX - shortSide / 2, y: centerY - longSide / 2, width: shortSide, height: longSide };
-    const c = candidateFromBounds(bounds, surface, 50, i);
-    if (c) out.push(c);
+  const seen = new Set<string>();
+  const components: EdgePoint[][] = [];
+
+  for (const [key, start] of occupied) {
+    if (seen.has(key)) continue;
+    const stack = [start];
+    const comp: EdgePoint[] = [];
+    seen.add(key);
+
+    while (stack.length) {
+      const cellInfo = stack.pop()!;
+      comp.push(...cellInfo.points);
+
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nKey = `${cellInfo.gx + dx},${cellInfo.gy + dy}`;
+          if (seen.has(nKey)) continue;
+          const next = occupied.get(nKey);
+          if (!next) continue;
+          seen.add(nKey);
+          stack.push(next);
+        }
+      }
+    }
+
+    components.push(comp);
   }
-  return out;
+
+  return components
+    .map((comp, index) => candidateFromComponent(comp, surface, index))
+    .filter((candidate): candidate is CandidateProposal => Boolean(candidate))
+    .sort((a, b) => b.score - a.score)
+    .filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.45 && other.score >= candidate.score) === -1)
+    .slice(0, 12);
 }
 
 export function detectArchitecturalCandidates(edgePoints: EdgePoint[], options: DetectorOptions = {}): ArchitecturalDetectionResult {
@@ -113,7 +167,6 @@ export function detectArchitecturalCandidates(edgePoints: EdgePoint[], options: 
   const horizontal = buildLineSegments(points, "horizontal", options);
   const vertical = buildLineSegments(points, "vertical", options);
   const lines = [...horizontal, ...vertical];
-  const raw = [...lineCandidates(lines, surface), ...denseComponentCandidates(points, surface)];
-  const candidates = raw.sort((a, b) => b.score - a.score).filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.55 && other.score >= candidate.score) === -1).slice(0, 60);
+  const candidates = componentCandidates(points, surface);
   return { lines: lines.slice(0, 160), candidates };
 }
