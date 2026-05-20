@@ -132,6 +132,83 @@ function lineSupport(lines: LineSegment[], x: number, y: number, width: number, 
   return count;
 }
 
+function quantile(values: number[], q: number) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.max(0, Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * q)));
+  return sorted[index];
+}
+
+function pointsInside(points: EdgePoint[], candidate: CandidateProposal) {
+  return points.filter((point) => point.x >= candidate.x && point.x <= candidate.x + candidate.width && point.y >= candidate.y && point.y <= candidate.y + candidate.height);
+}
+
+function refineToEdgeCluster(candidate: CandidateProposal, points: EdgePoint[], lines: LineSegment[], surface: Bounds, mode: "rect" | "arch"): CandidateProposal | null {
+  const inside = pointsInside(points, candidate);
+  if (inside.length < (mode === "arch" ? 6 : 8)) return null;
+
+  const strengths = inside.map((point) => point.strength).sort((a, b) => a - b);
+  const strengthCutoff = strengths[Math.floor(strengths.length * 0.42)] ?? 0;
+  const strong = inside.filter((point) => point.strength >= strengthCutoff);
+  if (strong.length < (mode === "arch" ? 5 : 7)) return null;
+
+  const xs = strong.map((point) => point.x);
+  const ys = strong.map((point) => point.y);
+  const pad = Math.max(0.85, Math.min(candidate.width, candidate.height) * (mode === "arch" ? 0.16 : 0.12));
+  let x1 = quantile(xs, 0.08) - pad;
+  let x2 = quantile(xs, 0.92) + pad;
+  let y1 = quantile(ys, 0.08) - pad;
+  let y2 = quantile(ys, 0.92) + pad;
+
+  x1 = Math.max(surface.x, Math.min(surface.x + surface.width, x1));
+  x2 = Math.max(surface.x, Math.min(surface.x + surface.width, x2));
+  y1 = Math.max(surface.y, Math.min(surface.y + surface.height, y1));
+  y2 = Math.max(surface.y, Math.min(surface.y + surface.height, y2));
+
+  const width = x2 - x1;
+  const height = y2 - y1;
+  if (width < surface.width * (mode === "arch" ? 0.14 : 0.11)) return null;
+  if (height < surface.height * (mode === "arch" ? 0.10 : 0.13)) return null;
+  if (width > surface.width * (mode === "arch" ? 0.38 : 0.24)) return null;
+  if (height > surface.height * (mode === "arch" ? 0.28 : 0.34)) return null;
+
+  const moved = Math.hypot((x1 + width / 2) - (candidate.x + candidate.width / 2), (y1 + height / 2) - (candidate.y + candidate.height / 2));
+  if (moved > Math.max(candidate.width, candidate.height) * 0.42) return null;
+
+  const refinedPoints = countPoints(points, x1, y1, width, height);
+  const border = perimeterSupport(points, x1, y1, width, height);
+  const interior = interiorStructure(points, x1, y1, width, height);
+  const hLines = lineSupport(lines, x1, y1, width, height, "horizontal");
+  const vLines = lineSupport(lines, x1, y1, width, height, "vertical");
+  const aspect = width / Math.max(0.001, height);
+
+  if (mode === "rect") {
+    if (aspect < 0.58 || aspect > 1.65) return null;
+    if (border.count < 6 || border.sides < 2) return null;
+    if (interior.count < 4 || interior.xBands < 2 || interior.yBands < 2 || interior.quadrants < 2) return null;
+    if (hLines < 1 || vLines < 1 || hLines + vLines < 4) return null;
+  } else {
+    if (aspect < 1.05 || aspect > 3.20) return null;
+    if (interior.count < 2 || interior.xBands < 2) return null;
+    if (hLines < 1 || vLines < 1) return null;
+  }
+
+  const specklePenalty = Math.max(0, refinedPoints.count - border.count - interior.count) * (mode === "arch" ? 1.1 : 1.8);
+  const score = Math.round(border.count * 2.5 + interior.count * 3.2 + hLines * 13 + vLines * 13 + Math.min(20, refinedPoints.strength / 900) - specklePenalty);
+  if (score < (mode === "arch" ? 42 : 48)) return null;
+
+  return {
+    ...candidate,
+    x: Number(x1.toFixed(2)),
+    y: Number(y1.toFixed(2)),
+    width: Number(width.toFixed(2)),
+    height: Number(height.toFixed(2)),
+    score: Math.max(candidate.score, score),
+    contributingLines: hLines + vLines,
+    status: score >= 70 ? "high" : "low"
+  };
+}
+
 function slidingCandidates(points: EdgePoint[], lines: LineSegment[], surface: Bounds): CandidateProposal[] {
   const out: CandidateProposal[] = [];
   const widths = [0.15, 0.17, 0.19, 0.21, 0.23].map((n) => surface.width * n);
@@ -162,7 +239,7 @@ function slidingCandidates(points: EdgePoint[], lines: LineSegment[], surface: B
           const wallSpecklePenalty = Math.max(0, support.count - border.count - interior.count) * 1.8;
           const score = Math.round(border.count * 2.4 + interior.count * 3 + hLines * 13 + vLines * 13 + Math.min(20, support.strength / 900) - oversizePenalty - wallSpecklePenalty);
           if (score < 48) continue;
-          out.push({
+          const raw = {
             id: `slide-${id++}`,
             x: Number(x.toFixed(2)),
             y: Number(y.toFixed(2)),
@@ -170,8 +247,10 @@ function slidingCandidates(points: EdgePoint[], lines: LineSegment[], surface: B
             height: Number(height.toFixed(2)),
             score,
             contributingLines: hLines + vLines,
-            status: score >= 70 ? "high" : "low"
-          });
+            status: score >= 70 ? "high" : "low" as "high" | "low"
+          };
+          const refined = refineToEdgeCluster(raw, points, lines, surface, "rect");
+          if (refined) out.push(refined);
         }
       }
     }
@@ -216,7 +295,7 @@ function archCandidates(points: EdgePoint[], lines: LineSegment[], surface: Boun
   const vLines = lineSupport(lines, x, y, width, height, "vertical");
   if (support.count < 6 || interior.count < 2 || hLines < 1 || vLines < 1) return [];
 
-  return [{
+  const raw = {
     id: "arch-centered-0",
     x: Number(x.toFixed(2)),
     y: Number(y.toFixed(2)),
@@ -224,8 +303,10 @@ function archCandidates(points: EdgePoint[], lines: LineSegment[], surface: Boun
     height: Number(height.toFixed(2)),
     score: Math.round(support.count * 2.2 + interior.count * 3 + hLines * 10 + vLines * 9),
     contributingLines: hLines + vLines,
-    status: "high"
-  }];
+    status: "high" as "high" | "low"
+  };
+  const refined = refineToEdgeCluster(raw, points, lines, surface, "arch");
+  return refined ? [refined] : [];
 }
 
 export function detectArchitecturalCandidates(edgePoints: EdgePoint[], options: DetectorOptions = {}): ArchitecturalDetectionResult {
