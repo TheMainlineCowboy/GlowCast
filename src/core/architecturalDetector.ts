@@ -8,7 +8,6 @@ export type ArchitecturalDetectionResult = { lines: LineSegment[]; candidates: C
 
 type Bounds = { x: number; y: number; width: number; height: number };
 type DetectorOptions = { bounds?: Bounds | null; polygon?: Point[] | null; maxLines?: number };
-type GridCell = { gx: number; gy: number; points: EdgePoint[] };
 
 function insidePolygon(point: { x: number; y: number }, polygon: Point[]) {
   let inside = false;
@@ -61,84 +60,74 @@ function overlaps(a: CandidateProposal, b: CandidateProposal) {
   return smaller > 0 ? (ix * iy) / smaller : 0;
 }
 
-function candidateFromComponent(points: EdgePoint[], surface: Bounds, index: number): CandidateProposal | null {
-  if (points.length < 18) return null;
-  const xs = points.map((p) => p.x), ys = points.map((p) => p.y);
-  const pad = Math.max(1.6, Math.min(surface.width, surface.height) * 0.025);
-  const x = Math.min(...xs) - pad;
-  const y = Math.min(...ys) - pad;
-  const width = Math.max(...xs) - Math.min(...xs) + pad * 2;
-  const height = Math.max(...ys) - Math.min(...ys) + pad * 2;
-  const surfaceArea = surface.width * surface.height;
-  const area = width * height;
-  const aspect = width / Math.max(0.001, height);
-  const marginX = surface.width * 0.025;
-  const marginY = surface.height * 0.025;
-
-  if (width < surface.width * 0.12) return null;
-  if (height < surface.height * 0.10) return null;
-  if (width > surface.width * 0.48) return null;
-  if (height > surface.height * 0.45) return null;
-  if (area < surfaceArea * 0.018 || area > surfaceArea * 0.18) return null;
-  if (aspect < 0.45 || aspect > 3.0) return null;
-  if (x <= surface.x + marginX || y <= surface.y + marginY || x + width >= surface.x + surface.width - marginX || y + height >= surface.y + surface.height - marginY) return null;
-
-  const density = points.length / Math.max(1, area);
-  const score = Math.round(55 + Math.min(30, points.length * 0.7) + Math.min(20, density * 140));
-  return {
-    id: `component-${index}-${Math.round(x * 10)}-${Math.round(y * 10)}`,
-    x: Number(Math.max(surface.x, x).toFixed(2)),
-    y: Number(Math.max(surface.y, y).toFixed(2)),
-    width: Number(Math.min(width, surface.x + surface.width - Math.max(surface.x, x)).toFixed(2)),
-    height: Number(Math.min(height, surface.y + surface.height - Math.max(surface.y, y)).toFixed(2)),
-    score,
-    contributingLines: Math.max(1, Math.round(points.length / 10)),
-    status: score >= 70 ? "high" : "low"
-  };
+function countPoints(points: EdgePoint[], x: number, y: number, width: number, height: number) {
+  let count = 0;
+  let strength = 0;
+  for (const point of points) {
+    if (point.x >= x && point.x <= x + width && point.y >= y && point.y <= y + height) {
+      count++;
+      strength += point.strength;
+    }
+  }
+  return { count, strength };
 }
 
-function componentCandidates(points: EdgePoint[], surface: Bounds): CandidateProposal[] {
-  const cell = Math.max(2.2, Math.min(surface.width, surface.height) * 0.055);
-  const occupied = new Map<string, GridCell>();
-  for (const point of points) {
-    const gx = Math.floor((point.x - surface.x) / cell);
-    const gy = Math.floor((point.y - surface.y) / cell);
-    const key = `${gx},${gy}`;
-    const existing = occupied.get(key);
-    if (existing) existing.points.push(point);
-    else occupied.set(key, { gx, gy, points: [point] });
+function lineSupport(lines: LineSegment[], x: number, y: number, width: number, height: number, orientation: StructuralOrientation) {
+  let count = 0;
+  for (const line of lines) {
+    if (line.orientation !== orientation) continue;
+    const centerX = (line.x1 + line.x2) / 2;
+    const centerY = (line.y1 + line.y2) / 2;
+    const overlapsX = line.x2 >= x && line.x1 <= x + width;
+    const overlapsY = line.y2 >= y && line.y1 <= y + height;
+    if (centerX >= x && centerX <= x + width && centerY >= y && centerY <= y + height) count++;
+    else if (orientation === "horizontal" && overlapsX && centerY >= y && centerY <= y + height) count++;
+    else if (orientation === "vertical" && overlapsY && centerX >= x && centerX <= x + width) count++;
   }
+  return count;
+}
 
-  const seen = new Set<string>();
-  const components: EdgePoint[][] = [];
-  for (const [key, start] of occupied) {
-    if (seen.has(key)) continue;
-    const stack = [start];
-    const comp: EdgePoint[] = [];
-    seen.add(key);
-    while (stack.length) {
-      const cellInfo = stack.pop()!;
-      comp.push(...cellInfo.points);
-      for (let dy = -2; dy <= 2; dy++) {
-        for (let dx = -2; dx <= 2; dx++) {
-          if (dx === 0 && dy === 0) continue;
-          const nKey = `${cellInfo.gx + dx},${cellInfo.gy + dy}`;
-          if (seen.has(nKey)) continue;
-          const next = occupied.get(nKey);
-          if (!next) continue;
-          seen.add(nKey);
-          stack.push(next);
+function slidingCandidates(points: EdgePoint[], lines: LineSegment[], surface: Bounds): CandidateProposal[] {
+  const out: CandidateProposal[] = [];
+  const widths = [0.18, 0.22, 0.26, 0.31, 0.36].map((n) => surface.width * n);
+  const heights = [0.14, 0.18, 0.22, 0.27, 0.32].map((n) => surface.height * n);
+  const stepX = surface.width * 0.045;
+  const stepY = surface.height * 0.045;
+  const marginX = surface.width * 0.035;
+  const marginY = surface.height * 0.035;
+  let id = 0;
+
+  for (const width of widths) {
+    for (const height of heights) {
+      for (let y = surface.y + marginY; y <= surface.y + surface.height - height - marginY; y += stepY) {
+        for (let x = surface.x + marginX; x <= surface.x + surface.width - width - marginX; x += stepX) {
+          const support = countPoints(points, x, y, width, height);
+          const hLines = lineSupport(lines, x, y, width, height, "horizontal");
+          const vLines = lineSupport(lines, x, y, width, height, "vertical");
+          if (support.count < 8) continue;
+          if (hLines + vLines < 3) continue;
+          const aspect = width / height;
+          if (aspect < 0.55 || aspect > 2.8) continue;
+          const score = Math.round(support.count * 2.2 + hLines * 12 + vLines * 12 + Math.min(20, support.strength / 900));
+          if (score < 45) continue;
+          out.push({
+            id: `slide-${id++}`,
+            x: Number(x.toFixed(2)),
+            y: Number(y.toFixed(2)),
+            width: Number(width.toFixed(2)),
+            height: Number(height.toFixed(2)),
+            score,
+            contributingLines: hLines + vLines,
+            status: score >= 70 ? "high" : "low"
+          });
         }
       }
     }
-    components.push(comp);
   }
 
-  return components
-    .map((comp, index) => candidateFromComponent(comp, surface, index))
-    .filter((candidate): candidate is CandidateProposal => Boolean(candidate))
+  return out
     .sort((a, b) => b.score - a.score)
-    .filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.40 && other.score >= candidate.score) === -1)
+    .filter((candidate, index, all) => all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.45 && other.score >= candidate.score) === -1)
     .slice(0, 8);
 }
 
@@ -147,5 +136,6 @@ export function detectArchitecturalCandidates(edgePoints: EdgePoint[], options: 
   const points = scopedPoints(edgePoints, options);
   const horizontal = buildLineSegments(points, "horizontal", options);
   const vertical = buildLineSegments(points, "vertical", options);
-  return { lines: [...horizontal, ...vertical].slice(0, 160), candidates: componentCandidates(points, surface) };
+  const lines = [...horizontal, ...vertical].slice(0, 160);
+  return { lines, candidates: slidingCandidates(points, lines, surface) };
 }
