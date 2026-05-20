@@ -2,17 +2,16 @@ import fs from 'node:fs';
 const p = 'src/App.tsx';
 let s = fs.readFileSync(p, 'utf8');
 
-if (!s.includes('function createFixedWindowMasks()')) {
+if (!s.includes('function createCandidateMasks()')) {
   const marker = '  function addZone(shape: MaskShape = drawShape) {';
-  const fn = `  function createFixedWindowMasks() {
-    const base = projectionArea ?? defaultSurface();
+  const fn = `  function createCandidateMasks() {
+    if (!architecturalResult?.candidates.length) {
+      setDetectMessage("Run Analyze Structural Candidates first.");
+      return;
+    }
     const id = Date.now();
-    const masks: ProjectZone[] = [
-      clampZone({ id: id + 1, x: base.x + base.width * 0.17, y: base.y + base.height * 0.36, width: base.width * 0.25, height: base.height * 0.23, included: true, label: "edge scan mask", shape: "rectangle" }),
-      clampZone({ id: id + 2, x: base.x + base.width * 0.55, y: base.y + base.height * 0.36, width: base.width * 0.25, height: base.height * 0.23, included: true, label: "edge scan mask", shape: "rectangle" }),
-      clampZone({ id: id + 3, x: base.x + base.width * 0.33, y: base.y + base.height * 0.14, width: base.width * 0.34, height: base.height * 0.21, included: true, label: "edge scan mask", shape: "rectangle" })
-    ];
-    setZones((current) => [...current.filter((zone) => zone.label !== "edge scan mask"), ...masks]);
+    const masks: ProjectZone[] = architecturalResult.candidates.slice(0, 12).map((c, i) => clampZone({ id: id + i, x: c.x, y: c.y, width: c.width, height: c.height, included: true, label: "candidate mask", shape: "rectangle" }));
+    setZones((current) => [...current.filter((zone) => zone.label !== "candidate mask"), ...masks]);
     setSelectedTarget("zone");
     setSelectedZoneId(masks[0].id);
     setDrawMode(false);
@@ -20,7 +19,8 @@ if (!s.includes('function createFixedWindowMasks()')) {
     setCornerPoints([]);
     setProjectionOnly(false);
     setShowEdges(false);
-    setDetectMessage("Created 3 fixed window masks.");
+    setArchitecturalDebug(false);
+    setDetectMessage("Created " + masks.length + " masks from structural candidates.");
   }
 
 `;
@@ -29,17 +29,17 @@ if (!s.includes('function createFixedWindowMasks()')) {
 }
 
 const button = `
-              <button type="button" className="primary" onClick={createFixedWindowMasks} disabled={!imageUrl || cornerMode || surfacePolygonMode}>
-                CREATE FIXED WINDOW MASKS
+              <button type="button" className="primary" onClick={createCandidateMasks} disabled={!imageUrl || !architecturalResult?.candidates.length || cornerMode || surfacePolygonMode}>
+                CREATE MASKS FROM CANDIDATES
               </button>
-              <p className="helperText">Zone count: {zones.length}</p>`;
+              <p className="helperText">Candidate boxes: {architecturalResult?.candidates.length ?? 0} / Zone count: {zones.length}</p>`;
 
-if (!s.includes('CREATE FIXED WINDOW MASKS')) {
+if (!s.includes('CREATE MASKS FROM CANDIDATES')) {
   const previewText = 'Preview Animation Only';
   const textIndex = s.indexOf(previewText);
   const buttonStart = textIndex >= 0 ? s.lastIndexOf('<button', textIndex) : -1;
   if (buttonStart >= 0) s = s.slice(0, buttonStart) + button + '\n' + s.slice(buttonStart);
-  else throw new Error('Preview button marker not found for fixed mask insertion');
+  else throw new Error('Preview button marker not found for candidate mask insertion');
 }
 
 fs.writeFileSync(p, s);
