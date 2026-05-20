@@ -72,6 +72,32 @@ function countPoints(points: EdgePoint[], x: number, y: number, width: number, h
   return { count, strength };
 }
 
+function perimeterSupport(points: EdgePoint[], x: number, y: number, width: number, height: number) {
+  const band = Math.max(1.2, Math.min(width, height) * 0.16);
+  let count = 0;
+  let top = 0;
+  let bottom = 0;
+  let left = 0;
+  let right = 0;
+
+  for (const point of points) {
+    if (point.x < x || point.x > x + width || point.y < y || point.y > y + height) continue;
+
+    const nearTop = Math.abs(point.y - y) <= band;
+    const nearBottom = Math.abs(point.y - (y + height)) <= band;
+    const nearLeft = Math.abs(point.x - x) <= band;
+    const nearRight = Math.abs(point.x - (x + width)) <= band;
+
+    if (nearTop || nearBottom || nearLeft || nearRight) count++;
+    if (nearTop) top++;
+    if (nearBottom) bottom++;
+    if (nearLeft) left++;
+    if (nearRight) right++;
+  }
+
+  return { count, sides: [top, bottom, left, right].filter((value) => value >= 2).length };
+}
+
 function lineSupport(lines: LineSegment[], x: number, y: number, width: number, height: number, orientation: StructuralOrientation) {
   let count = 0;
   for (const line of lines) {
@@ -102,15 +128,18 @@ function slidingCandidates(points: EdgePoint[], lines: LineSegment[], surface: B
       for (let y = surface.y + marginY; y <= surface.y + surface.height - height - marginY; y += stepY) {
         for (let x = surface.x + marginX; x <= surface.x + surface.width - width - marginX; x += stepX) {
           const support = countPoints(points, x, y, width, height);
+          const border = perimeterSupport(points, x, y, width, height);
           const hLines = lineSupport(lines, x, y, width, height, "horizontal");
           const vLines = lineSupport(lines, x, y, width, height, "vertical");
           if (support.count < 7) continue;
+          if (border.count < 6 || border.sides < 2) continue;
           if (hLines < 1 || vLines < 1) continue;
           if (hLines + vLines < 4) continue;
           const aspect = width / height;
           if (aspect < 0.65 || aspect > 2.15) continue;
           const oversizePenalty = Math.max(0, width / surface.width - 0.24) * 90;
-          const score = Math.round(support.count * 2.2 + hLines * 13 + vLines * 13 + Math.min(20, support.strength / 900) - oversizePenalty);
+          const wallSpecklePenalty = Math.max(0, support.count - border.count) * 1.4;
+          const score = Math.round(border.count * 3.2 + hLines * 13 + vLines * 13 + Math.min(20, support.strength / 900) - oversizePenalty - wallSpecklePenalty);
           if (score < 46) continue;
           out.push({
             id: `slide-${id++}`,
