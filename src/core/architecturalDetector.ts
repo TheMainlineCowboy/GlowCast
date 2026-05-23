@@ -80,13 +80,7 @@ function insidePolygon(point: { x: number; y: number }, polygon: Point[]) {
 }
 
 function scopedPoints(edgePoints: EdgePoint[], options: DetectorOptions) {
-  const bounds = options.bounds ?? {
-    x: 0,
-    y: 0,
-    width: 100,
-    height: 100
-  };
-
+  const bounds = options.bounds ?? { x: 0, y: 0, width: 100, height: 100 };
   const polygon = options.polygon && options.polygon.length >= 3 ? options.polygon : null;
 
   return edgePoints.filter((point) => {
@@ -102,7 +96,6 @@ function scopedPoints(edgePoints: EdgePoint[], options: DetectorOptions) {
 
 function quantile(values: number[], q: number) {
   if (!values.length) return 0;
-
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * q)))];
 }
@@ -112,12 +105,10 @@ function makeLine(points: EdgePoint[], orientation: StructuralOrientation, id: s
 
   const xs = points.map((p) => p.x);
   const ys = points.map((p) => p.y);
-
   const x1 = Math.min(...xs);
   const x2 = Math.max(...xs);
   const y1 = Math.min(...ys);
   const y2 = Math.max(...ys);
-
   const length = orientation === "horizontal" ? x2 - x1 : y2 - y1;
 
   if (length < 0.8) return null;
@@ -134,18 +125,8 @@ function makeLine(points: EdgePoint[], orientation: StructuralOrientation, id: s
   };
 }
 
-function buildLineSegments(
-  points: EdgePoint[],
-  orientation: StructuralOrientation,
-  options: DetectorOptions
-): LineSegment[] {
-  const bounds = options.bounds ?? {
-    x: 0,
-    y: 0,
-    width: 100,
-    height: 100
-  };
-
+function buildLineSegments(points: EdgePoint[], orientation: StructuralOrientation, options: DetectorOptions): LineSegment[] {
+  const bounds = options.bounds ?? { x: 0, y: 0, width: 100, height: 100 };
   const binSize = 1.2;
   const bins = new Map<number, EdgePoint[]>();
 
@@ -160,27 +141,20 @@ function buildLineSegments(
 
   for (const [key, binPoints] of bins) {
     if (binPoints.length < 2) continue;
-
     const line = makeLine(binPoints, orientation, `${orientation}-${key}`);
 
-    if (
-      line &&
-      line.length >= Math.max(1.2, (orientation === "horizontal" ? bounds.width : bounds.height) * 0.018)
-    ) {
+    if (line && line.length >= Math.max(1.2, (orientation === "horizontal" ? bounds.width : bounds.height) * 0.018)) {
       lines.push(line);
     }
   }
 
-  return lines
-    .sort((a, b) => b.length * b.strength - a.length * a.strength)
-    .slice(0, options.maxLines ?? 160);
+  return lines.sort((a, b) => b.length * b.strength - a.length * a.strength).slice(0, options.maxLines ?? 160);
 }
 
 function overlaps(a: CandidateProposal, b: CandidateProposal) {
   const ix = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
   const iy = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
   const smaller = Math.min(a.width * a.height, b.width * b.height);
-
   return smaller > 0 ? (ix * iy) / smaller : 0;
 }
 
@@ -200,7 +174,6 @@ function countPoints(points: EdgePoint[], x: number, y: number, width: number, h
 
 function perimeterSupport(points: EdgePoint[], x: number, y: number, width: number, height: number) {
   const band = Math.max(1.1, Math.min(width, height) * 0.16);
-
   let count = 0;
   let top = 0;
   let bottom = 0;
@@ -216,7 +189,6 @@ function perimeterSupport(points: EdgePoint[], x: number, y: number, width: numb
     const nearRight = Math.abs(point.x - (x + width)) <= band;
 
     if (nearTop || nearBottom || nearLeft || nearRight) count++;
-
     if (nearTop) top++;
     if (nearBottom) bottom++;
     if (nearLeft) left++;
@@ -234,17 +206,13 @@ function interiorStructure(points: EdgePoint[], x: number, y: number, width: num
   const innerY = y + height * 0.16;
   const innerW = width * 0.68;
   const innerH = height * 0.68;
-
   let count = 0;
   const xBands = new Set<number>();
   const yBands = new Set<number>();
   const quadrants = new Set<string>();
 
   for (const point of points) {
-    if (point.x < innerX || point.x > innerX + innerW || point.y < innerY || point.y > innerY + innerH) {
-      continue;
-    }
-
+    if (point.x < innerX || point.x > innerX + innerW || point.y < innerY || point.y > innerY + innerH) continue;
     count++;
     xBands.add(Math.floor(((point.x - innerX) / innerW) * 4));
     yBands.add(Math.floor(((point.y - innerY) / innerH) * 4));
@@ -259,14 +227,7 @@ function interiorStructure(points: EdgePoint[], x: number, y: number, width: num
   };
 }
 
-function lineSupport(
-  lines: LineSegment[],
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  orientation: StructuralOrientation
-) {
+function lineSupport(lines: LineSegment[], x: number, y: number, width: number, height: number, orientation: StructuralOrientation) {
   let count = 0;
 
   for (const line of lines) {
@@ -274,7 +235,6 @@ function lineSupport(
 
     const centerX = (line.x1 + line.x2) / 2;
     const centerY = (line.y1 + line.y2) / 2;
-
     const overlapsX = line.x2 >= x && line.x1 <= x + width;
     const overlapsY = line.y2 >= y && line.y1 <= y + height;
 
@@ -308,34 +268,25 @@ function connectedEdgeComponents(points: EdgePoint[], surface: Bounds) {
   const strengths = points.map((point) => point.strength).sort((a, b) => a - b);
   const cutoff = strengths[Math.floor(strengths.length * 0.58)] ?? 0;
   const strongPoints = points.filter((point) => point.strength >= cutoff);
-
-  const cellSize = Math.max(0.9, Math.min(surface.width, surface.height) * 0.018);
+  const cellSize = Math.max(0.65, Math.min(surface.width, surface.height) * 0.012);
   const cells = new Map<string, Cell>();
 
   for (const point of strongPoints) {
     const gx = Math.floor((point.x - surface.x) / cellSize);
     const gy = Math.floor((point.y - surface.y) / cellSize);
     const key = `${gx},${gy}`;
-
     const existing = cells.get(key);
 
     if (existing) {
       existing.points.push(point);
     } else {
-      cells.set(key, {
-        gx,
-        gy,
-        points: [point]
-      });
+      cells.set(key, { gx, gy, points: [point] });
     }
   }
 
   for (const [key, cell] of [...cells.entries()]) {
     const avg = cell.points.reduce((sum, point) => sum + point.strength, 0) / cell.points.length;
-
-    if (cell.points.length < 2 && avg < cutoff * 1.25) {
-      cells.delete(key);
-    }
+    if (cell.points.length < 2 && avg < cutoff * 1.25) cells.delete(key);
   }
 
   const seen = new Set<string>();
@@ -346,15 +297,14 @@ function connectedEdgeComponents(points: EdgePoint[], surface: Bounds) {
 
     const stack = [start];
     const component: EdgePoint[] = [];
-
     seen.add(key);
 
     while (stack.length) {
       const current = stack.pop()!;
       component.push(...current.points);
 
-      for (let dy = -2; dy <= 2; dy++) {
-        for (let dx = -2; dx <= 2; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
           if (dx === 0 && dy === 0) continue;
 
           const nextKey = `${current.gx + dx},${current.gy + dy}`;
@@ -380,37 +330,19 @@ function componentBox(points: EdgePoint[], surface: Bounds): ComponentBox | null
 
   const xs = points.map((point) => point.x);
   const ys = points.map((point) => point.y);
-
   const pad = Math.max(0.8, Math.min(surface.width, surface.height) * 0.012);
-
   const x = Math.max(surface.x, quantile(xs, 0.04) - pad);
   const y = Math.max(surface.y, quantile(ys, 0.04) - pad);
   const right = Math.min(surface.x + surface.width, quantile(xs, 0.96) + pad);
   const bottom = Math.min(surface.y + surface.height, quantile(ys, 0.96) + pad);
-
   const width = right - x;
   const height = bottom - y;
 
-  return {
-    points,
-    x,
-    y,
-    width,
-    height,
-    cx: x + width / 2,
-    cy: y + height / 2
-  };
+  return { points, x, y, width, height, cx: x + width / 2, cy: y + height / 2 };
 }
 
-function boxToCandidate(
-  box: ComponentBox,
-  allPoints: EdgePoint[],
-  lines: LineSegment[],
-  surface: Bounds,
-  id: string
-): CandidateProposal | null {
+function boxToCandidate(box: ComponentBox, allPoints: EdgePoint[], lines: LineSegment[], surface: Bounds, id: string): CandidateProposal | null {
   const { x, y, width, height } = box;
-
   const area = width * height;
   const surfaceArea = surface.width * surface.height;
   const aspect = width / Math.max(0.001, height);
@@ -420,17 +352,29 @@ function boxToCandidate(
   if (area < surfaceArea * 0.006 || area > surfaceArea * 0.30) return null;
   if (aspect < 0.18 || aspect > 5.25) return null;
 
-  const skinnyEdgeArtifact = aspect < 0.34 && nearSurfaceEdge(x, y, width, height, surface);
+  const avgStrength = box.points.reduce((sum, point) => sum + point.strength, 0) / Math.max(1, box.points.length);
+  const isHintDriven = avgStrength >= 260 && box.points.length >= 10;
+  const tallEdgePanel = isHintDriven && height >= surface.height * 0.30 && width >= surface.width * 0.075;
+  const skinnyEdgeShadow =
+    isHintDriven &&
+    nearSurfaceEdge(x, y, width, height, surface) &&
+    width < surface.width * 0.075 &&
+    height < surface.height * 0.36;
+
+  if (skinnyEdgeShadow) return null;
+
+  const skinnyEdgeArtifact = aspect < 0.34 && nearSurfaceEdge(x, y, width, height, surface) && !tallEdgePanel;
   if (skinnyEdgeArtifact) return null;
 
   const marginX = surface.width * 0.006;
   const marginY = surface.height * 0.008;
 
   if (
-    x <= surface.x + marginX ||
-    y <= surface.y + marginY ||
-    x + width >= surface.x + surface.width - marginX ||
-    y + height >= surface.y + surface.height - marginY
+    !isHintDriven &&
+    (x <= surface.x + marginX ||
+      y <= surface.y + marginY ||
+      x + width >= surface.x + surface.width - marginX ||
+      y + height >= surface.y + surface.height - marginY)
   ) {
     return null;
   }
@@ -440,16 +384,12 @@ function boxToCandidate(
   const hLines = lineSupport(lines, x, y, width, height, "horizontal");
   const vLines = lineSupport(lines, x, y, width, height, "vertical");
   const points = countPoints(allPoints, x, y, width, height);
-
-  const avgStrength = box.points.reduce((sum, point) => sum + point.strength, 0) / Math.max(1, box.points.length);
   const density = box.points.length / Math.max(1, area);
 
   const isArchLike = aspect >= 1.0 && height <= surface.height * 0.34 && y <= surface.y + surface.height * 0.55;
   const isDoorLike = aspect >= 0.2 && aspect <= 0.82 && height >= surface.height * 0.28;
   const isWideWindow = aspect > 1.9 && aspect <= 5.25 && height <= surface.height * 0.34;
   const isRectLike = aspect >= 0.42 && aspect <= 2.2;
-
-  const isHintDriven = avgStrength >= 260 && box.points.length >= 10;
 
   if (!isArchLike && !isDoorLike && !isWideWindow && !isRectLike) return null;
 
@@ -496,7 +436,6 @@ function boxToCandidate(
   if (isolatedSpeckleRatio < 0.34) return null;
 
   const specklePenalty = Math.max(0, points.count - box.points.length - border.count - interior.count) * 1.15;
-
   const score = Math.round(
     box.points.length * 2.5 +
       border.count * 1.9 +
@@ -529,31 +468,14 @@ function componentCandidates(points: EdgePoint[], lines: LineSegment[], surface:
     .filter((candidate): candidate is CandidateProposal => Boolean(candidate))
     .sort((a, b) => b.score - a.score)
     .filter((candidate, index, all) => {
-      return (
-        all.findIndex(
-          (other) =>
-            other.id !== candidate.id &&
-            overlaps(other, candidate) > 0.35 &&
-            other.score >= candidate.score
-        ) === -1
-      );
+      return all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.35 && other.score >= candidate.score) === -1;
     })
     .slice(0, 8);
 }
 
-export function detectArchitecturalCandidates(
-  edgePoints: EdgePoint[],
-  options: DetectorOptions = {}
-): ArchitecturalDetectionResult {
-  const surface = options.bounds ?? {
-    x: 0,
-    y: 0,
-    width: 100,
-    height: 100
-  };
-
+export function detectArchitecturalCandidates(edgePoints: EdgePoint[], options: DetectorOptions = {}): ArchitecturalDetectionResult {
+  const surface = options.bounds ?? { x: 0, y: 0, width: 100, height: 100 };
   const points = scopedPoints(edgePoints, options);
-
   const horizontal = buildLineSegments(points, "horizontal", options);
   const vertical = buildLineSegments(points, "vertical", options);
   const lines = [...horizontal, ...vertical].slice(0, 160);
@@ -561,19 +483,9 @@ export function detectArchitecturalCandidates(
   const candidates = [...componentCandidates(points, lines, surface)]
     .sort((a, b) => b.score - a.score)
     .filter((candidate, index, all) => {
-      return (
-        all.findIndex(
-          (other) =>
-            other.id !== candidate.id &&
-            overlaps(other, candidate) > 0.38 &&
-            other.score >= candidate.score
-        ) === -1
-      );
+      return all.findIndex((other) => other.id !== candidate.id && overlaps(other, candidate) > 0.38 && other.score >= candidate.score) === -1;
     })
     .slice(0, 10);
 
-  return {
-    lines,
-    candidates
-  };
+  return { lines, candidates };
 }
