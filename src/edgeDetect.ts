@@ -19,6 +19,14 @@ type RegionBox = {
   score: number;
 };
 
+type CellStats = {
+  r: number;
+  g: number;
+  b: number;
+  gray: number;
+  chroma: number;
+};
+
 const clampByte = (value: number) => Math.max(0, Math.min(255, value));
 
 function quantile(values: number[], q: number) {
@@ -35,8 +43,8 @@ function overlapRatio(a: RegionBox, b: RegionBox) {
 }
 
 function addBoxHintPoints(points: EdgePoint[], box: RegionBox) {
-  const steps = 10;
-  const strength = 340 + Math.min(120, box.score * 6);
+  const steps = 12;
+  const strength = 380 + Math.min(150, box.score * 5);
 
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
@@ -50,12 +58,46 @@ function addBoxHintPoints(points: EdgePoint[], box: RegionBox) {
   }
 }
 
-function createRegionHintPoints(gray: Uint8ClampedArray, width: number, height: number): EdgePoint[] {
-  const gridW = 96;
-  const gridH = Math.max(42, Math.round((height / width) * gridW));
-  const values: number[] = [];
-  const avgGrid = new Float32Array(gridW * gridH);
-  const darkGrid = new Uint8Array(gridW * gridH);
+function neighborAverage(grid: CellStats[], gridW: number, gridH: number, gx: number, gy: number, radius: number) {
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let gray = 0;
+  let chroma = 0;
+  let count = 0;
+
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const nx = gx + dx;
+      const ny = gy + dy;
+      if (nx < 0 || ny < 0 || nx >= gridW || ny >= gridH) continue;
+      const cell = grid[ny * gridW + nx];
+      r += cell.r;
+      g += cell.g;
+      b += cell.b;
+      gray += cell.gray;
+      chroma += cell.chroma;
+      count++;
+    }
+  }
+
+  const safe = Math.max(1, count);
+  return {
+    r: r / safe,
+    g: g / safe,
+    b: b / safe,
+    gray: gray / safe,
+    chroma: chroma / safe
+  };
+}
+
+function createRegionHintPoints(source: ImageData, width: number, height: number): EdgePoint[] {
+  const gridW = 108;
+  const gridH = Math.max(44, Math.round((height / width) * gridW));
+  const grid: CellStats[] = [];
+  const grayValues: number[] = [];
+  const contrastValues: number[] = [];
+  const objectGrid = new Uint8Array(gridW * gridH);
 
   for (let gy = 0; gy < gridH; gy++) {
     for (let gx = 0; gx < gridW; gx++) {
@@ -63,82 +105,131 @@ function createRegionHintPoints(gray: Uint8ClampedArray, width: number, height: 
       const x1 = Math.max(x0 + 1, Math.floor(((gx + 1) / gridW) * width));
       const y0 = Math.floor((gy / gridH) * height);
       const y1 = Math.max(y0 + 1, Math.floor(((gy + 1) / gridH) * height));
-      let sum = 0;
+
+      let r = 0;
+      let g = 0;
+      let b = 0;
       let count = 0;
 
       for (let y = y0; y < y1; y++) {
         for (let x = x0; x < x1; x++) {
-          sum += gray[y * width + x];
+          const i = (y * width + x) * 4;
+          r += source.data[i];
+          g += source.data[i + 1];
+          b += source.data[i + 2];
           count++;
         }
       }
 
-      const avg = sum / Math.max(1, count);
-      avgGrid[gy * gridW + gx] = avg;
-      values.push(avg);
+      const safe = Math.max(1, count);
+      const rr = r / safe;
+      const gg = g / safe;
+      const bb = b / safe;
+      const max = Math.max(rr, gg, bb);
+      const min = Math.min(rr, gg, bb);
+
+      const cell: CellStats = {
+        r: rr,
+        g: gg,
+        b: bb,
+        gray: 0.299 * rr + 0.587 * gg + 0.114 * bb,
+        chroma: max - min
+      };
+
+      grid.push(cell);
+      grayValues.push(cell.gray);
     }
   }
 
-  const globalDark = quantile(values, 0.30);
-
-  for (let gy = 0; gy < gridH; gy++) {
-    for (let gx = 0; gx < gridW; gx++) {
+  for (let gy = 1; gy < gridH - 1; gy++) {
+    for (let gx = 1; gx < gridW - 1; gx++) {
       const idx = gy * gridW + gx;
-      const avg = avgGrid[idx];
-      let localSum = 0;
-      let localCount = 0;
+      const c = grid[idx];
+      const left = grid[idx - 1].gray;
+      const right = grid[idx + 1].gray;
+      const up = grid[idx - gridW].gray;
+      const down = grid[idx + gridW].gray;
 
-      for (let dy = -5; dy <= 5; dy++) {
-        for (let dx = -5; dx <= 5; dx++) {
-          const nx = gx + dx;
-          const ny = gy + dy;
-          if (nx < 0 || ny < 0 || nx >= gridW || ny >= gridH) continue;
-          localSum += avgGrid[ny * gridW + nx];
-          localCount++;
-        }
-      }
-
-      const localAvg = localSum / Math.max(1, localCount);
-      const isLocalRecess = avg < localAvg - 18;
-      const isGloballyDark = avg < globalDark - 4;
-      darkGrid[idx] = isLocalRecess || isGloballyDark ? 1 : 0;
+      contrastValues.push(
+        Math.abs(c.gray - left) +
+          Math.abs(c.gray - right) +
+          Math.abs(c.gray - up) +
+          Math.abs(c.gray - down)
+      );
     }
   }
 
-  const seen = new Uint8Array(darkGrid.length);
+  const globalDark = quantile(grayValues, 0.30);
+  const globalLight = quantile(grayValues, 0.78);
+  const contrastCutoff = Math.max(18, quantile(contrastValues, 0.78));
+
+  for (let gy = 1; gy < gridH - 1; gy++) {
+    for (let gx = 1; gx < gridW - 1; gx++) {
+      const idx = gy * gridW + gx;
+      const cell = grid[idx];
+      const local = neighborAverage(grid, gridW, gridH, gx, gy, 5);
+
+      const colorDelta =
+        Math.abs(cell.r - local.r) +
+        Math.abs(cell.g - local.g) +
+        Math.abs(cell.b - local.b);
+
+      const edgeContrast =
+        Math.abs(cell.gray - grid[idx - 1].gray) +
+        Math.abs(cell.gray - grid[idx + 1].gray) +
+        Math.abs(cell.gray - grid[idx - gridW].gray) +
+        Math.abs(cell.gray - grid[idx + gridW].gray);
+
+      const darkerRecess = cell.gray < local.gray - 14 || cell.gray < globalDark - 2;
+      const lighterGlass = cell.gray > local.gray + 20 && cell.gray > globalLight - 10;
+      const colorObject = colorDelta > 34 || Math.abs(cell.chroma - local.chroma) > 12;
+      const edgeObject = edgeContrast > contrastCutoff;
+
+      objectGrid[idx] = darkerRecess || lighterGlass || colorObject || edgeObject ? 1 : 0;
+    }
+  }
+
+  const seen = new Uint8Array(objectGrid.length);
   const boxes: RegionBox[] = [];
 
-  for (let start = 0; start < darkGrid.length; start++) {
-    if (!darkGrid[start] || seen[start]) continue;
+  for (let start = 0; start < objectGrid.length; start++) {
+    if (!objectGrid[start] || seen[start]) continue;
 
     const stack = [start];
     seen[start] = 1;
+
     let minX = gridW;
     let minY = gridH;
     let maxX = 0;
     let maxY = 0;
     let cells = 0;
-    let darkness = 0;
+    let score = 0;
 
     while (stack.length) {
       const idx = stack.pop()!;
       const x = idx % gridW;
       const y = Math.floor(idx / gridW);
+      const cell = grid[idx];
+      const local = neighborAverage(grid, gridW, gridH, x, y, 4);
+
       minX = Math.min(minX, x);
       minY = Math.min(minY, y);
       maxX = Math.max(maxX, x);
       maxY = Math.max(maxY, y);
       cells++;
-      darkness += 255 - avgGrid[idx];
+      score += cell.chroma + Math.abs(cell.gray - local.gray);
 
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           if (dx === 0 && dy === 0) continue;
+
           const nx = x + dx;
           const ny = y + dy;
           if (nx < 0 || ny < 0 || nx >= gridW || ny >= gridH) continue;
+
           const next = ny * gridW + nx;
-          if (!darkGrid[next] || seen[next]) continue;
+          if (!objectGrid[next] || seen[next]) continue;
+
           seen[next] = 1;
           stack.push(next);
         }
@@ -154,13 +245,13 @@ function createRegionHintPoints(gray: Uint8ClampedArray, width: number, height: 
     const gridArea = (maxX - minX + 1) * (maxY - minY + 1);
     const fill = cells / Math.max(1, gridArea);
 
-    if (w < 4.2 || h < 4.2) continue;
-    if (w > 38 || h > 48) continue;
-    if (area < 18 || area > 900) continue;
-    if (aspect < 0.22 || aspect > 4.8) continue;
-    if (fill < 0.20) continue;
+    if (w < 4.0 || h < 4.0) continue;
+    if (w > 40 || h > 52) continue;
+    if (area < 16 || area > 950) continue;
+    if (aspect < 0.20 || aspect > 5.2) continue;
+    if (fill < 0.15) continue;
 
-    const touchesPhotoEdge = x < 1.2 || y < 1.2 || x + w > 98.8 || y + h > 98.8;
+    const touchesPhotoEdge = x < 1 || y < 1 || x + w > 99 || y + h > 99;
     if (touchesPhotoEdge) continue;
 
     boxes.push({
@@ -168,7 +259,7 @@ function createRegionHintPoints(gray: Uint8ClampedArray, width: number, height: 
       y,
       width: w,
       height: h,
-      score: (darkness / Math.max(1, cells)) * fill + cells * 0.6
+      score: score / Math.max(1, cells) + cells * 0.7 + fill * 18
     });
   }
 
@@ -176,9 +267,9 @@ function createRegionHintPoints(gray: Uint8ClampedArray, width: number, height: 
 
   const selected: RegionBox[] = [];
   for (const box of boxes) {
-    if (selected.some((other) => overlapRatio(box, other) > 0.45)) continue;
+    if (selected.some((other) => overlapRatio(box, other) > 0.42)) continue;
     selected.push(box);
-    if (selected.length >= 12) break;
+    if (selected.length >= 14) break;
   }
 
   const hints: EdgePoint[] = [];
@@ -256,7 +347,11 @@ export async function scanImageEdges(imageUrl: string): Promise<EdgeScanResult> 
         edgeImage.data[pixel + 2] = 238;
         edgeImage.data[pixel + 3] = clampByte(Math.min(255, strength));
 
-        rawEdges.push({ x: (x / width) * 100, y: (y / height) * 100, strength });
+        rawEdges.push({
+          x: (x / width) * 100,
+          y: (y / height) * 100,
+          strength
+        });
       }
     }
   }
@@ -266,7 +361,7 @@ export async function scanImageEdges(imageUrl: string): Promise<EdgeScanResult> 
   const maxPoints = 9000;
   const stride = Math.max(1, Math.ceil(rawEdges.length / maxPoints));
   const edgePoints = rawEdges.filter((_, index) => index % stride === 0);
-  const regionHints = createRegionHintPoints(gray, width, height);
+  const regionHints = createRegionHintPoints(source, width, height);
 
   return {
     width,
