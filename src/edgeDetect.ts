@@ -91,6 +91,148 @@ function neighborAverage(grid: CellStats[], gridW: number, gridH: number, gx: nu
   };
 }
 
+function cellDistance(a: CellStats, b: CellStats) {
+  return Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b) + Math.abs(a.gray - b.gray) * 0.7 + Math.abs(a.chroma - b.chroma) * 1.2;
+}
+
+function scoreRectPanel(
+  grid: CellStats[],
+  objectGrid: Uint8Array,
+  gridW: number,
+  gridH: number,
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number
+) {
+  let insideR = 0;
+  let insideG = 0;
+  let insideB = 0;
+  let insideGray = 0;
+  let insideChroma = 0;
+  let insideCount = 0;
+  let insideObject = 0;
+  let perimeterObject = 0;
+  let perimeterCount = 0;
+
+  for (let y = sy; y < sy + sh; y++) {
+    for (let x = sx; x < sx + sw; x++) {
+      const idx = y * gridW + x;
+      const cell = grid[idx];
+      insideR += cell.r;
+      insideG += cell.g;
+      insideB += cell.b;
+      insideGray += cell.gray;
+      insideChroma += cell.chroma;
+      insideCount++;
+      if (objectGrid[idx]) insideObject++;
+
+      const onEdge = x === sx || y === sy || x === sx + sw - 1 || y === sy + sh - 1;
+      if (onEdge) {
+        perimeterCount++;
+        if (objectGrid[idx]) perimeterObject++;
+      }
+    }
+  }
+
+  if (!insideCount || !perimeterCount) return 0;
+
+  const inner: CellStats = {
+    r: insideR / insideCount,
+    g: insideG / insideCount,
+    b: insideB / insideCount,
+    gray: insideGray / insideCount,
+    chroma: insideChroma / insideCount
+  };
+
+  let outsideR = 0;
+  let outsideG = 0;
+  let outsideB = 0;
+  let outsideGray = 0;
+  let outsideChroma = 0;
+  let outsideCount = 0;
+
+  const ox0 = Math.max(0, sx - 2);
+  const oy0 = Math.max(0, sy - 2);
+  const ox1 = Math.min(gridW, sx + sw + 2);
+  const oy1 = Math.min(gridH, sy + sh + 2);
+
+  for (let y = oy0; y < oy1; y++) {
+    for (let x = ox0; x < ox1; x++) {
+      if (x >= sx && x < sx + sw && y >= sy && y < sy + sh) continue;
+      const cell = grid[y * gridW + x];
+      outsideR += cell.r;
+      outsideG += cell.g;
+      outsideB += cell.b;
+      outsideGray += cell.gray;
+      outsideChroma += cell.chroma;
+      outsideCount++;
+    }
+  }
+
+  if (!outsideCount) return 0;
+
+  const outer: CellStats = {
+    r: outsideR / outsideCount,
+    g: outsideG / outsideCount,
+    b: outsideB / outsideCount,
+    gray: outsideGray / outsideCount,
+    chroma: outsideChroma / outsideCount
+  };
+
+  let variance = 0;
+  for (let y = sy; y < sy + sh; y++) {
+    for (let x = sx; x < sx + sw; x++) {
+      variance += cellDistance(grid[y * gridW + x], inner);
+    }
+  }
+
+  const avgVariance = variance / insideCount;
+  const outsideDelta = cellDistance(inner, outer);
+  const borderRatio = perimeterObject / perimeterCount;
+  const insideRatio = insideObject / insideCount;
+  const coherence = Math.max(0, 1 - avgVariance / 75);
+
+  return outsideDelta * 1.3 + borderRatio * 80 + insideRatio * 30 + coherence * 35;
+}
+
+function createGenericPanelBoxes(grid: CellStats[], objectGrid: Uint8Array, gridW: number, gridH: number) {
+  const candidates: RegionBox[] = [];
+  const widths = [7, 9, 11, 14, 17, 21, 25, 30, 36];
+  const heights = [7, 9, 11, 14, 18, 23, 29, 36, 44];
+
+  for (const sw of widths) {
+    for (const sh of heights) {
+      const aspect = sw / Math.max(1, sh);
+      if (aspect < 0.18 || aspect > 5.25) continue;
+
+      const stepX = Math.max(2, Math.floor(sw / 3));
+      const stepY = Math.max(2, Math.floor(sh / 3));
+
+      for (let sy = 1; sy <= gridH - sh - 1; sy += stepY) {
+        for (let sx = 1; sx <= gridW - sw - 1; sx += stepX) {
+          const score = scoreRectPanel(grid, objectGrid, gridW, gridH, sx, sy, sw, sh);
+          if (score < 82) continue;
+
+          const x = (sx / gridW) * 100;
+          const y = (sy / gridH) * 100;
+          const width = (sw / gridW) * 100;
+          const height = (sh / gridH) * 100;
+          const area = width * height;
+
+          if (width < 4 || height < 4) continue;
+          if (width > 42 || height > 58) continue;
+          if (area < 16 || area > 1100) continue;
+
+          candidates.push({ x, y, width, height, score });
+        }
+      }
+    }
+  }
+
+  return candidates.sort((a, b) => b.score - a.score).slice(0, 30);
+}
+
 function createRegionHintPoints(source: ImageData, width: number, height: number): EdgePoint[] {
   const gridW = 108;
   const gridH = Math.max(44, Math.round((height / width) * gridW));
@@ -263,13 +405,14 @@ function createRegionHintPoints(source: ImageData, width: number, height: number
     });
   }
 
+  boxes.push(...createGenericPanelBoxes(grid, objectGrid, gridW, gridH));
   boxes.sort((a, b) => b.score - a.score);
 
   const selected: RegionBox[] = [];
   for (const box of boxes) {
     if (selected.some((other) => overlapRatio(box, other) > 0.42)) continue;
     selected.push(box);
-    if (selected.length >= 14) break;
+    if (selected.length >= 16) break;
   }
 
   const hints: EdgePoint[] = [];
