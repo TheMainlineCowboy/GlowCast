@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+
 const p = 'src/App.tsx';
 let s = fs.readFileSync(p, 'utf8');
 
@@ -6,7 +7,7 @@ if (!s.includes('function createCandidateMasks()')) {
   const marker = '  function addZone(shape: MaskShape = drawShape) {';
   const fn = `  function createCandidateMasks() {
     if (!architecturalResult?.candidates.length) {
-      setDetectMessage("No candidate masks found yet. Run Edge Scanner, then Analyze Structural Candidates. If it still finds 0, add a manual rectangle zone and use magnetic snap.");
+      setDetectMessage("No high-confidence candidate masks found. Add a manual rectangle zone, then use magnetic snap. Auto masks now only create tight connected structures; loose guesses are blocked.");
       return;
     }
     const id = Date.now();
@@ -20,7 +21,7 @@ if (!s.includes('function createCandidateMasks()')) {
     setProjectionOnly(false);
     setShowEdges(false);
     setArchitecturalDebug(false);
-    setDetectMessage("Created " + masks.length + " masks from structural candidates.");
+    setDetectMessage("Created " + masks.length + " high-confidence masks from connected edge structures.");
   }
 
 `;
@@ -45,10 +46,12 @@ if (!s.includes('CREATE MASKS FROM CANDIDATES')) {
     'disabled={!imageUrl || !architecturalResult?.candidates.length || cornerMode || surfacePolygonMode}',
     'disabled={!imageUrl || cornerMode || surfacePolygonMode}'
   );
+
   s = s.replace(
     'setDetectMessage("Run Analyze Structural Candidates first.");',
-    'setDetectMessage("No candidate masks found yet. Run Edge Scanner, then Analyze Structural Candidates. If it still finds 0, add a manual rectangle zone and use magnetic snap.");'
+    'setDetectMessage("No high-confidence candidate masks found. Add a manual rectangle zone, then use magnetic snap. Auto masks now only create tight connected structures; loose guesses are blocked.");'
   );
+
   s = s.replace(
     'shape: "rectangle" }));',
     'shape: "rectangle" as MaskShape }));'
@@ -58,11 +61,19 @@ if (!s.includes('CREATE MASKS FROM CANDIDATES')) {
 fs.writeFileSync(p, s);
 
 const detectorPath = 'src/core/architecturalDetector.ts';
+
 if (fs.existsSync(detectorPath)) {
   let detector = fs.readFileSync(detectorPath, 'utf8');
+
   detector = detector.replace(
     'const candidates = [...componentCandidates(points, lines, surface), ...linePairCandidates(points, lines, surface), ...edgeDensityGridCandidates(points, lines, surface)]',
-    'const candidates = [...componentCandidates(points, lines, surface), ...linePairCandidates(points, lines, surface)]'
+    'const candidates = [...componentCandidates(points, lines, surface)]'
   );
+
+  detector = detector.replace(
+    'const candidates = [...componentCandidates(points, lines, surface), ...linePairCandidates(points, lines, surface)]',
+    'const candidates = [...componentCandidates(points, lines, surface)]'
+  );
+
   fs.writeFileSync(detectorPath, detector);
 }
