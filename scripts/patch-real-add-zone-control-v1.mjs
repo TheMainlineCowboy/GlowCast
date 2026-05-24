@@ -6,22 +6,8 @@ let s = fs.readFileSync(p, 'utf8');
 if (!s.includes('function createCandidateMasks()')) {
   const marker = '  function addZone(shape: MaskShape = drawShape) {';
   const fn = `  function createCandidateMasks() {
-    if (!architecturalResult?.candidates.length) {
-      setDetectMessage("No high-confidence candidate masks found. Add a manual rectangle zone, then use magnetic snap. Auto masks now only create tight connected structures; loose guesses are blocked.");
-      return;
-    }
-    const id = Date.now();
-    const masks: ProjectZone[] = architecturalResult.candidates.slice(0, 12).map((c, i) => clampZone({ id: id + i, x: c.x, y: c.y, width: c.width, height: c.height, included: true, label: "candidate mask", shape: "rectangle" as MaskShape }));
-    setZones((current) => [...current.filter((zone) => zone.label !== "candidate mask"), ...masks]);
-    setSelectedTarget("zone");
-    setSelectedZoneId(masks[0].id);
-    setDrawMode(false);
-    setCornerMode(false);
-    setCornerPoints([]);
-    setProjectionOnly(false);
-    setShowEdges(false);
-    setArchitecturalDebug(false);
-    setDetectMessage("Created " + masks.length + " high-confidence masks from connected edge structures.");
+    setDetectMessage("Automatic candidate masks are disabled. Add a manual rectangle zone, then use magnetic snap to tighten it to the real object edge.");
+    return;
   }
 
 `;
@@ -49,7 +35,12 @@ if (!s.includes('CREATE MASKS FROM CANDIDATES')) {
 
   s = s.replace(
     'setDetectMessage("Run Analyze Structural Candidates first.");',
-    'setDetectMessage("No high-confidence candidate masks found. Add a manual rectangle zone, then use magnetic snap. Auto masks now only create tight connected structures; loose guesses are blocked.");'
+    'setDetectMessage("Automatic candidate masks are disabled. Add a manual rectangle zone, then use magnetic snap to tighten it to the real object edge.");'
+  );
+
+  s = s.replace(
+    'setDetectMessage("No high-confidence candidate masks found. Add a manual rectangle zone, then use magnetic snap. Auto masks now only create tight connected structures; loose guesses are blocked.");',
+    'setDetectMessage("Automatic candidate masks are disabled. Add a manual rectangle zone, then use magnetic snap to tighten it to the real object edge.");'
   );
 
   s = s.replace(
@@ -66,13 +57,13 @@ if (fs.existsSync(detectorPath)) {
   let detector = fs.readFileSync(detectorPath, 'utf8');
 
   detector = detector.replace(
-    'const candidates = [...componentCandidates(points, lines, surface), ...linePairCandidates(points, lines, surface), ...edgeDensityGridCandidates(points, lines, surface)]',
-    'const candidates = [...componentCandidates(points, lines, surface)]'
+    /const candidates = \[[\s\S]*?\]\s*\.sort\(\(a, b\) => b\.score - a\.score\)[\s\S]*?\.slice\(0, 10\);/m,
+    'const candidates: CandidateProposal[] = [];'
   );
 
   detector = detector.replace(
-    'const candidates = [...componentCandidates(points, lines, surface), ...linePairCandidates(points, lines, surface)]',
-    'const candidates = [...componentCandidates(points, lines, surface)]'
+    /return \{ lines, candidates \};/m,
+    'return { lines, candidates: [] };'
   );
 
   fs.writeFileSync(detectorPath, detector);
