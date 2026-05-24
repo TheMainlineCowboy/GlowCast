@@ -15,6 +15,63 @@ if (!s.includes('function createCandidateMasks()')) {
   s = s.replace(marker, fn + marker);
 }
 
+if (!s.includes('function snapSelectedZoneToEdges()')) {
+  const marker = '  function updateSelectedZone(update: Partial<ProjectZone>) {';
+  const fn = `  function snapSelectedZoneToEdges() {
+    if (!selectedZone) {
+      setDetectMessage("Select an avoid zone first, then snap it to nearby edges.");
+      return;
+    }
+
+    if (!edgePoints.length) {
+      setDetectMessage("Run Show Edge Scanner first, then select a zone and snap it.");
+      return;
+    }
+
+    const searchPadX = Math.max(3, selectedZone.width * 0.35);
+    const searchPadY = Math.max(3, selectedZone.height * 0.35);
+    const minX = selectedZone.x - searchPadX;
+    const maxX = selectedZone.x + selectedZone.width + searchPadX;
+    const minY = selectedZone.y - searchPadY;
+    const maxY = selectedZone.y + selectedZone.height + searchPadY;
+
+    const nearby = edgePoints.filter((point) => (
+      point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY
+    ));
+
+    if (nearby.length < 12) {
+      setDetectMessage("Not enough nearby edge points found. Move the zone closer to the object edge and try again.");
+      return;
+    }
+
+    const sortedX = nearby.map((point) => point.x).sort((a, b) => a - b);
+    const sortedY = nearby.map((point) => point.y).sort((a, b) => a - b);
+    const q = (values: number[], amount: number) => values[Math.max(0, Math.min(values.length - 1, Math.floor((values.length - 1) * amount)))] ?? 0;
+
+    const left = q(sortedX, 0.08);
+    const right = q(sortedX, 0.92);
+    const top = q(sortedY, 0.08);
+    const bottom = q(sortedY, 0.92);
+
+    const snapped = clampZone({
+      ...selectedZone,
+      x: left,
+      y: top,
+      width: Math.max(2, right - left),
+      height: Math.max(2, bottom - top),
+      shape: selectedZone.shape ?? "rectangle",
+      points: undefined
+    });
+
+    setZones((current) => current.map((zone) => zone.id === selectedZone.id ? snapped : zone));
+    setDetectMessage("Selected zone snapped to nearby edges. Adjust manually if the object edge needs a small correction.");
+  }
+
+`;
+  if (!s.includes(marker)) throw new Error('updateSelectedZone marker not found');
+  s = s.replace(marker, fn + marker);
+}
+
 const button = `
               <button type="button" className="primary" onClick={createCandidateMasks} disabled={!imageUrl || cornerMode || surfacePolygonMode}>
                 CREATE MASKS FROM CANDIDATES
@@ -47,6 +104,18 @@ if (!s.includes('CREATE MASKS FROM CANDIDATES')) {
     'shape: "rectangle" }));',
     'shape: "rectangle" as MaskShape }));'
   );
+}
+
+if (!s.includes('Snap Selected Zone to Edges')) {
+  const marker = `              <button onClick={() => addZone(drawShape)} disabled={!imageUrl || cornerMode || surfacePolygonMode} >
+                <Plus size={18} /> Add {drawShape} Zone
+              </button>`;
+  const replacement = `${marker}
+              <button type="button" onClick={snapSelectedZoneToEdges} disabled={!selectedZone || !edgePoints.length || cornerMode || surfacePolygonMode}>
+                <ScanLine size={18} /> Snap Selected Zone to Edges
+              </button>`;
+  if (!s.includes(marker)) throw new Error('Add zone button marker not found');
+  s = s.replace(marker, replacement);
 }
 
 fs.writeFileSync(p, s);
