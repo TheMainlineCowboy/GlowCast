@@ -1,146 +1,257 @@
-export type EdgePoint = {
-  x: number;
-  y: number;
-  strength: number;
-};
+import type { EdgePoint } from "./edgeDetect";
 
-export type EdgeScanResult = {
-  width: number;
-  height: number;
-  edgeCanvasUrl: string;
-  edgePoints: EdgePoint[];
-};
+export type Coordinate = { x: number; y: number };
 
-const clampByte = (value: number) => Math.max(0, Math.min(255, value));
-
-export async function scanImageEdges(imageUrl: string): Promise<EdgeScanResult> {
-  const image = await loadImageElement(imageUrl);
-
-  const sourceCanvas = document.createElement("canvas");
-  sourceCanvas.width = image.naturalWidth || image.width;
-  sourceCanvas.height = image.naturalHeight || image.height;
-
-  const sourceCtx = sourceCanvas.getContext("2d", { willReadFrequently: true });
-  if (!sourceCtx) {
-    throw new Error("Could not create source canvas.");
-  }
-
-  sourceCtx.drawImage(image, 0, 0, sourceCanvas.width, sourceCanvas.height);
-
-  const source = sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
-  const { width, height } = source;
-  const gray = new Uint8ClampedArray(width * height);
-
-  for (let i = 0; i < source.data.length; i += 4) {
-    const r = source.data[i];
-    const g = source.data[i + 1];
-    const b = source.data[i + 2];
-    gray[i / 4] = clampByte(0.299 * r + 0.587 * g + 0.114 * b);
-  }
-
-  const edgeCanvas = document.createElement("canvas");
-  edgeCanvas.width = width;
-  edgeCanvas.height = height;
-
-  const edgeCtx = edgeCanvas.getContext("2d");
-  if (!edgeCtx) {
-    throw new Error("Could not create edge overlay.");
-  }
-
-  const edgeImage = edgeCtx.createImageData(width, height);
-  const rawEdges: EdgePoint[] = [];
-  const threshold = 48;
-
-  for (let y = 1; y < height - 1; y++) {
-    for (let x = 1; x < width - 1; x++) {
-      const index = y * width + x;
-
-      const gx =
-        -gray[index - width - 1] +
-        gray[index - width + 1] -
-        2 * gray[index - 1] +
-        2 * gray[index + 1] -
-        gray[index + width - 1] +
-        gray[index + width + 1];
-
-      const gy =
-        -gray[index - width - 1] -
-        2 * gray[index - width] -
-        gray[index - width + 1] +
-        gray[index + width - 1] +
-        2 * gray[index + width] +
-        gray[index + width + 1];
-
-      const strength = Math.sqrt(gx * gx + gy * gy);
-
-      if (strength > threshold) {
-        const pixel = index * 4;
-        edgeImage.data[pixel] = 34;
-        edgeImage.data[pixel + 1] = 211;
-        edgeImage.data[pixel + 2] = 238;
-        edgeImage.data[pixel + 3] = clampByte(Math.min(255, strength));
-
-        rawEdges.push({
-          x: (x / width) * 100,
-          y: (y / height) * 100,
-          strength
-        });
-      }
-    }
-  }
-
-  edgeCtx.putImageData(edgeImage, 0, 0);
-
-  const maxPoints = 9000;
-  const stride = Math.max(1, Math.ceil(rawEdges.length / maxPoints));
-  const edgePoints = rawEdges.filter((_, index) => index % stride === 0);
-
-  return {
-    width,
-    height,
-    edgeCanvasUrl: edgeCanvas.toDataURL("image/png"),
-    edgePoints
+export type AutoMaskZone = {
+  id: string;
+  type: "auto-generated";
+  shape: "polygon";
+  points: Coordinate[];
+  boundingBox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
   };
+  enabled: boolean;
+};
+
+interface ClusterGridCell {
+  points: EdgePoint[];
+  visited: boolean;
 }
 
-export function snapPointToEdge(
-  point: { x: number; y: number },
+/**
+ * Calculates the perpendicular distance from a point to a line segment.
+ */
+function getPerpendicularDistance(point: Coordinate, lineStart: Coordinate, lineEnd: Coordinate): number {
+  const dx = lineEnd.x - lineStart.x;
+  const dy = lineEnd.y - lineStart.y;
+  
+  if (dx === 0 && dy === 0) {
+    return Math.sqrt((point.x - lineStart.x) ** 2 + (point.y - lineStart.y) ** 2);
+  }
+  
+  const numerator = Math.abs(dy * point.x - dx * point.y + lineEnd.x * lineStart.y - lineEnd.y * lineStart.x);
+  const denominator = Math.sqrt(dx * dx + dy * dy);
+  return numerator / denominator;
+}
+
+/**
+ * Simplifies a high-frequency array of coordinates using the Douglas-Peucker algorithm.
+ */
+export function simplifyPath(points: Coordinate[], tolerance: number): Coordinate[] {
+  if (points.length <= 2) return points;
+  
+  let maxDistance = 0;
+  let index = 0;
+  const end = points.length - 1;
+  
+  for (let i = 1; i < end; i++) {
+    const distance = getPerpendicularDistance(points[i], points[0], points[end]);
+    if (distance > maxDistance) {
+      maxDistance = distance;
+      index = i;
+    }
+  }
+  
+  if (maxDistance > tolerance) {
+    const results1 = simplifyPath(points.slice(0, index + 1), tolerance);
+    const results2 = simplifyPath(points.slice(index), tolerance);
+    return results1.slice(0, results1.length - 1).concat(results2);
+  }
+  
+  return [points[0], points[end]];
+}
+
+/**
+ * Automatically groups raw edges falling inside the projection target,
+ * structuring them into bounded polygonal zones.
+ * * @param edgePoints Source arrays from the scanImageEdges response
+ * @param projectionZone Bounding matrix currently targeted on your canvas
+ * @param options Calibration controls for grouping density and edge filtering
+ */
+export function generateAutoMasks(
   edgePoints: EdgePoint[],
-  radiusPercent = 1.2
-) {
-  if (!edgePoints.length) return point;
+  projectionZone: { x: number; y: number; width: number; height: number },
+  options = { clusterRadius: 1.5, minPoints: 15, tolerance: 0.8 }
+): AutoMaskZone[] {
+  // 1. Isolate vectors falling explicitly within the active projection bounding area
+  const containedPoints = edgePoints.filter((p) => {
+    return (
+      p.x >= projectionZone.x &&
+      p.x <= projectionZone.x + projectionZone.width &&
+      p.y >= projectionZone.y &&
+      p.y <= projectionZone.y + projectionZone.height
+    );
+  });
 
-  let best = point;
-  let bestScore = Number.POSITIVE_INFINITY;
+  if (containedPoints.length === 0) return [];
 
-  for (const edge of edgePoints) {
-    const dx = edge.x - point.x;
-    const dy = edge.y - point.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+  // 2. Map coordinates to a spatial hash grid to perform fast neighbor queries
+  const cellSize = options.clusterRadius;
+  const grid: Map<string, ClusterGridCell> = new Map();
 
-    if (distance <= radiusPercent) {
-      const score = distance - edge.strength / 1000;
+  const getGridKey = (x: number, y: number) => {
+    const cx = Math.floor(x / cellSize);
+    const cy = Math.floor(y / cellSize);
+    return `${cx},${cy}`;
+  };
 
-      if (score < bestScore) {
-        bestScore = score;
-        best = {
-          x: edge.x,
-          y: edge.y
-        };
+  for (const p of containedPoints) {
+    const key = getGridKey(p.x, p.y);
+    if (!grid.has(key)) {
+      grid.set(key, { points: [], visited: false });
+    }
+    grid.get(key)!.points.push(p);
+  }
+
+  const clusters: EdgePoint[][] = [];
+
+  // 3. Cluster contiguous paths using spatial search passes
+  for (const [key, cell] of grid.entries()) {
+    if (cell.visited || cell.points.length === 0) continue;
+
+    const queue: string[] = [key];
+    const currentCluster: EdgePoint[] = [];
+    cell.visited = true;
+
+    while (queue.length > 0) {
+      const currentKey = queue.shift()!;
+      const currentCell = grid.get(currentKey);
+      if (!currentCell) continue;
+
+      currentCluster.push(...currentCell.points);
+
+      // Extract parts from key coordinate positions
+      const [cx, cy] = currentKey.split(",").map(Number);
+
+      // Check all 8 neighboring directions around the cell
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          if (dx === 0 && dy === 0) continue;
+          const neighborKey = `${cx + dx},${cy + dy}`;
+          const neighborCell = grid.get(neighborKey);
+          
+          if (neighborCell && !neighborCell.visited && neighborCell.points.length > 0) {
+            neighborCell.visited = true;
+            queue.push(neighborKey);
+          }
+        }
       }
+    }
+
+    if (currentCluster.length >= options.minPoints) {
+      clusters.push(currentCluster);
     }
   }
 
-  return best;
+  const generatedZones: AutoMaskZone[] = [];
+
+  // 4. Construct sorted boundaries and apply linear vector simplification
+  for (const cluster of clusters) {
+    // Sort coordinates angularly to form a clean, non-self-intersecting geometric path
+    let sumX = 0;
+    let sumY = 0;
+    for (const p of cluster) {
+      sumX += p.x;
+      sumY += p.y;
+    }
+    const center = { x: sumX / cluster.length, y: sumY / cluster.length };
+
+    const sortedCoords: Coordinate[] = cluster
+      .map((p) => ({ x: p.x, y: p.y }))
+      .sort((a, b) => {
+        const angleA = Math.atan2(a.y - center.y, a.x - center.x);
+        const angleB = Math.atan2(b.y - center.y, b.x - center.x);
+        return angleA - angleB;
+      });
+
+    // Close the path loop explicitly
+    if (sortedCoords.length > 0) {
+      sortedCoords.push({ ...sortedCoords[0] });
+    }
+
+    // Apply linear simplification to remove extraneous points along straight lines
+    const simplified = simplifyPath(sortedCoords, options.tolerance);
+
+    // Remove closing coordinate if it was retained after path simplification
+    if (simplified.length > 2) {
+      simplified.pop();
+    }
+
+    if (simplified.length < 3) continue;
+
+    // Calculate strict bounding box coordinates
+    const xs = simplified.map((p) => p.x);
+    const ys = simplified.map((p) => p.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+
+    generatedZones.push({
+      id: `auto_mask_${Math.random().toString(36).substr(2, 9)}`,
+      type: "auto-generated",
+      shape: "polygon",
+      points: simplified,
+      boundingBox: {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY,
+      },
+      enabled: true,
+    });
+  }
+
+  return generatedZones;
 }
 
-function loadImageElement(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
+/**
+ * Renders an inverted canvas context block, clipping out detected geometric
+ * features while preserving output to the rest of the target projection area.
+ */
+export function drawProjectionWithMasks(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  projectionZone: { x: number; y: number; width: number; height: number },
+  masks: AutoMaskZone[],
+  renderEffectCallback: () => void
+): void {
+  ctx.save();
 
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Could not load image."));
+  // 1. Constrain execution bounds to the active projection area
+  ctx.beginPath();
+  ctx.rect(
+    (projectionZone.x / 100) * width,
+    (projectionZone.y / 100) * height,
+    (projectionZone.width / 100) * width,
+    (projectionZone.height / 100) * height
+  );
+  ctx.clip();
 
-    image.src = src;
-  });
+  // 2. Punch inverted stencil holes through the canvas buffer for active masks
+  for (const mask of masks) {
+    if (!mask.enabled || mask.points.length < 3) continue;
+
+    ctx.beginPath();
+    // Trace outer projection zone bounds counter-clockwise to execute standard non-zero winding rule inversion
+    ctx.rect(width, 0, -width, height);
+
+    // Trace inner mask vectors clockwise
+    const firstPoint = mask.points[0];
+    ctx.moveTo((firstPoint.x / 100) * width, (firstPoint.y / 100) * height);
+    for (let i = 1; i < mask.points.length; i++) {
+      ctx.lineTo((mask.points[i].x / 100) * width, (mask.points[i].y / 100) * height);
+    }
+    ctx.closePath();
+    ctx.clip();
+  }
+
+  // 3. Execute the standard projection mapping pipeline inside the unclipped regions
+  renderEffectCallback();
+
+  ctx.restore();
 }
