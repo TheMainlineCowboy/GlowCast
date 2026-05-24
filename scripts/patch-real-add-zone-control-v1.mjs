@@ -14,21 +14,55 @@ if (fs.existsSync(appPath)) {
     '      return;\n' +
     '    }\n' +
     '\n' +
-    '    const radius = Math.max(2, Math.min(selectedZone.width, selectedZone.height) * 0.45);\n' +
-    '    const p1 = snapPointToEdge({ x: selectedZone.x, y: selectedZone.y }, edgePoints, radius);\n' +
-    '    const p2 = snapPointToEdge({ x: selectedZone.x + selectedZone.width, y: selectedZone.y + selectedZone.height }, edgePoints, radius);\n' +
+    '    const padX = Math.max(1.2, selectedZone.width * 0.18);\n' +
+    '    const padY = Math.max(1.2, selectedZone.height * 0.18);\n' +
+    '    const leftLimit = selectedZone.x - padX;\n' +
+    '    const rightLimit = selectedZone.x + selectedZone.width + padX;\n' +
+    '    const topLimit = selectedZone.y - padY;\n' +
+    '    const bottomLimit = selectedZone.y + selectedZone.height + padY;\n' +
     '\n' +
-    '    const x = Math.min(p1.x, p2.x);\n' +
-    '    const y = Math.min(p1.y, p2.y);\n' +
-    '    const width = Math.max(2, Math.abs(p2.x - p1.x));\n' +
-    '    const height = Math.max(2, Math.abs(p2.y - p1.y));\n' +
+    '    const localEdges = edgePoints.filter((point) => point.x >= leftLimit && point.x <= rightLimit && point.y >= topLimit && point.y <= bottomLimit);\n' +
+    '\n' +
+    '    if (localEdges.length < 10) {\n' +
+    '      setDetectMessage("Not enough nearby edge points. Move the zone closer to the object and try again.");\n' +
+    '      return;\n' +
+    '    }\n' +
+    '\n' +
+    '    const xs = localEdges.map((point) => point.x).sort((a, b) => a - b);\n' +
+    '    const ys = localEdges.map((point) => point.y).sort((a, b) => a - b);\n' +
+    '    const pick = (values: number[], amount: number) => values[Math.max(0, Math.min(values.length - 1, Math.floor((values.length - 1) * amount)))] ?? 0;\n' +
+    '\n' +
+    '    const x = pick(xs, 0.10);\n' +
+    '    const y = pick(ys, 0.10);\n' +
+    '    const right = pick(xs, 0.90);\n' +
+    '    const bottom = pick(ys, 0.90);\n' +
+    '    const width = Math.max(2, right - x);\n' +
+    '    const height = Math.max(2, bottom - y);\n' +
+    '\n' +
+    '    const oldArea = Math.max(1, selectedZone.width * selectedZone.height);\n' +
+    '    const newArea = Math.max(1, width * height);\n' +
+    '    const centerX = x + width / 2;\n' +
+    '    const centerY = y + height / 2;\n' +
+    '    const oldCenterX = selectedZone.x + selectedZone.width / 2;\n' +
+    '    const oldCenterY = selectedZone.y + selectedZone.height / 2;\n' +
+    '    const centerMove = Math.hypot(centerX - oldCenterX, centerY - oldCenterY);\n' +
+    '\n' +
+    '    if (newArea < oldArea * 0.18 || newArea > oldArea * 2.75 || centerMove > Math.max(selectedZone.width, selectedZone.height) * 0.45) {\n' +
+    '      setDetectMessage("Snap rejected because it would jump too far. Resize the zone closer around the object and try again.");\n' +
+    '      return;\n' +
+    '    }\n' +
     '\n' +
     '    updateSelectedZone({ x, y, width, height, points: undefined });\n' +
-    '    setDetectMessage("Selected zone snapped to nearby edge points.");\n' +
+    '    setDetectMessage("Selected zone tightened around nearby edge points.");\n' +
     '  }\n' +
     '\n';
 
-  if (!app.includes('function snapSelectedZoneToEdges()')) {
+  const oldFunctionStart = app.indexOf('  function snapSelectedZoneToEdges() {');
+  const updateFunctionStart = app.indexOf(fnMarker);
+
+  if (oldFunctionStart >= 0 && updateFunctionStart > oldFunctionStart) {
+    app = app.slice(0, oldFunctionStart) + snapFn + app.slice(updateFunctionStart);
+  } else if (!app.includes('function snapSelectedZoneToEdges()')) {
     if (app.includes(fnMarker)) {
       app = app.replace(fnMarker, snapFn + fnMarker);
     } else {
@@ -53,9 +87,6 @@ if (fs.existsSync(appPath)) {
     for (const markerText of markerTexts) {
       const textIndex = app.indexOf(markerText);
       if (textIndex < 0) continue;
-
-      const buttonStart = app.lastIndexOf('<button', textIndex);
-      if (buttonStart < 0) continue;
 
       const buttonEnd = app.indexOf('</button>', textIndex);
       if (buttonEnd < 0) continue;
@@ -87,4 +118,4 @@ if (fs.existsSync(detectorPath)) {
   fs.writeFileSync(detectorPath, detector, 'utf8');
 }
 
-console.log('snap selected zone patch completed without fatal marker errors');
+console.log('guided snap behavior updated');
