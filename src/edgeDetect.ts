@@ -1,6 +1,11 @@
-export type EdgePoint = { x: number; y: number; strength?: number };
+export type EdgePoint = { x: number; y: number; strength: number };
 
 export type Coordinate = { x: number; y: number };
+
+export type EdgeScanResult = {
+  edgeCanvasUrl: string;
+  edgePoints: EdgePoint[];
+};
 
 export type AutoMaskZone = {
   id: string;
@@ -19,6 +24,103 @@ export type AutoMaskZone = {
 interface ClusterGridCell {
   points: EdgePoint[];
   visited: boolean;
+}
+
+function loadScanImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Could not load image for edge scanning."));
+    image.src = src;
+  });
+}
+
+/**
+ * Lightweight local edge detector used by the manual mask snap mode.
+ * Coordinates are returned as percentages so they match the existing editor surface.
+ */
+export async function scanImageEdges(src: string): Promise<EdgeScanResult> {
+  const image = await loadScanImage(src);
+  const maxSize = 900;
+  const scale = Math.min(maxSize / image.naturalWidth, maxSize / image.naturalHeight, 1);
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) throw new Error("Could not start edge scanner canvas.");
+
+  ctx.drawImage(image, 0, 0, width, height);
+  const source = ctx.getImageData(0, 0, width, height);
+  const data = source.data;
+  const gray = new Uint8ClampedArray(width * height);
+
+  for (let i = 0; i < gray.length; i += 1) {
+    const j = i * 4;
+    gray[i] = Math.round(data[j] * 0.299 + data[j + 1] * 0.587 + data[j + 2] * 0.114);
+  }
+
+  const overlay = ctx.createImageData(width, height);
+  const out = overlay.data;
+  const edgePoints: EdgePoint[] = [];
+  const threshold = 58;
+  const stride = Math.max(1, Math.round(Math.min(width, height) / 450));
+
+  for (let y = 1; y < height - 1; y += stride) {
+    for (let x = 1; x < width - 1; x += stride) {
+      const i = y * width + x;
+      const gx =
+        -gray[i - width - 1] + gray[i - width + 1] +
+        -2 * gray[i - 1] + 2 * gray[i + 1] +
+        -gray[i + width - 1] + gray[i + width + 1];
+      const gy =
+        -gray[i - width - 1] - 2 * gray[i - width] - gray[i - width + 1] +
+        gray[i + width - 1] + 2 * gray[i + width] + gray[i + width + 1];
+      const strength = Math.min(255, Math.round(Math.hypot(gx, gy)));
+
+      if (strength < threshold) continue;
+
+      edgePoints.push({
+        x: (x / width) * 100,
+        y: (y / height) * 100,
+        strength
+      });
+
+      const p = i * 4;
+      out[p] = 0;
+      out[p + 1] = 220;
+      out[p + 2] = 255;
+      out[p + 3] = Math.min(230, Math.max(90, strength));
+    }
+  }
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.putImageData(overlay, 0, 0);
+
+  return {
+    edgeCanvasUrl: canvas.toDataURL("image/png"),
+    edgePoints
+  };
+}
+
+/**
+ * Snaps a percentage-space point to the nearest detected edge point when close enough.
+ */
+export function snapPointToEdge(point: Coordinate, edgePoints: EdgePoint[], maxDistance = 2.2): Coordinate {
+  let best: EdgePoint | null = null;
+  let bestDistance = maxDistance;
+
+  for (const edge of edgePoints) {
+    const distance = Math.hypot(edge.x - point.x, edge.y - point.y);
+    if (distance < bestDistance) {
+      best = edge;
+      bestDistance = distance;
+    }
+  }
+
+  return best ? { x: best.x, y: best.y } : point;
 }
 
 /**
