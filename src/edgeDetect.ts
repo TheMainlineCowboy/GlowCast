@@ -1,4 +1,4 @@
-import type { EdgePoint } from "./edgeDetect";
+export type EdgePoint = { x: number; y: number; strength?: number };
 
 export type Coordinate = { x: number; y: number };
 
@@ -67,7 +67,8 @@ export function simplifyPath(points: Coordinate[], tolerance: number): Coordinat
 /**
  * Automatically groups raw edges falling inside the projection target,
  * structuring them into bounded polygonal zones.
- * * @param edgePoints Source arrays from the scanImageEdges response
+ *
+ * @param edgePoints Source arrays from the scanImageEdges response
  * @param projectionZone Bounding matrix currently targeted on your canvas
  * @param options Calibration controls for grouping density and edge filtering
  */
@@ -76,7 +77,6 @@ export function generateAutoMasks(
   projectionZone: { x: number; y: number; width: number; height: number },
   options = { clusterRadius: 1.5, minPoints: 15, tolerance: 0.8 }
 ): AutoMaskZone[] {
-  // 1. Isolate vectors falling explicitly within the active projection bounding area
   const containedPoints = edgePoints.filter((p) => {
     return (
       p.x >= projectionZone.x &&
@@ -88,7 +88,6 @@ export function generateAutoMasks(
 
   if (containedPoints.length === 0) return [];
 
-  // 2. Map coordinates to a spatial hash grid to perform fast neighbor queries
   const cellSize = options.clusterRadius;
   const grid: Map<string, ClusterGridCell> = new Map();
 
@@ -108,7 +107,6 @@ export function generateAutoMasks(
 
   const clusters: EdgePoint[][] = [];
 
-  // 3. Cluster contiguous paths using spatial search passes
   for (const [key, cell] of grid.entries()) {
     if (cell.visited || cell.points.length === 0) continue;
 
@@ -123,10 +121,8 @@ export function generateAutoMasks(
 
       currentCluster.push(...currentCell.points);
 
-      // Extract parts from key coordinate positions
       const [cx, cy] = currentKey.split(",").map(Number);
 
-      // Check all 8 neighboring directions around the cell
       for (let dx = -1; dx <= 1; dx++) {
         for (let dy = -1; dy <= 1; dy++) {
           if (dx === 0 && dy === 0) continue;
@@ -148,9 +144,7 @@ export function generateAutoMasks(
 
   const generatedZones: AutoMaskZone[] = [];
 
-  // 4. Construct sorted boundaries and apply linear vector simplification
   for (const cluster of clusters) {
-    // Sort coordinates angularly to form a clean, non-self-intersecting geometric path
     let sumX = 0;
     let sumY = 0;
     for (const p of cluster) {
@@ -167,22 +161,18 @@ export function generateAutoMasks(
         return angleA - angleB;
       });
 
-    // Close the path loop explicitly
     if (sortedCoords.length > 0) {
       sortedCoords.push({ ...sortedCoords[0] });
     }
 
-    // Apply linear simplification to remove extraneous points along straight lines
     const simplified = simplifyPath(sortedCoords, options.tolerance);
 
-    // Remove closing coordinate if it was retained after path simplification
     if (simplified.length > 2) {
       simplified.pop();
     }
 
     if (simplified.length < 3) continue;
 
-    // Calculate strict bounding box coordinates
     const xs = simplified.map((p) => p.x);
     const ys = simplified.map((p) => p.y);
     const minX = Math.min(...xs);
@@ -222,7 +212,6 @@ export function drawProjectionWithMasks(
 ): void {
   ctx.save();
 
-  // 1. Constrain execution bounds to the active projection area
   ctx.beginPath();
   ctx.rect(
     (projectionZone.x / 100) * width,
@@ -232,15 +221,12 @@ export function drawProjectionWithMasks(
   );
   ctx.clip();
 
-  // 2. Punch inverted stencil holes through the canvas buffer for active masks
   for (const mask of masks) {
     if (!mask.enabled || mask.points.length < 3) continue;
 
     ctx.beginPath();
-    // Trace outer projection zone bounds counter-clockwise to execute standard non-zero winding rule inversion
     ctx.rect(width, 0, -width, height);
 
-    // Trace inner mask vectors clockwise
     const firstPoint = mask.points[0];
     ctx.moveTo((firstPoint.x / 100) * width, (firstPoint.y / 100) * height);
     for (let i = 1; i < mask.points.length; i++) {
@@ -250,7 +236,6 @@ export function drawProjectionWithMasks(
     ctx.clip();
   }
 
-  // 3. Execute the standard projection mapping pipeline inside the unclipped regions
   renderEffectCallback();
 
   ctx.restore();
