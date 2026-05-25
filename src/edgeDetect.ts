@@ -4,6 +4,7 @@ export type Coordinate = { x: number; y: number };
 
 export type EdgeScanResult = {
   edgeCanvasUrl: string;
+  edgeRegionCanvasUrl: string;
   edgePoints: EdgePoint[];
 };
 
@@ -35,10 +36,6 @@ function loadScanImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-/**
- * Lightweight local edge detector used by the manual mask snap mode.
- * Coordinates are returned as percentages so they match the existing editor surface.
- */
 export async function scanImageEdges(src: string): Promise<EdgeScanResult> {
   const image = await loadScanImage(src);
   const maxSize = 900;
@@ -98,16 +95,15 @@ export async function scanImageEdges(src: string): Promise<EdgeScanResult> {
 
   ctx.clearRect(0, 0, width, height);
   ctx.putImageData(overlay, 0, 0);
+  const edgeCanvasUrl = canvas.toDataURL("image/png");
 
   return {
-    edgeCanvasUrl: canvas.toDataURL("image/png"),
+    edgeCanvasUrl,
+    edgeRegionCanvasUrl: edgeCanvasUrl,
     edgePoints
   };
 }
 
-/**
- * Snaps a percentage-space point to the nearest detected edge point when close enough.
- */
 export function snapPointToEdge(point: Coordinate, edgePoints: EdgePoint[], maxDistance = 2.2): Coordinate {
   let best: EdgePoint | null = null;
   let bestDistance = maxDistance;
@@ -123,9 +119,6 @@ export function snapPointToEdge(point: Coordinate, edgePoints: EdgePoint[], maxD
   return best ? { x: best.x, y: best.y } : point;
 }
 
-/**
- * Calculates the perpendicular distance from a point to a line segment.
- */
 function getPerpendicularDistance(point: Coordinate, lineStart: Coordinate, lineEnd: Coordinate): number {
   const dx = lineEnd.x - lineStart.x;
   const dy = lineEnd.y - lineStart.y;
@@ -139,9 +132,6 @@ function getPerpendicularDistance(point: Coordinate, lineStart: Coordinate, line
   return numerator / denominator;
 }
 
-/**
- * Simplifies a high-frequency array of coordinates using the Douglas-Peucker algorithm.
- */
 export function simplifyPath(points: Coordinate[], tolerance: number): Coordinate[] {
   if (points.length <= 2) return points;
   
@@ -166,14 +156,6 @@ export function simplifyPath(points: Coordinate[], tolerance: number): Coordinat
   return [points[0], points[end]];
 }
 
-/**
- * Automatically groups raw edges falling inside the projection target,
- * structuring them into bounded polygonal zones.
- *
- * @param edgePoints Source arrays from the scanImageEdges response
- * @param projectionZone Bounding matrix currently targeted on your canvas
- * @param options Calibration controls for grouping density and edge filtering
- */
 export function generateAutoMasks(
   edgePoints: EdgePoint[],
   projectionZone: { x: number; y: number; width: number; height: number },
@@ -300,10 +282,6 @@ export function generateAutoMasks(
   return generatedZones;
 }
 
-/**
- * Renders an inverted canvas context block, clipping out detected geometric
- * features while preserving output to the rest of the target projection area.
- */
 export function drawProjectionWithMasks(
   ctx: CanvasRenderingContext2D,
   width: number,
