@@ -1,5 +1,4 @@
 export type EdgePoint = { x: number; y: number; strength: number };
-
 export type Coordinate = { x: number; y: number };
 
 export type EdgeScanResult = {
@@ -13,19 +12,19 @@ export type AutoMaskZone = {
   type: "auto-generated";
   shape: "polygon";
   points: Coordinate[];
-  boundingBox: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
+  boundingBox: { x: number; y: number; width: number; height: number };
   enabled: boolean;
 };
 
-interface ClusterGridCell {
+type ProjectionZone = { x: number; y: number; width: number; height: number };
+type AutoMaskOptions = { clusterRadius: number; minPoints: number; tolerance: number };
+
+type GridCell = {
+  x: number;
+  y: number;
   points: EdgePoint[];
   visited: boolean;
-}
+};
 
 function loadScanImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -42,7 +41,6 @@ export async function scanImageEdges(src: string): Promise<EdgeScanResult> {
   const scale = Math.min(maxSize / image.naturalWidth, maxSize / image.naturalHeight, 1);
   const width = Math.max(1, Math.round(image.naturalWidth * scale));
   const height = Math.max(1, Math.round(image.naturalHeight * scale));
-
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -76,15 +74,9 @@ export async function scanImageEdges(src: string): Promise<EdgeScanResult> {
         -gray[i - width - 1] - 2 * gray[i - width] - gray[i - width + 1] +
         gray[i + width - 1] + 2 * gray[i + width] + gray[i + width + 1];
       const strength = Math.min(255, Math.round(Math.hypot(gx, gy)));
-
       if (strength < threshold) continue;
 
-      edgePoints.push({
-        x: (x / width) * 100,
-        y: (y / height) * 100,
-        strength
-      });
-
+      edgePoints.push({ x: (x / width) * 100, y: (y / height) * 100, strength });
       const p = i * 4;
       out[p] = 0;
       out[p + 1] = 220;
@@ -96,12 +88,7 @@ export async function scanImageEdges(src: string): Promise<EdgeScanResult> {
   ctx.clearRect(0, 0, width, height);
   ctx.putImageData(overlay, 0, 0);
   const edgeCanvasUrl = canvas.toDataURL("image/png");
-
-  return {
-    edgeCanvasUrl,
-    edgeRegionCanvasUrl: edgeCanvasUrl,
-    edgePoints
-  };
+  return { edgeCanvasUrl, edgeRegionCanvasUrl: edgeCanvasUrl, edgePoints };
 }
 
 export function snapPointToEdge(point: Coordinate, edgePoints: EdgePoint[], maxDistance = 2.2): Coordinate {
@@ -119,179 +106,143 @@ export function snapPointToEdge(point: Coordinate, edgePoints: EdgePoint[], maxD
   return best ? { x: best.x, y: best.y } : point;
 }
 
-function getPerpendicularDistance(point: Coordinate, lineStart: Coordinate, lineEnd: Coordinate): number {
-  const dx = lineEnd.x - lineStart.x;
-  const dy = lineEnd.y - lineStart.y;
-  
-  if (dx === 0 && dy === 0) {
-    return Math.sqrt((point.x - lineStart.x) ** 2 + (point.y - lineStart.y) ** 2);
-  }
-  
-  const numerator = Math.abs(dy * point.x - dx * point.y + lineEnd.x * lineStart.y - lineEnd.y * lineStart.x);
-  const denominator = Math.sqrt(dx * dx + dy * dy);
-  return numerator / denominator;
+function insideZone(point: EdgePoint, zone: ProjectionZone) {
+  return point.x >= zone.x && point.x <= zone.x + zone.width && point.y >= zone.y && point.y <= zone.y + zone.height;
 }
 
-export function simplifyPath(points: Coordinate[], tolerance: number): Coordinate[] {
-  if (points.length <= 2) return points;
-  
-  let maxDistance = 0;
-  let index = 0;
-  const end = points.length - 1;
-  
-  for (let i = 1; i < end; i++) {
-    const distance = getPerpendicularDistance(points[i], points[0], points[end]);
-    if (distance > maxDistance) {
-      maxDistance = distance;
-      index = i;
-    }
-  }
-  
-  if (maxDistance > tolerance) {
-    const results1 = simplifyPath(points.slice(0, index + 1), tolerance);
-    const results2 = simplifyPath(points.slice(index), tolerance);
-    return results1.slice(0, results1.length - 1).concat(results2);
-  }
-  
-  return [points[0], points[end]];
+function rectPoints(box: ProjectionZone): Coordinate[] {
+  return [
+    { x: box.x, y: box.y },
+    { x: box.x + box.width, y: box.y },
+    { x: box.x + box.width, y: box.y + box.height },
+    { x: box.x, y: box.y + box.height }
+  ];
+}
+
+function overlapAmount(a: ProjectionZone, b: ProjectionZone) {
+  const xOverlap = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+  const yOverlap = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+  return xOverlap * yOverlap;
+}
+
+function candidateScore(zone: ProjectionZone, pointCount: number) {
+  const area = Math.max(1, zone.width * zone.height);
+  const aspect = zone.width / Math.max(zone.height, 0.01);
+  const windowAspectBonus = aspect >= 0.35 && aspect <= 3.2 ? 1.25 : 0.75;
+  return (pointCount / area) * windowAspectBonus;
 }
 
 export function generateAutoMasks(
   edgePoints: EdgePoint[],
-  projectionZone: { x: number; y: number; width: number; height: number },
-  options = { clusterRadius: 1.5, minPoints: 15, tolerance: 0.8 }
+  projectionZone: ProjectionZone,
+  options: AutoMaskOptions = { clusterRadius: 1.8, minPoints: 14, tolerance: 0.8 }
 ): AutoMaskZone[] {
-  const containedPoints = edgePoints.filter((p) => {
-    return (
-      p.x >= projectionZone.x &&
-      p.x <= projectionZone.x + projectionZone.width &&
-      p.y >= projectionZone.y &&
-      p.y <= projectionZone.y + projectionZone.height
-    );
-  });
+  const containedPoints = edgePoints.filter((point) => insideZone(point, projectionZone));
+  if (!containedPoints.length) return [];
 
-  if (containedPoints.length === 0) return [];
+  const cellSize = Math.max(0.8, Math.min(3, options.clusterRadius));
+  const grid = new Map<string, GridCell>();
+  const keyFor = (x: number, y: number) => `${Math.floor(x / cellSize)},${Math.floor(y / cellSize)}`;
 
-  const cellSize = options.clusterRadius;
-  const grid: Map<string, ClusterGridCell> = new Map();
-
-  const getGridKey = (x: number, y: number) => {
-    const cx = Math.floor(x / cellSize);
-    const cy = Math.floor(y / cellSize);
-    return `${cx},${cy}`;
-  };
-
-  for (const p of containedPoints) {
-    const key = getGridKey(p.x, p.y);
-    if (!grid.has(key)) {
-      grid.set(key, { points: [], visited: false });
-    }
-    grid.get(key)!.points.push(p);
+  for (const point of containedPoints) {
+    const key = keyFor(point.x, point.y);
+    const [gx, gy] = key.split(",").map(Number);
+    const cell = grid.get(key) ?? { x: gx, y: gy, points: [], visited: false };
+    cell.points.push(point);
+    grid.set(key, cell);
   }
 
-  const clusters: EdgePoint[][] = [];
+  const denseCells = new Map([...grid.entries()].filter(([, cell]) => cell.points.length >= 2));
+  const components: EdgePoint[][] = [];
 
-  for (const [key, cell] of grid.entries()) {
-    if (cell.visited || cell.points.length === 0) continue;
+  for (const [startKey, startCell] of denseCells.entries()) {
+    if (startCell.visited) continue;
+    const queue = [startKey];
+    const component: EdgePoint[] = [];
+    startCell.visited = true;
 
-    const queue: string[] = [key];
-    const currentCluster: EdgePoint[] = [];
-    cell.visited = true;
+    while (queue.length) {
+      const key = queue.shift()!;
+      const cell = denseCells.get(key);
+      if (!cell) continue;
+      component.push(...cell.points);
 
-    while (queue.length > 0) {
-      const currentKey = queue.shift()!;
-      const currentCell = grid.get(currentKey);
-      if (!currentCell) continue;
-
-      currentCluster.push(...currentCell.points);
-
-      const [cx, cy] = currentKey.split(",").map(Number);
-
-      for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        for (let dy = -1; dy <= 1; dy += 1) {
           if (dx === 0 && dy === 0) continue;
-          const neighborKey = `${cx + dx},${cy + dy}`;
-          const neighborCell = grid.get(neighborKey);
-          
-          if (neighborCell && !neighborCell.visited && neighborCell.points.length > 0) {
-            neighborCell.visited = true;
-            queue.push(neighborKey);
-          }
+          const neighbor = denseCells.get(`${cell.x + dx},${cell.y + dy}`);
+          if (!neighbor || neighbor.visited) continue;
+          neighbor.visited = true;
+          queue.push(`${cell.x + dx},${cell.y + dy}`);
         }
       }
     }
 
-    if (currentCluster.length >= options.minPoints) {
-      clusters.push(currentCluster);
-    }
+    if (component.length >= options.minPoints) components.push(component);
   }
 
-  const generatedZones: AutoMaskZone[] = [];
+  const maxCandidateArea = projectionZone.width * projectionZone.height * 0.35;
+  const candidates = components
+    .map((points) => {
+      const xs = points.map((point) => point.x);
+      const ys = points.map((point) => point.y);
+      const pad = Math.max(0.7, cellSize * 0.35);
+      const x = Math.max(projectionZone.x, Math.min(...xs) - pad);
+      const y = Math.max(projectionZone.y, Math.min(...ys) - pad);
+      const maxX = Math.min(projectionZone.x + projectionZone.width, Math.max(...xs) + pad);
+      const maxY = Math.min(projectionZone.y + projectionZone.height, Math.max(...ys) + pad);
+      const box = { x, y, width: maxX - x, height: maxY - y };
+      return { box, count: points.length, score: candidateScore(box, points.length) };
+    })
+    .filter(({ box, count }) => {
+      const area = box.width * box.height;
+      const aspect = box.width / Math.max(box.height, 0.01);
+      return (
+        count >= options.minPoints &&
+        box.width >= 2.5 &&
+        box.height >= 2.5 &&
+        box.width <= projectionZone.width * 0.75 &&
+        box.height <= projectionZone.height * 0.75 &&
+        area <= maxCandidateArea &&
+        aspect >= 0.2 &&
+        aspect <= 5
+      );
+    })
+    .sort((a, b) => b.score - a.score);
 
-  for (const cluster of clusters) {
-    let sumX = 0;
-    let sumY = 0;
-    for (const p of cluster) {
-      sumX += p.x;
-      sumY += p.y;
-    }
-    const center = { x: sumX / cluster.length, y: sumY / cluster.length };
+  const accepted: ProjectionZone[] = [];
 
-    const sortedCoords: Coordinate[] = cluster
-      .map((p) => ({ x: p.x, y: p.y }))
-      .sort((a, b) => {
-        const angleA = Math.atan2(a.y - center.y, a.x - center.x);
-        const angleB = Math.atan2(b.y - center.y, b.x - center.x);
-        return angleA - angleB;
-      });
-
-    if (sortedCoords.length > 0) {
-      sortedCoords.push({ ...sortedCoords[0] });
-    }
-
-    const simplified = simplifyPath(sortedCoords, options.tolerance);
-
-    if (simplified.length > 2) {
-      simplified.pop();
-    }
-
-    if (simplified.length < 3) continue;
-
-    const xs = simplified.map((p) => p.x);
-    const ys = simplified.map((p) => p.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-
-    generatedZones.push({
-      id: `auto_mask_${Math.random().toString(36).substr(2, 9)}`,
-      type: "auto-generated",
-      shape: "polygon",
-      points: simplified,
-      boundingBox: {
-        x: minX,
-        y: minY,
-        width: maxX - minX,
-        height: maxY - minY,
-      },
-      enabled: true,
+  for (const candidate of candidates) {
+    const candidateArea = candidate.box.width * candidate.box.height;
+    const duplicate = accepted.some((existing) => {
+      const overlap = overlapAmount(existing, candidate.box);
+      const existingArea = existing.width * existing.height;
+      return overlap / Math.min(existingArea, candidateArea) > 0.45;
     });
+
+    if (!duplicate) accepted.push(candidate.box);
+    if (accepted.length >= 24) break;
   }
 
-  return generatedZones;
+  return accepted.map((box, index) => ({
+    id: `auto_mask_${Date.now()}_${index}`,
+    type: "auto-generated",
+    shape: "polygon",
+    points: rectPoints(box),
+    boundingBox: box,
+    enabled: true
+  }));
 }
 
 export function drawProjectionWithMasks(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  projectionZone: { x: number; y: number; width: number; height: number },
+  projectionZone: ProjectionZone,
   masks: AutoMaskZone[],
   renderEffectCallback: () => void
 ): void {
   ctx.save();
-
   ctx.beginPath();
   ctx.rect(
     (projectionZone.x / 100) * width,
@@ -303,13 +254,11 @@ export function drawProjectionWithMasks(
 
   for (const mask of masks) {
     if (!mask.enabled || mask.points.length < 3) continue;
-
     ctx.beginPath();
     ctx.rect(width, 0, -width, height);
-
     const firstPoint = mask.points[0];
     ctx.moveTo((firstPoint.x / 100) * width, (firstPoint.y / 100) * height);
-    for (let i = 1; i < mask.points.length; i++) {
+    for (let i = 1; i < mask.points.length; i += 1) {
       ctx.lineTo((mask.points[i].x / 100) * width, (mask.points[i].y / 100) * height);
     }
     ctx.closePath();
@@ -317,6 +266,5 @@ export function drawProjectionWithMasks(
   }
 
   renderEffectCallback();
-
   ctx.restore();
 }
