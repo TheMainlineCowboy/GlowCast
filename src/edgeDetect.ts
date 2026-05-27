@@ -151,6 +151,7 @@ function scoreBox(points: EdgePoint[], box: ProjectionZone, projectionZone: Proj
   if (aspect < 0.45 || aspect > 2.65) return null;
 
   const sideHits = [0, 0, 0, 0];
+  const cornerHits = [0, 0, 0, 0];
   let centerHits = 0;
   let middleVerticalHits = 0;
   let middleHorizontalHits = 0;
@@ -161,26 +162,34 @@ function scoreBox(points: EdgePoint[], box: ProjectionZone, projectionZone: Proj
     if (ny > 0.78) sideHits[1] += 1;
     if (nx < 0.24) sideHits[2] += 1;
     if (nx > 0.76) sideHits[3] += 1;
+    if (nx < 0.28 && ny < 0.28) cornerHits[0] += 1;
+    if (nx > 0.72 && ny < 0.28) cornerHits[1] += 1;
+    if (nx < 0.28 && ny > 0.72) cornerHits[2] += 1;
+    if (nx > 0.72 && ny > 0.72) cornerHits[3] += 1;
     if (nx >= 0.28 && nx <= 0.72 && ny >= 0.28 && ny <= 0.72) centerHits += 1;
     if (nx >= 0.38 && nx <= 0.62) middleVerticalHits += 1;
     if (ny >= 0.38 && ny <= 0.62) middleHorizontalHits += 1;
   }
 
   const requiredSideHits = Math.max(4, inside.length * 0.11);
+  const requiredCornerHits = Math.max(2, inside.length * 0.035);
   const hasTop = sideHits[0] >= requiredSideHits;
   const hasBottom = sideHits[1] >= requiredSideHits;
   const hasLeft = sideHits[2] >= requiredSideHits;
   const hasRight = sideHits[3] >= requiredSideHits;
+  const cornerCoverage = cornerHits.filter((count) => count >= requiredCornerHits).length;
   if (!(hasLeft && hasRight && hasTop && hasBottom)) return null;
+  if (cornerCoverage < 3) return null;
   if (centerHits < Math.max(4, inside.length * 0.06)) return null;
   if (middleVerticalHits < Math.max(5, inside.length * 0.12)) return null;
   if (middleHorizontalHits < Math.max(5, inside.length * 0.12)) return null;
 
   const density = inside.length / Math.max(area, 1);
   const aspectBonus = aspect >= 0.65 && aspect <= 2.1 ? 1.45 : 0.9;
+  const cornerBonus = cornerCoverage / 4;
   const centerBonus = centerHits >= Math.max(6, inside.length * 0.1) ? 0.45 : 0;
   const sizePenalty = area / Math.max(projectionArea, 1);
-  const score = density * aspectBonus * (2 + centerBonus) - sizePenalty;
+  const score = density * aspectBonus * (2 + centerBonus + cornerBonus) - sizePenalty;
   return { ...box, score, edgeCount: inside.length };
 }
 
