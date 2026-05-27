@@ -12,6 +12,11 @@ if (source.includes(oldImport)) {
   throw new Error("Native edge mask patch failed: edgeDetect import anchor was not found.");
 }
 
+source = source.replace(
+  '          setSurfacePolygonMode(false);\n          setSurfacePolygonClosed(true);\n          setShowSurfaceHandles(false);\n          setDetectMessage("Projection surface polygon set. Draw avoid masks inside the selected area.");',
+  '          setSurfacePolygonMode(false);\n          setSurfacePolygonClosed(true);\n          setShowSurfaceHandles(true);\n          setSelectedTarget("surface");\n          setSelectedZoneId(null);\n          setDrawMode(false);\n          setDetectMessage("Projection surface closed. Review and adjust it before scanning edges or drawing masks.");'
+);
+
 const functionAnchor = "  function resetForPhoto(src: string, thumbnail: string | null, size: ImageSize, message: string) {";
 const functionBody = `  function createMasksFromEdges() {
     if (!edgePoints.length) {
