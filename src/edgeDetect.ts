@@ -18,7 +18,6 @@ export type AutoMaskZone = {
 
 type ProjectionZone = { x: number; y: number; width: number; height: number };
 type AutoMaskOptions = { clusterRadius: number; minPoints: number; tolerance: number };
-
 type CellCandidate = ProjectionZone & { score: number; edgeCount: number };
 
 function loadScanImage(src: string): Promise<HTMLImageElement> {
@@ -70,7 +69,6 @@ export async function scanImageEdges(src: string): Promise<EdgeScanResult> {
         gray[i + width - 1] + 2 * gray[i + width] + gray[i + width + 1];
       const strength = Math.min(255, Math.round(Math.hypot(gx, gy)));
       if (strength < threshold) continue;
-
       edgePoints.push({ x: (x / width) * 100, y: (y / height) * 100, strength });
       const p = i * 4;
       out[p] = 0;
@@ -89,7 +87,6 @@ export async function scanImageEdges(src: string): Promise<EdgeScanResult> {
 export function snapPointToEdge(point: Coordinate, edgePoints: EdgePoint[], maxDistance = 2.2): Coordinate {
   let best: EdgePoint | null = null;
   let bestDistance = maxDistance;
-
   for (const edge of edgePoints) {
     const distance = Math.hypot(edge.x - point.x, edge.y - point.y);
     if (distance < bestDistance) {
@@ -97,7 +94,6 @@ export function snapPointToEdge(point: Coordinate, edgePoints: EdgePoint[], maxD
       bestDistance = distance;
     }
   }
-
   return best ? { x: best.x, y: best.y } : point;
 }
 
@@ -116,6 +112,12 @@ function overlapAmount(a: ProjectionZone, b: ProjectionZone) {
   return xOverlap * yOverlap;
 }
 
+function gapBetween(a: ProjectionZone, b: ProjectionZone) {
+  const xGap = Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + a.width, b.x + b.width));
+  const yGap = Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.height, b.y + b.height));
+  return { xGap, yGap };
+}
+
 function pointInsideBox(point: EdgePoint, box: ProjectionZone) {
   return point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height;
 }
@@ -123,17 +125,11 @@ function pointInsideBox(point: EdgePoint, box: ProjectionZone) {
 function touchesProjectionBoundary(box: ProjectionZone, projectionZone: ProjectionZone) {
   const marginX = Math.max(1.2, projectionZone.width * 0.025);
   const marginY = Math.max(1.2, projectionZone.height * 0.025);
-  return (
-    box.x <= projectionZone.x + marginX ||
-    box.y <= projectionZone.y + marginY ||
-    box.x + box.width >= projectionZone.x + projectionZone.width - marginX ||
-    box.y + box.height >= projectionZone.y + projectionZone.height - marginY
-  );
+  return box.x <= projectionZone.x + marginX || box.y <= projectionZone.y + marginY || box.x + box.width >= projectionZone.x + projectionZone.width - marginX || box.y + box.height >= projectionZone.y + projectionZone.height - marginY;
 }
 
 function scoreBox(points: EdgePoint[], box: ProjectionZone, projectionZone: ProjectionZone): CellCandidate | null {
   if (touchesProjectionBoundary(box, projectionZone)) return null;
-
   const inside = points.filter((point) => pointInsideBox(point, box));
   if (inside.length < 20) return null;
 
@@ -149,7 +145,6 @@ function scoreBox(points: EdgePoint[], box: ProjectionZone, projectionZone: Proj
   let centerHits = 0;
   let middleVerticalHits = 0;
   let middleHorizontalHits = 0;
-
   for (const point of inside) {
     const nx = (point.x - box.x) / Math.max(box.width, 0.01);
     const ny = (point.y - box.y) / Math.max(box.height, 0.01);
@@ -167,7 +162,6 @@ function scoreBox(points: EdgePoint[], box: ProjectionZone, projectionZone: Proj
   const hasBottom = sideHits[1] >= requiredSideHits;
   const hasLeft = sideHits[2] >= requiredSideHits;
   const hasRight = sideHits[3] >= requiredSideHits;
-
   if (!(hasLeft && hasRight)) return null;
   if (!(hasTop || hasBottom)) return null;
   if (centerHits < Math.max(4, inside.length * 0.06)) return null;
@@ -190,6 +184,55 @@ function mergeBoxes(a: ProjectionZone, b: ProjectionZone): ProjectionZone {
   const maxX = Math.max(a.x + a.width, b.x + b.width);
   const maxY = Math.max(a.y + a.height, b.y + b.height);
   return { x, y, width: maxX - x, height: maxY - y };
+}
+
+function shouldMergePaneBoxes(a: ProjectionZone, b: ProjectionZone, projectionZone: ProjectionZone) {
+  const combined = mergeBoxes(a, b);
+  const combinedArea = combined.width * combined.height;
+  const projectionArea = projectionZone.width * projectionZone.height;
+  const aspect = combined.width / Math.max(combined.height, 0.01);
+  if (combinedArea > projectionArea * 0.24) return false;
+  if (combined.width > projectionZone.width * 0.52 || combined.height > projectionZone.height * 0.56) return false;
+  if (aspect < 0.35 || aspect > 3.8) return false;
+
+  const overlap = overlapAmount(a, b);
+  const minArea = Math.min(a.width * a.height, b.width * b.height);
+  if (overlap / Math.max(minArea, 1) > 0.12) return true;
+
+  const { xGap, yGap } = gapBetween(a, b);
+  const aCenterY = a.y + a.height / 2;
+  const bCenterY = b.y + b.height / 2;
+  const aCenterX = a.x + a.width / 2;
+  const bCenterX = b.x + b.width / 2;
+  const horizontalNeighbors = xGap <= Math.max(2.8, projectionZone.width * 0.055) && Math.abs(aCenterY - bCenterY) <= Math.max(a.height, b.height) * 0.65;
+  const verticalNeighbors = yGap <= Math.max(2.8, projectionZone.height * 0.075) && Math.abs(aCenterX - bCenterX) <= Math.max(a.width, b.width) * 0.75;
+  return horizontalNeighbors || verticalNeighbors;
+}
+
+function mergeNearbyPaneBoxes(boxes: CellCandidate[], projectionZone: ProjectionZone): CellCandidate[] {
+  const mergedBoxes = [...boxes];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = 0; i < mergedBoxes.length; i += 1) {
+      for (let j = i + 1; j < mergedBoxes.length; j += 1) {
+        if (!shouldMergePaneBoxes(mergedBoxes[i], mergedBoxes[j], projectionZone)) continue;
+        const first = mergedBoxes[i];
+        const second = mergedBoxes[j];
+        const combined = mergeBoxes(first, second);
+        mergedBoxes[i] = {
+          ...combined,
+          score: Math.max(first.score, second.score) + 0.2,
+          edgeCount: first.edgeCount + second.edgeCount
+        };
+        mergedBoxes.splice(j, 1);
+        changed = true;
+        break;
+      }
+      if (changed) break;
+    }
+  }
+  return mergedBoxes;
 }
 
 function buildWindowCandidates(edgePoints: EdgePoint[], projectionZone: ProjectionZone): CellCandidate[] {
@@ -223,35 +266,11 @@ function buildWindowCandidates(edgePoints: EdgePoint[], projectionZone: Projecti
       return overlap / Math.max(minArea, 1) > 0.35;
     });
     if (!duplicate) accepted.push(candidate);
-    if (accepted.length >= 8) break;
+    if (accepted.length >= 12) break;
   }
 
-  let merged = true;
-  while (merged) {
-    merged = false;
-    for (let i = 0; i < accepted.length; i += 1) {
-      for (let j = i + 1; j < accepted.length; j += 1) {
-        const first = accepted[i];
-        const second = accepted[j];
-        const overlap = overlapAmount(first, second);
-        const minArea = Math.min(first.width * first.height, second.width * second.height);
-        if (overlap / Math.max(minArea, 1) > 0.2) {
-          const combined = mergeBoxes(first, second);
-          accepted[i] = {
-            ...combined,
-            score: Math.max(first.score, second.score),
-            edgeCount: first.edgeCount + second.edgeCount
-          };
-          accepted.splice(j, 1);
-          merged = true;
-          break;
-        }
-      }
-      if (merged) break;
-    }
-  }
-
-  return accepted.sort((a, b) => b.score - a.score).slice(0, 8);
+  const merged = mergeNearbyPaneBoxes(accepted, projectionZone);
+  return merged.sort((a, b) => b.score - a.score).slice(0, 6);
 }
 
 export function generateAutoMasks(
@@ -260,7 +279,6 @@ export function generateAutoMasks(
   _options: AutoMaskOptions = { clusterRadius: 1.8, minPoints: 14, tolerance: 0.8 }
 ): AutoMaskZone[] {
   const candidates = buildWindowCandidates(edgePoints, projectionZone);
-
   return candidates.map((box, index) => ({
     id: `auto_mask_${Date.now()}_${index}`,
     type: "auto-generated",
@@ -293,7 +311,6 @@ export function drawProjectionWithMasks(
     (projectionZone.height / 100) * height
   );
   ctx.clip();
-
   for (const mask of masks) {
     if (!mask.enabled || mask.points.length < 3) continue;
     ctx.beginPath();
@@ -306,7 +323,6 @@ export function drawProjectionWithMasks(
     ctx.closePath();
     ctx.clip();
   }
-
   renderEffectCallback();
   ctx.restore();
 }
