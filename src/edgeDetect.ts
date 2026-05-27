@@ -19,12 +19,7 @@ export type AutoMaskZone = {
 type ProjectionZone = { x: number; y: number; width: number; height: number };
 type AutoMaskOptions = { clusterRadius: number; minPoints: number; tolerance: number };
 
-type GridCell = {
-  x: number;
-  y: number;
-  points: EdgePoint[];
-  visited: boolean;
-};
+type CellCandidate = ProjectionZone & { score: number; edgeCount: number };
 
 function loadScanImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -106,10 +101,6 @@ export function snapPointToEdge(point: Coordinate, edgePoints: EdgePoint[], maxD
   return best ? { x: best.x, y: best.y } : point;
 }
 
-function insideZone(point: EdgePoint, zone: ProjectionZone) {
-  return point.x >= zone.x && point.x <= zone.x + zone.width && point.y >= zone.y && point.y <= zone.y + zone.height;
-}
-
 function rectPoints(box: ProjectionZone): Coordinate[] {
   return [
     { x: box.x, y: box.y },
@@ -125,111 +116,125 @@ function overlapAmount(a: ProjectionZone, b: ProjectionZone) {
   return xOverlap * yOverlap;
 }
 
-function candidateScore(zone: ProjectionZone, pointCount: number) {
-  const area = Math.max(1, zone.width * zone.height);
-  const aspect = zone.width / Math.max(zone.height, 0.01);
-  const windowAspectBonus = aspect >= 0.35 && aspect <= 3.2 ? 1.25 : 0.75;
-  return (pointCount / area) * windowAspectBonus;
+function pointInsideBox(point: EdgePoint, box: ProjectionZone) {
+  return point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height;
+}
+
+function scoreBox(points: EdgePoint[], box: ProjectionZone, projectionZone: ProjectionZone): CellCandidate | null {
+  const inside = points.filter((point) => pointInsideBox(point, box));
+  if (inside.length < 18) return null;
+
+  const area = box.width * box.height;
+  const projectionArea = projectionZone.width * projectionZone.height;
+  const aspect = box.width / Math.max(box.height, 0.01);
+  if (area < 18 || area > projectionArea * 0.22) return null;
+  if (box.width < projectionZone.width * 0.07 || box.height < projectionZone.height * 0.08) return null;
+  if (box.width > projectionZone.width * 0.5 || box.height > projectionZone.height * 0.45) return null;
+  if (aspect < 0.35 || aspect > 3.4) return null;
+
+  const thirds = [0, 0, 0, 0];
+  for (const point of inside) {
+    const nx = (point.x - box.x) / Math.max(box.width, 0.01);
+    const ny = (point.y - box.y) / Math.max(box.height, 0.01);
+    if (ny < 0.28) thirds[0] += 1;
+    if (ny > 0.72) thirds[1] += 1;
+    if (nx < 0.28) thirds[2] += 1;
+    if (nx > 0.72) thirds[3] += 1;
+  }
+
+  const sideCoverage = thirds.filter((count) => count >= Math.max(3, inside.length * 0.08)).length;
+  if (sideCoverage < 2) return null;
+
+  const density = inside.length / Math.max(area, 1);
+  const aspectBonus = aspect >= 0.55 && aspect <= 2.4 ? 1.4 : 1;
+  const coverageBonus = sideCoverage / 4;
+  const sizePenalty = area / Math.max(projectionArea, 1);
+  const score = density * aspectBonus * (1 + coverageBonus) - sizePenalty;
+  return { ...box, score, edgeCount: inside.length };
+}
+
+function mergeBoxes(a: ProjectionZone, b: ProjectionZone): ProjectionZone {
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  const maxX = Math.max(a.x + a.width, b.x + b.width);
+  const maxY = Math.max(a.y + a.height, b.y + b.height);
+  return { x, y, width: maxX - x, height: maxY - y };
+}
+
+function buildWindowCandidates(edgePoints: EdgePoint[], projectionZone: ProjectionZone): CellCandidate[] {
+  const points = edgePoints.filter((point) => pointInsideBox(point, projectionZone));
+  const candidates: CellCandidate[] = [];
+  const minW = Math.max(6, projectionZone.width * 0.12);
+  const maxW = Math.max(minW + 1, projectionZone.width * 0.36);
+  const minH = Math.max(6, projectionZone.height * 0.14);
+  const maxH = Math.max(minH + 1, projectionZone.height * 0.34);
+  const stepX = Math.max(2, projectionZone.width / 24);
+  const stepY = Math.max(2, projectionZone.height / 24);
+  const widths = [minW, (minW + maxW) / 2, maxW];
+  const heights = [minH, (minH + maxH) / 2, maxH];
+
+  for (const width of widths) {
+    for (const height of heights) {
+      for (let y = projectionZone.y; y <= projectionZone.y + projectionZone.height - height; y += stepY) {
+        for (let x = projectionZone.x; x <= projectionZone.x + projectionZone.width - width; x += stepX) {
+          const scored = scoreBox(points, { x, y, width, height }, projectionZone);
+          if (scored) candidates.push(scored);
+        }
+      }
+    }
+  }
+
+  const accepted: CellCandidate[] = [];
+  for (const candidate of candidates.sort((a, b) => b.score - a.score)) {
+    const duplicate = accepted.some((existing) => {
+      const overlap = overlapAmount(existing, candidate);
+      const minArea = Math.min(existing.width * existing.height, candidate.width * candidate.height);
+      return overlap / Math.max(minArea, 1) > 0.35;
+    });
+    if (!duplicate) accepted.push(candidate);
+    if (accepted.length >= 12) break;
+  }
+
+  let merged = true;
+  while (merged) {
+    merged = false;
+    for (let i = 0; i < accepted.length; i += 1) {
+      for (let j = i + 1; j < accepted.length; j += 1) {
+        const overlap = overlapAmount(accepted[i], accepted[j]);
+        const minArea = Math.min(accepted[i].width * accepted[i].height, accepted[j].width * accepted[j].height);
+        if (overlap / Math.max(minArea, 1) > 0.2) {
+          const combined = mergeBoxes(accepted[i], accepted[j]);
+          accepted.splice(j, 1);
+          accepted[i] = { ...combined, score: Math.max(accepted[i].score, accepted[j]?.score ?? 0), edgeCount: accepted[i].edgeCount + (accepted[j]?.edgeCount ?? 0) };
+          merged = true;
+          break;
+        }
+      }
+      if (merged) break;
+    }
+  }
+
+  return accepted.sort((a, b) => b.score - a.score).slice(0, 8);
 }
 
 export function generateAutoMasks(
   edgePoints: EdgePoint[],
   projectionZone: ProjectionZone,
-  options: AutoMaskOptions = { clusterRadius: 1.8, minPoints: 14, tolerance: 0.8 }
+  _options: AutoMaskOptions = { clusterRadius: 1.8, minPoints: 14, tolerance: 0.8 }
 ): AutoMaskZone[] {
-  const containedPoints = edgePoints.filter((point) => insideZone(point, projectionZone));
-  if (!containedPoints.length) return [];
+  const candidates = buildWindowCandidates(edgePoints, projectionZone);
 
-  const cellSize = Math.max(0.8, Math.min(3, options.clusterRadius));
-  const grid = new Map<string, GridCell>();
-  const keyFor = (x: number, y: number) => `${Math.floor(x / cellSize)},${Math.floor(y / cellSize)}`;
-
-  for (const point of containedPoints) {
-    const key = keyFor(point.x, point.y);
-    const [gx, gy] = key.split(",").map(Number);
-    const cell = grid.get(key) ?? { x: gx, y: gy, points: [], visited: false };
-    cell.points.push(point);
-    grid.set(key, cell);
-  }
-
-  const denseCells = new Map([...grid.entries()].filter(([, cell]) => cell.points.length >= 2));
-  const components: EdgePoint[][] = [];
-
-  for (const [startKey, startCell] of denseCells.entries()) {
-    if (startCell.visited) continue;
-    const queue = [startKey];
-    const component: EdgePoint[] = [];
-    startCell.visited = true;
-
-    while (queue.length) {
-      const key = queue.shift()!;
-      const cell = denseCells.get(key);
-      if (!cell) continue;
-      component.push(...cell.points);
-
-      for (let dx = -1; dx <= 1; dx += 1) {
-        for (let dy = -1; dy <= 1; dy += 1) {
-          if (dx === 0 && dy === 0) continue;
-          const neighbor = denseCells.get(`${cell.x + dx},${cell.y + dy}`);
-          if (!neighbor || neighbor.visited) continue;
-          neighbor.visited = true;
-          queue.push(`${cell.x + dx},${cell.y + dy}`);
-        }
-      }
-    }
-
-    if (component.length >= options.minPoints) components.push(component);
-  }
-
-  const maxCandidateArea = projectionZone.width * projectionZone.height * 0.35;
-  const candidates = components
-    .map((points) => {
-      const xs = points.map((point) => point.x);
-      const ys = points.map((point) => point.y);
-      const pad = Math.max(0.7, cellSize * 0.35);
-      const x = Math.max(projectionZone.x, Math.min(...xs) - pad);
-      const y = Math.max(projectionZone.y, Math.min(...ys) - pad);
-      const maxX = Math.min(projectionZone.x + projectionZone.width, Math.max(...xs) + pad);
-      const maxY = Math.min(projectionZone.y + projectionZone.height, Math.max(...ys) + pad);
-      const box = { x, y, width: maxX - x, height: maxY - y };
-      return { box, count: points.length, score: candidateScore(box, points.length) };
-    })
-    .filter(({ box, count }) => {
-      const area = box.width * box.height;
-      const aspect = box.width / Math.max(box.height, 0.01);
-      return (
-        count >= options.minPoints &&
-        box.width >= 2.5 &&
-        box.height >= 2.5 &&
-        box.width <= projectionZone.width * 0.75 &&
-        box.height <= projectionZone.height * 0.75 &&
-        area <= maxCandidateArea &&
-        aspect >= 0.2 &&
-        aspect <= 5
-      );
-    })
-    .sort((a, b) => b.score - a.score);
-
-  const accepted: ProjectionZone[] = [];
-
-  for (const candidate of candidates) {
-    const candidateArea = candidate.box.width * candidate.box.height;
-    const duplicate = accepted.some((existing) => {
-      const overlap = overlapAmount(existing, candidate.box);
-      const existingArea = existing.width * existing.height;
-      return overlap / Math.min(existingArea, candidateArea) > 0.45;
-    });
-
-    if (!duplicate) accepted.push(candidate.box);
-    if (accepted.length >= 24) break;
-  }
-
-  return accepted.map((box, index) => ({
+  return candidates.map((box, index) => ({
     id: `auto_mask_${Date.now()}_${index}`,
     type: "auto-generated",
     shape: "polygon",
     points: rectPoints(box),
-    boundingBox: box,
+    boundingBox: {
+      x: Number(box.x.toFixed(2)),
+      y: Number(box.y.toFixed(2)),
+      width: Number(box.width.toFixed(2)),
+      height: Number(box.height.toFixed(2))
+    },
     enabled: true
   }));
 }
