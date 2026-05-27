@@ -35,13 +35,21 @@ if (!source.includes('function applySelectedEdgeCandidate()')) {
 
 const maskStart = source.indexOf('{step === "mask" && (');
 const magneticIndex = source.indexOf('<label className="flex items-center gap-2 text-sm text-slate-200">', maskStart);
-if (maskStart !== -1 && magneticIndex !== -1 && !source.slice(maskStart, magneticIndex).includes('applySelectedEdgeCandidate')) {
+if (maskStart !== -1 && magneticIndex !== -1) {
+  const chunk = source.slice(maskStart, magneticIndex);
+  const createButton = `              <button type="button" onClick={createMasksFromEdges} disabled={!imageUrl || edgeScanning || !edgePoints.length} className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg disabled:opacity-50" >
+                Create Edge Mask Candidates
+              </button>
+`;
   const controls = `              <button type="button" onClick={applySelectedEdgeCandidate} disabled={!selectedZone || selectedZone.label !== "edge candidate"} className="primary">
                 Apply Selected Candidate
               </button>
               <button type="button" onClick={clearEdgeCandidates}>Clear Candidates</button>
 `;
-  source = source.slice(0, magneticIndex) + controls + source.slice(magneticIndex);
+  let insert = "";
+  if (!chunk.includes('onClick={createMasksFromEdges}')) insert += createButton;
+  if (!chunk.includes('applySelectedEdgeCandidate')) insert += controls;
+  if (insert) source = source.slice(0, magneticIndex) + insert + source.slice(magneticIndex);
 }
 
 writeFileSync(appPath, source);
