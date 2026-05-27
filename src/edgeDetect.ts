@@ -1,5 +1,6 @@
 export type EdgePoint = { x: number; y: number; strength: number };
 export type Coordinate = { x: number; y: number };
+export type DetectedMaskShape = "rectangle" | "circle" | "triangle";
 
 export type EdgeScanResult = {
   edgeCanvasUrl: string;
@@ -11,6 +12,7 @@ export type AutoMaskZone = {
   id: string;
   type: "auto-generated";
   shape: "polygon";
+  maskShape: DetectedMaskShape;
   points: Coordinate[];
   boundingBox: { x: number; y: number; width: number; height: number };
   enabled: boolean;
@@ -18,7 +20,7 @@ export type AutoMaskZone = {
 
 type ProjectionZone = { x: number; y: number; width: number; height: number };
 type AutoMaskOptions = { clusterRadius: number; minPoints: number; tolerance: number };
-type CellCandidate = ProjectionZone & { score: number; edgeCount: number };
+type CellCandidate = ProjectionZone & { score: number; edgeCount: number; maskShape: DetectedMaskShape };
 
 function loadScanImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -137,7 +139,7 @@ function touchesProjectionBoundary(box: ProjectionZone, projectionZone: Projecti
   return box.x <= projectionZone.x + marginX || box.y <= projectionZone.y + marginY || box.x + box.width >= projectionZone.x + projectionZone.width - marginX || box.y + box.height >= projectionZone.y + projectionZone.height - marginY;
 }
 
-function scoreBox(points: EdgePoint[], box: ProjectionZone, projectionZone: ProjectionZone): CellCandidate | null {
+function scoreRectangleBox(points: EdgePoint[], box: ProjectionZone, projectionZone: ProjectionZone): CellCandidate | null {
   if (touchesProjectionBoundary(box, projectionZone)) return null;
   const inside = points.filter((point) => pointInsideBox(point, box));
   if (inside.length < 22) return null;
@@ -190,7 +192,80 @@ function scoreBox(points: EdgePoint[], box: ProjectionZone, projectionZone: Proj
   const centerBonus = centerHits >= Math.max(6, inside.length * 0.1) ? 0.45 : 0;
   const sizePenalty = area / Math.max(projectionArea, 1);
   const score = density * aspectBonus * (2 + centerBonus + cornerBonus) - sizePenalty;
-  return { ...box, score, edgeCount: inside.length };
+  return { ...box, score, edgeCount: inside.length, maskShape: "rectangle" };
+}
+
+function distanceToLine(px: number, py: number, ax: number, ay: number, bx: number, by: number) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lenSq = dx * dx + dy * dy || 0.00001;
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
+  const cx = ax + t * dx;
+  const cy = ay + t * dy;
+  return Math.hypot(px - cx, py - cy);
+}
+
+function scoreCircleBox(points: EdgePoint[], box: ProjectionZone, projectionZone: ProjectionZone): CellCandidate | null {
+  if (touchesProjectionBoundary(box, projectionZone)) return null;
+  const aspect = box.width / Math.max(box.height, 0.01);
+  if (aspect < 0.72 || aspect > 1.32) return null;
+  const projectionArea = projectionZone.width * projectionZone.height;
+  const area = box.width * box.height;
+  if (area < 18 || area > projectionArea * 0.12) return null;
+
+  const inside = points.filter((point) => pointInsideBox(point, box));
+  if (inside.length < 20) return null;
+  const quadrants = [0, 0, 0, 0];
+  let ringHits = 0;
+  let centerHits = 0;
+  for (const point of inside) {
+    const nx = ((point.x - box.x) / Math.max(box.width, 0.01) - 0.5) * 2;
+    const ny = ((point.y - box.y) / Math.max(box.height, 0.01) - 0.5) * 2;
+    const r = Math.hypot(nx, ny);
+    if (r >= 0.66 && r <= 1.18) {
+      ringHits += 1;
+      const q = (nx >= 0 ? 1 : 0) + (ny >= 0 ? 2 : 0);
+      quadrants[q] += 1;
+    }
+    if (r < 0.42) centerHits += 1;
+  }
+  const ringRatio = ringHits / Math.max(inside.length, 1);
+  const quadrantCoverage = quadrants.filter((count) => count >= Math.max(2, ringHits * 0.12)).length;
+  if (ringRatio < 0.42 || quadrantCoverage < 3) return null;
+  if (centerHits > inside.length * 0.35) return null;
+  return { ...box, score: ringRatio * 5 + quadrantCoverage - centerHits / Math.max(inside.length, 1), edgeCount: inside.length, maskShape: "circle" };
+}
+
+function scoreTriangleBox(points: EdgePoint[], box: ProjectionZone, projectionZone: ProjectionZone): CellCandidate | null {
+  if (touchesProjectionBoundary(box, projectionZone)) return null;
+  const aspect = box.width / Math.max(box.height, 0.01);
+  if (aspect < 0.72 || aspect > 1.45) return null;
+  const projectionArea = projectionZone.width * projectionZone.height;
+  const area = box.width * box.height;
+  if (area < 18 || area > projectionArea * 0.14) return null;
+
+  const inside = points.filter((point) => pointInsideBox(point, box));
+  if (inside.length < 18) return null;
+  let leftSide = 0;
+  let rightSide = 0;
+  let base = 0;
+  let outsideTriangle = 0;
+  for (const point of inside) {
+    const nx = (point.x - box.x) / Math.max(box.width, 0.01);
+    const ny = (point.y - box.y) / Math.max(box.height, 0.01);
+    const dl = distanceToLine(nx, ny, 0.5, 0.08, 0.08, 0.92);
+    const dr = distanceToLine(nx, ny, 0.5, 0.08, 0.92, 0.92);
+    const db = Math.abs(ny - 0.92);
+    if (dl < 0.085) leftSide += 1;
+    if (dr < 0.085) rightSide += 1;
+    if (db < 0.075 && nx > 0.08 && nx < 0.92) base += 1;
+    if (ny < 0.04 || ny > 0.98 || nx < 0.02 || nx > 0.98) outsideTriangle += 1;
+  }
+  const minEdgeHits = Math.max(3, inside.length * 0.11);
+  if (leftSide < minEdgeHits || rightSide < minEdgeHits || base < minEdgeHits) return null;
+  if (outsideTriangle > inside.length * 0.12) return null;
+  const score = (leftSide + rightSide + base) / Math.max(inside.length, 1) * 5;
+  return { ...box, score, edgeCount: inside.length, maskShape: "triangle" };
 }
 
 function mergeBoxes(a: ProjectionZone, b: ProjectionZone): ProjectionZone {
@@ -201,7 +276,8 @@ function mergeBoxes(a: ProjectionZone, b: ProjectionZone): ProjectionZone {
   return { x, y, width: maxX - x, height: maxY - y };
 }
 
-function shouldMergePaneBoxes(a: ProjectionZone, b: ProjectionZone, projectionZone: ProjectionZone) {
+function shouldMergePaneBoxes(a: CellCandidate, b: CellCandidate, projectionZone: ProjectionZone) {
+  if (a.maskShape !== "rectangle" || b.maskShape !== "rectangle") return false;
   const combined = mergeBoxes(a, b);
   const combinedArea = combined.width * combined.height;
   const projectionArea = projectionZone.width * projectionZone.height;
@@ -250,7 +326,8 @@ function mergeNearbyPaneBoxes(boxes: CellCandidate[], projectionZone: Projection
         mergedBoxes[i] = {
           ...combined,
           score: Math.max(first.score, second.score) + 0.2,
-          edgeCount: first.edgeCount + second.edgeCount
+          edgeCount: first.edgeCount + second.edgeCount,
+          maskShape: "rectangle"
         };
         mergedBoxes.splice(j, 1);
         changed = true;
@@ -262,7 +339,7 @@ function mergeNearbyPaneBoxes(boxes: CellCandidate[], projectionZone: Projection
   return mergedBoxes;
 }
 
-function buildWindowCandidates(edgePoints: EdgePoint[], projectionZone: ProjectionZone): CellCandidate[] {
+function buildCandidates(edgePoints: EdgePoint[], projectionZone: ProjectionZone): CellCandidate[] {
   const points = edgePoints.filter((point) => pointInsideBox(point, projectionZone));
   const candidates: CellCandidate[] = [];
   const minW = Math.max(5, projectionZone.width * 0.1);
@@ -278,26 +355,34 @@ function buildWindowCandidates(edgePoints: EdgePoint[], projectionZone: Projecti
     for (const height of heights) {
       for (let y = projectionZone.y; y <= projectionZone.y + projectionZone.height - height; y += stepY) {
         for (let x = projectionZone.x; x <= projectionZone.x + projectionZone.width - width; x += stepX) {
-          const scored = scoreBox(points, { x, y, width, height }, projectionZone);
-          if (scored) candidates.push(scored);
+          const box = { x, y, width, height };
+          const rectangle = scoreRectangleBox(points, box, projectionZone);
+          const circle = scoreCircleBox(points, box, projectionZone);
+          const triangle = scoreTriangleBox(points, box, projectionZone);
+          if (rectangle) candidates.push(rectangle);
+          if (circle) candidates.push(circle);
+          if (triangle) candidates.push(triangle);
         }
       }
     }
   }
 
+  const rectangleCandidates = mergeNearbyPaneBoxes(candidates.filter((candidate) => candidate.maskShape === "rectangle"), projectionZone);
+  const shapeCandidates = candidates.filter((candidate) => candidate.maskShape !== "rectangle");
+  const sorted = [...shapeCandidates, ...rectangleCandidates].sort((a, b) => b.score - a.score);
   const accepted: CellCandidate[] = [];
-  for (const candidate of candidates.sort((a, b) => b.score - a.score)) {
+
+  for (const candidate of sorted) {
     const duplicate = accepted.some((existing) => {
       const overlap = overlapAmount(existing, candidate);
       const minArea = Math.min(existing.width * existing.height, candidate.width * candidate.height);
-      return overlap / Math.max(minArea, 1) > 0.35;
+      return overlap / Math.max(minArea, 1) > 0.36;
     });
     if (!duplicate) accepted.push(candidate);
-    if (accepted.length >= 12) break;
+    if (accepted.length >= 8) break;
   }
 
-  const merged = mergeNearbyPaneBoxes(accepted, projectionZone);
-  return merged.sort((a, b) => b.score - a.score).slice(0, 6);
+  return accepted.sort((a, b) => b.score - a.score).slice(0, 6);
 }
 
 export function generateAutoMasks(
@@ -305,11 +390,12 @@ export function generateAutoMasks(
   projectionZone: ProjectionZone,
   _options: AutoMaskOptions = { clusterRadius: 1.8, minPoints: 14, tolerance: 0.8 }
 ): AutoMaskZone[] {
-  const candidates = buildWindowCandidates(edgePoints, projectionZone);
+  const candidates = buildCandidates(edgePoints, projectionZone);
   return candidates.map((box, index) => ({
     id: `auto_mask_${Date.now()}_${index}`,
     type: "auto-generated",
     shape: "polygon",
+    maskShape: box.maskShape,
     points: rectPoints(box),
     boundingBox: {
       x: Number(box.x.toFixed(2)),
