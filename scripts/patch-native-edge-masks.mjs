@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 const path = "src/App.tsx";
 let source = readFileSync(path, "utf8");
@@ -110,3 +110,27 @@ ${buttonAnchor}`
 }
 
 writeFileSync(path, source);
+
+const cssPath = "styles.css";
+if (existsSync(cssPath)) {
+  let css = readFileSync(cssPath, "utf8");
+  const mobileGuard = `
+
+/* Native mobile start overflow guard */
+@media(max-width:960px){
+  html,body,#root{max-width:100vw!important;overflow-x:hidden!important;}
+  .appShell,.glowcastApp{width:100%!important;max-width:100vw!important;overflow-x:hidden!important;}
+  .startPage{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;overflow:hidden!important;padding:0!important;margin:12px 0 0!important;}
+  .startCard{width:100%!important;max-width:100%!important;min-width:0!important;overflow:hidden!important;}
+  .startCard *{max-width:100%!important;}
+  .startCard .uploadButton,.startCard button{width:100%!important;max-width:100%!important;min-width:0!important;white-space:normal!important;overflow:hidden!important;}
+  .recentPhotoBlock,.recentHeader,.recentPhotoRow,.recentProjectList{width:100%!important;max-width:100%!important;min-width:0!important;}
+  .recentPhotoRow{overflow-x:auto!important;overflow-y:hidden!important;display:flex!important;}
+  .startCard button.recentPhotoButton{flex:0 0 92px!important;min-width:92px!important;max-width:92px!important;}
+}
+`;
+  if (!css.includes("Native mobile start overflow guard")) {
+    css += mobileGuard;
+    writeFileSync(cssPath, css);
+  }
+}
