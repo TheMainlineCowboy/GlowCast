@@ -4,11 +4,11 @@ const path = "src/App.tsx";
 let source = readFileSync(path, "utf8");
 
 const oldImport = 'import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";';
-const newImport = 'import { generateAutoMasks, scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";';
+const newImport = 'import { generateContourMasks } from "./edgeContour";\nimport { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";';
 
 if (source.includes(oldImport)) {
   source = source.replace(oldImport, newImport);
-} else if (!source.includes(newImport)) {
+} else if (!source.includes('import { generateContourMasks } from "./edgeContour";')) {
   throw new Error("Native edge mask patch failed: edgeDetect import anchor was not found.");
 }
 
@@ -21,7 +21,7 @@ source = source.replace(
 const functionAnchor = "  function resetForPhoto(src: string, thumbnail: string | null, size: ImageSize, message: string) {";
 const functionBody = `  function createMasksFromEdges() {
     if (!edgePoints.length) {
-      setDetectMessage("Run the Edge Scanner first, then create edge masks.");
+      setDetectMessage("Run the Edge Scanner first, then create contour masks.");
       return;
     }
 
@@ -48,11 +48,7 @@ const functionBody = `  function createMasksFromEdges() {
       return inside;
     };
 
-    const autoMasks = generateAutoMasks(edgePoints, bounds, {
-      clusterRadius: 1.6,
-      minPoints: 18,
-      tolerance: 0.8
-    });
+    const autoMasks = generateContourMasks(edgePoints, bounds);
 
     const usable = autoMasks
       .map((mask, index) => clampZone({
@@ -62,8 +58,9 @@ const functionBody = `  function createMasksFromEdges() {
         width: mask.boundingBox.width,
         height: mask.boundingBox.height,
         included: true,
-        label: "edge mask",
-        shape: "rectangle" as MaskShape
+        label: "edge contour mask",
+        shape: "freehand" as MaskShape,
+        points: mask.points
       }))
       .filter((zone) => {
         if (zone.width < 2 || zone.height < 2) return false;
@@ -74,12 +71,12 @@ const functionBody = `  function createMasksFromEdges() {
       .slice(0, 24);
 
     if (!usable.length) {
-      setDetectMessage("No usable edge masks found inside the selected projection surface. Try tightening the projection outline around the windows.");
+      setDetectMessage("No usable contour masks found inside the selected projection surface. Try showing edges on a clearer photo.");
       return;
     }
 
     setZones((current) => [
-      ...current.filter((zone) => zone.label !== "edge mask"),
+      ...current.filter((zone) => zone.label !== "edge contour mask" && zone.label !== "edge mask"),
       ...usable
     ]);
     setSelectedTarget("zone");
@@ -88,7 +85,7 @@ const functionBody = `  function createMasksFromEdges() {
     setCornerMode(false);
     setCornerPoints([]);
     setProjectionOnly(false);
-    setDetectMessage("Created " + usable.length + " edge masks from scanned edges.");
+    setDetectMessage("Created " + usable.length + " contour masks from edge paths.");
   }
 
 `;
