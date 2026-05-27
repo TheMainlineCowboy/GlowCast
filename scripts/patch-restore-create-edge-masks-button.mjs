@@ -10,5 +10,6 @@ if (source.includes(importAnchor) && !source.includes('import { generateContourM
 
 source = source.replace(/Create Edge Masks/g, "Create Edge Mask Candidates");
 source = source.replace('included: true,\n        label: "edge contour mask"', 'included: false,\n        label: "edge candidate"');
+source = source.replace(/edge fallback mask/g, "edge candidate");
 
 writeFileSync(appPath, source);
