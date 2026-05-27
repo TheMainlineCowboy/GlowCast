@@ -120,19 +120,33 @@ function pointInsideBox(point: EdgePoint, box: ProjectionZone) {
   return point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height;
 }
 
+function touchesProjectionBoundary(box: ProjectionZone, projectionZone: ProjectionZone) {
+  const marginX = Math.max(1.2, projectionZone.width * 0.025);
+  const marginY = Math.max(1.2, projectionZone.height * 0.025);
+  return (
+    box.x <= projectionZone.x + marginX ||
+    box.y <= projectionZone.y + marginY ||
+    box.x + box.width >= projectionZone.x + projectionZone.width - marginX ||
+    box.y + box.height >= projectionZone.y + projectionZone.height - marginY
+  );
+}
+
 function scoreBox(points: EdgePoint[], box: ProjectionZone, projectionZone: ProjectionZone): CellCandidate | null {
+  if (touchesProjectionBoundary(box, projectionZone)) return null;
+
   const inside = points.filter((point) => pointInsideBox(point, box));
   if (inside.length < 18) return null;
 
   const area = box.width * box.height;
   const projectionArea = projectionZone.width * projectionZone.height;
   const aspect = box.width / Math.max(box.height, 0.01);
-  if (area < 18 || area > projectionArea * 0.22) return null;
+  if (area < 18 || area > projectionArea * 0.18) return null;
   if (box.width < projectionZone.width * 0.07 || box.height < projectionZone.height * 0.08) return null;
-  if (box.width > projectionZone.width * 0.5 || box.height > projectionZone.height * 0.45) return null;
+  if (box.width > projectionZone.width * 0.42 || box.height > projectionZone.height * 0.38) return null;
   if (aspect < 0.35 || aspect > 3.4) return null;
 
   const sideHits = [0, 0, 0, 0];
+  let centerHits = 0;
   for (const point of inside) {
     const nx = (point.x - box.x) / Math.max(box.width, 0.01);
     const ny = (point.y - box.y) / Math.max(box.height, 0.01);
@@ -140,16 +154,18 @@ function scoreBox(points: EdgePoint[], box: ProjectionZone, projectionZone: Proj
     if (ny > 0.72) sideHits[1] += 1;
     if (nx < 0.28) sideHits[2] += 1;
     if (nx > 0.72) sideHits[3] += 1;
+    if (nx >= 0.28 && nx <= 0.72 && ny >= 0.28 && ny <= 0.72) centerHits += 1;
   }
 
-  const sideCoverage = sideHits.filter((count) => count >= Math.max(3, inside.length * 0.08)).length;
-  if (sideCoverage < 2) return null;
+  const sideCoverage = sideHits.filter((count) => count >= Math.max(4, inside.length * 0.1)).length;
+  if (sideCoverage < 3) return null;
 
   const density = inside.length / Math.max(area, 1);
   const aspectBonus = aspect >= 0.55 && aspect <= 2.4 ? 1.4 : 1;
   const coverageBonus = sideCoverage / 4;
+  const centerBonus = centerHits >= Math.max(4, inside.length * 0.08) ? 0.35 : 0;
   const sizePenalty = area / Math.max(projectionArea, 1);
-  const score = density * aspectBonus * (1 + coverageBonus) - sizePenalty;
+  const score = density * aspectBonus * (1 + coverageBonus + centerBonus) - sizePenalty;
   return { ...box, score, edgeCount: inside.length };
 }
 
@@ -164,12 +180,12 @@ function mergeBoxes(a: ProjectionZone, b: ProjectionZone): ProjectionZone {
 function buildWindowCandidates(edgePoints: EdgePoint[], projectionZone: ProjectionZone): CellCandidate[] {
   const points = edgePoints.filter((point) => pointInsideBox(point, projectionZone));
   const candidates: CellCandidate[] = [];
-  const minW = Math.max(6, projectionZone.width * 0.12);
-  const maxW = Math.max(minW + 1, projectionZone.width * 0.36);
-  const minH = Math.max(6, projectionZone.height * 0.14);
-  const maxH = Math.max(minH + 1, projectionZone.height * 0.34);
-  const stepX = Math.max(2, projectionZone.width / 24);
-  const stepY = Math.max(2, projectionZone.height / 24);
+  const minW = Math.max(5, projectionZone.width * 0.09);
+  const maxW = Math.max(minW + 1, projectionZone.width * 0.34);
+  const minH = Math.max(5, projectionZone.height * 0.1);
+  const maxH = Math.max(minH + 1, projectionZone.height * 0.32);
+  const stepX = Math.max(1.5, projectionZone.width / 32);
+  const stepY = Math.max(1.5, projectionZone.height / 32);
   const widths = [minW, (minW + maxW) / 2, maxW];
   const heights = [minH, (minH + maxH) / 2, maxH];
 
@@ -192,7 +208,7 @@ function buildWindowCandidates(edgePoints: EdgePoint[], projectionZone: Projecti
       return overlap / Math.max(minArea, 1) > 0.35;
     });
     if (!duplicate) accepted.push(candidate);
-    if (accepted.length >= 12) break;
+    if (accepted.length >= 10) break;
   }
 
   let merged = true;
