@@ -112,6 +112,15 @@ function overlapAmount(a: ProjectionZone, b: ProjectionZone) {
   return xOverlap * yOverlap;
 }
 
+function overlapRatios(a: ProjectionZone, b: ProjectionZone) {
+  const xOverlap = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+  const yOverlap = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+  return {
+    xRatio: xOverlap / Math.max(0.01, Math.min(a.width, b.width)),
+    yRatio: yOverlap / Math.max(0.01, Math.min(a.height, b.height))
+  };
+}
+
 function gapBetween(a: ProjectionZone, b: ProjectionZone) {
   const xGap = Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + a.width, b.x + b.width));
   const yGap = Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.height, b.y + b.height));
@@ -191,21 +200,33 @@ function shouldMergePaneBoxes(a: ProjectionZone, b: ProjectionZone, projectionZo
   const combinedArea = combined.width * combined.height;
   const projectionArea = projectionZone.width * projectionZone.height;
   const aspect = combined.width / Math.max(combined.height, 0.01);
-  if (combinedArea > projectionArea * 0.24) return false;
-  if (combined.width > projectionZone.width * 0.52 || combined.height > projectionZone.height * 0.56) return false;
-  if (aspect < 0.35 || aspect > 3.8) return false;
+  if (combinedArea > projectionArea * 0.22) return false;
+  if (combined.width > projectionZone.width * 0.44 || combined.height > projectionZone.height * 0.52) return false;
+  if (combined.width > Math.max(a.width, b.width) * 2.45 && combined.height > Math.max(a.height, b.height) * 1.25) return false;
+  if (aspect < 0.35 || aspect > 3.2) return false;
 
   const overlap = overlapAmount(a, b);
   const minArea = Math.min(a.width * a.height, b.width * b.height);
-  if (overlap / Math.max(minArea, 1) > 0.12) return true;
+  if (overlap / Math.max(minArea, 1) > 0.18) return true;
 
   const { xGap, yGap } = gapBetween(a, b);
+  const { xRatio, yRatio } = overlapRatios(a, b);
   const aCenterY = a.y + a.height / 2;
   const bCenterY = b.y + b.height / 2;
   const aCenterX = a.x + a.width / 2;
   const bCenterX = b.x + b.width / 2;
-  const horizontalNeighbors = xGap <= Math.max(2.8, projectionZone.width * 0.055) && Math.abs(aCenterY - bCenterY) <= Math.max(a.height, b.height) * 0.65;
-  const verticalNeighbors = yGap <= Math.max(2.8, projectionZone.height * 0.075) && Math.abs(aCenterX - bCenterX) <= Math.max(a.width, b.width) * 0.75;
+  const similarHeight = Math.min(a.height, b.height) / Math.max(a.height, b.height) >= 0.55;
+  const similarWidth = Math.min(a.width, b.width) / Math.max(a.width, b.width) >= 0.45;
+  const horizontalNeighbors =
+    xGap <= Math.max(1.6, projectionZone.width * 0.032) &&
+    yRatio >= 0.46 &&
+    similarHeight &&
+    Math.abs(aCenterY - bCenterY) <= Math.max(a.height, b.height) * 0.42;
+  const verticalNeighbors =
+    yGap <= Math.max(1.8, projectionZone.height * 0.045) &&
+    xRatio >= 0.5 &&
+    similarWidth &&
+    Math.abs(aCenterX - bCenterX) <= Math.max(a.width, b.width) * 0.45;
   return horizontalNeighbors || verticalNeighbors;
 }
 
