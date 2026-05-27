@@ -86,9 +86,7 @@ const contourFunction = `  function createMasksFromEdges() {
       return inside;
     };
 
-    const autoMasks = generateContourMasks(edgePoints, bounds);
-
-    const usable = autoMasks
+    const contourZones = generateContourMasks(edgePoints, bounds)
       .map((mask, index) => clampZone({
         id: Date.now() + index,
         x: mask.boundingBox.x,
@@ -99,7 +97,26 @@ const contourFunction = `  function createMasksFromEdges() {
         label: "edge contour mask",
         shape: "freehand" as MaskShape,
         points: mask.points
+      }));
+
+    const fallbackZones = contourZones.length ? [] : generateAutoMasks(edgePoints, bounds, {
+      clusterRadius: 1.6,
+      minPoints: 18,
+      tolerance: 0.8
+    })
+      .map((mask, index) => clampZone({
+        id: Date.now() + 100 + index,
+        x: mask.boundingBox.x,
+        y: mask.boundingBox.y,
+        width: mask.boundingBox.width,
+        height: mask.boundingBox.height,
+        included: true,
+        label: "edge fallback mask",
+        shape: "rectangle" as MaskShape
       }))
+      .slice(0, 2);
+
+    const usable = [...contourZones, ...fallbackZones]
       .filter((zone) => {
         if (zone.width < 2 || zone.height < 2) return false;
         if (!polygon) return true;
@@ -109,12 +126,12 @@ const contourFunction = `  function createMasksFromEdges() {
       .slice(0, 8);
 
     if (!usable.length) {
-      setDetectMessage("No usable connected edge clusters found inside the selected projection surface.");
+      setDetectMessage("No usable edge masks found inside the selected projection surface.");
       return;
     }
 
     setZones((current) => [
-      ...current.filter((zone) => zone.label !== "edge contour mask" && zone.label !== "edge mask"),
+      ...current.filter((zone) => zone.label !== "edge contour mask" && zone.label !== "edge mask" && zone.label !== "edge fallback mask"),
       ...usable
     ]);
     setSelectedTarget("zone");
@@ -123,7 +140,7 @@ const contourFunction = `  function createMasksFromEdges() {
     setCornerMode(false);
     setCornerPoints([]);
     setProjectionOnly(false);
-    setDetectMessage("Created " + usable.length + " connected edge masks from visible edge paths.");
+    setDetectMessage(contourZones.length ? "Created " + usable.length + " connected edge masks from visible edge paths." : "Created " + usable.length + " fallback edge masks from scanned edges.");
   }
 
 `;
