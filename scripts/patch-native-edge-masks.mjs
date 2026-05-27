@@ -15,8 +15,13 @@ if (source.includes(oldImport)) {
 }
 
 source = source.replace(
+  '    setStep("mask");\n    setDetectMessage(message);',
+  '    setStep("start");\n    setDetectMessage(message);'
+);
+
+source = source.replace(
   '          setSurfacePolygonMode(false);\n          setSurfacePolygonClosed(true);\n          setShowSurfaceHandles(false);\n          setDetectMessage("Projection surface polygon set. Draw avoid masks inside the selected area.");',
-  '          setSurfacePolygonMode(false);\n          setSurfacePolygonClosed(true);\n          setShowSurfaceHandles(true);\n          setSelectedTarget("surface");\n          setSelectedZoneId(null);\n          setDrawMode(false);\n          setDetectMessage("Projection surface closed. Review it, then continue to masking.");'
+  '          setSurfacePolygonMode(false);\n          setSurfacePolygonClosed(true);\n          setShowSurfaceHandles(true);\n          setSelectedTarget("surface");\n          setSelectedZoneId(null);\n          setDrawMode(false);\n          setDetectMessage("Projection surface closed. Review it, then tap Continue to Mask & Edit.");'
 );
 
 const functionAnchor = "  function resetForPhoto(src: string, thumbnail: string | null, size: ImageSize, message: string) {";
@@ -103,6 +108,79 @@ if (source.includes("function createMasksFromEdges()")) {
   if (!source.includes(functionAnchor)) throw new Error("Native edge mask patch failed: resetForPhoto anchor was not found.");
   source = source.replace(functionAnchor, functionBody + functionAnchor);
 }
+
+const startBlockStart = '      {step === "start" && (';
+const maskBlockStart = '      {step === "mask" && (';
+const startStart = source.indexOf(startBlockStart);
+const maskStart = source.indexOf(maskBlockStart);
+if (startStart === -1 || maskStart === -1) throw new Error("Start surface workflow patch failed: step block anchors not found.");
+
+const startBlock = `      {step === "start" && (
+        imageUrl ? (
+          <section className="workspace startSurfaceWorkspace">
+            <aside className="toolPanel startSetupPanel">
+              <div className="panelBlock">
+                <h2>Projection Surface</h2>
+                <p className="helperText">Set and adjust the projection surface before masking.</p>
+                <button type="button" onClick={startSurfacePolygonMode} disabled={!imageUrl} className={surfacePolygonMode ? "activeStep" : ""}>
+                  {surfacePolygonMode ? "Tap Surface Points" : surfacePolygonClosed ? "Redraw Projection Surface" : "Draw Projection Surface"}
+                </button>
+                <button type="button" onClick={resetSurfacePolygon} disabled={!surfacePolygonPoints.length}>Clear Projection Surface</button>
+                <button type="button" onClick={() => setShowSurfaceHandles((current) => !current)} disabled={!imageUrl}>{showSurfaceHandles ? "Hide Surface Handles" : "Show Surface Handles"}</button>
+                <button className="primary" type="button" onClick={() => { setShowSurfaceHandles(false); setResizeAction(null); setSelectedTarget("zone"); setSelectedZoneId(null); setStep("mask"); }} disabled={!surfacePolygonClosed && !projectionArea}>Continue to Mask & Edit</button>
+                <p className="helperText">
+                  {surfacePolygonMode ? "Tap the photo to outline your projection surface. Close the shape by tapping your first point." : surfacePolygonClosed ? "Surface closed. Adjust/review it here, then continue to masking." : "Draw the projection surface on the photo."}
+                </p>
+              </div>
+              <div className="panelBlock">
+                <h2>Reference Photo</h2>
+                <label className="uploadButton"><ImagePlus size={20} /> Change Surface Photo<input type="file" accept="image/*" onChange={handleImageUpload} /></label>
+                <button onClick={() => importProjectRef.current?.click()}><FolderOpen size={18} /> Load Project File</button>
+                <input ref={importProjectRef} className="hiddenInput" type="file" accept="application/json,.json" onChange={importProjectFile} />
+              </div>
+            </aside>
+            {stage}
+          </section>
+        ) : (
+          <section className="startPage">
+            <div className="startCard">
+              <h2>Start with a reference photo</h2>
+              <p>The photo is only for setup and alignment. The actual projection output will be animation or uploaded video only.</p>
+              <label className="uploadButton"><ImagePlus size={20} /> Upload Surface Photo<input type="file" accept="image/*" onChange={handleImageUpload} /></label>
+              {visibleRecentPhotos.length > 0 && (
+                <div className="recentPhotoBlock">
+                  <div className="recentHeader"><strong>Recent Photos</strong><span>Tap to reuse</span></div>
+                  <div className="recentPhotoRow">
+                    {visibleRecentPhotos.map((photo) => (
+                      <button key={photo.id} className="recentPhotoButton" onClick={() => loadRecentPhoto(photo)} title={photo.name}>
+                        <img src={photo.thumbnailUrl} alt={photo.name} />
+                        <span>{photo.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button onClick={() => importProjectRef.current?.click()}><FolderOpen size={18} /> Load Project File</button>
+              <input ref={importProjectRef} className="hiddenInput" type="file" accept="application/json,.json" onChange={importProjectFile} />
+            </div>
+            <div className="startCard">
+              <h2>Recent autosaves</h2>
+              {recentProjects.length === 0 && <p className="helperText">No recent projects saved in this browser yet.</p>}
+              <div className="recentProjectList">
+                {recentProjects.map((project) => (
+                  <button key={project.id} className="recentProjectButton" onClick={() => loadProject(project)}>
+                    {project.thumbnailUrl || project.imageUrl ? <img src={project.thumbnailUrl ?? project.imageUrl ?? ""} alt={project.name} /> : <FolderOpen size={24} />}
+                    <span><strong>{project.name}</strong><small>{project.savedAt ? new Date(project.savedAt).toLocaleString() : "Recent autosave"}</small></span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+        )
+      )}
+
+`;
+source = source.slice(0, startStart) + startBlock + source.slice(maskStart);
 
 const cssPath = "styles.css";
 if (existsSync(cssPath)) {
