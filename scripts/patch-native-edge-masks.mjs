@@ -55,19 +55,16 @@ const functionBody = `  function createMasksFromEdges() {
     });
 
     const usable = autoMasks
-      .map((mask, index) => {
-        const shape = (mask.maskShape ?? "rectangle") as MaskShape;
-        return clampZone({
-          id: Date.now() + index,
-          x: mask.boundingBox.x,
-          y: mask.boundingBox.y,
-          width: mask.boundingBox.width,
-          height: mask.boundingBox.height,
-          included: true,
-          label: "edge " + shape + " mask",
-          shape
-        });
-      })
+      .map((mask, index) => clampZone({
+        id: Date.now() + index,
+        x: mask.boundingBox.x,
+        y: mask.boundingBox.y,
+        width: mask.boundingBox.width,
+        height: mask.boundingBox.height,
+        included: true,
+        label: "edge mask",
+        shape: "rectangle" as MaskShape
+      }))
       .filter((zone) => {
         if (zone.width < 2 || zone.height < 2) return false;
         if (!polygon) return true;
@@ -82,7 +79,7 @@ const functionBody = `  function createMasksFromEdges() {
     }
 
     setZones((current) => [
-      ...current.filter((zone) => !zone.label.startsWith("edge ")),
+      ...current.filter((zone) => zone.label !== "edge mask"),
       ...usable
     ]);
     setSelectedTarget("zone");
@@ -91,7 +88,7 @@ const functionBody = `  function createMasksFromEdges() {
     setCornerMode(false);
     setCornerPoints([]);
     setProjectionOnly(false);
-    setDetectMessage("Created " + usable.length + " shape-aware edge masks from scanned edges.");
+    setDetectMessage("Created " + usable.length + " edge masks from scanned edges.");
   }
 
 `;
@@ -105,20 +102,6 @@ if (source.includes("function createMasksFromEdges()")) {
   if (!source.includes(functionAnchor)) throw new Error("Native edge mask patch failed: resetForPhoto anchor was not found.");
   source = source.replace(functionAnchor, functionBody + functionAnchor);
 }
-
-const startBlockStart = '      {step === "start" && (';
-const maskBlockStart = '      {step === "mask" && (';
-const contentBlockStart = '      {step === "content" && (';
-const startStart = source.indexOf(startBlockStart);
-const maskStart = source.indexOf(maskBlockStart);
-const contentStart = source.indexOf(contentBlockStart);
-if (startStart === -1 || maskStart === -1 || contentStart === -1) throw new Error("Workflow patch failed: step block anchors not found.");
-
-const newStartBlock = source.slice(startStart, maskStart);
-const newMaskBlock = source.slice(maskStart, contentStart);
-source = source.slice(0, startStart) + newStartBlock + newMaskBlock + source.slice(contentStart);
-
-writeFileSync(path, source);
 
 const cssPath = "styles.css";
 if (existsSync(cssPath)) {
@@ -143,3 +126,5 @@ if (existsSync(cssPath)) {
     writeFileSync(cssPath, css);
   }
 }
+
+writeFileSync(path, source);
