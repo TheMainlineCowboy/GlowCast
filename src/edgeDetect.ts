@@ -132,17 +132,17 @@ function scoreBox(points: EdgePoint[], box: ProjectionZone, projectionZone: Proj
   if (box.width > projectionZone.width * 0.5 || box.height > projectionZone.height * 0.45) return null;
   if (aspect < 0.35 || aspect > 3.4) return null;
 
-  const thirds = [0, 0, 0, 0];
+  const sideHits = [0, 0, 0, 0];
   for (const point of inside) {
     const nx = (point.x - box.x) / Math.max(box.width, 0.01);
     const ny = (point.y - box.y) / Math.max(box.height, 0.01);
-    if (ny < 0.28) thirds[0] += 1;
-    if (ny > 0.72) thirds[1] += 1;
-    if (nx < 0.28) thirds[2] += 1;
-    if (nx > 0.72) thirds[3] += 1;
+    if (ny < 0.28) sideHits[0] += 1;
+    if (ny > 0.72) sideHits[1] += 1;
+    if (nx < 0.28) sideHits[2] += 1;
+    if (nx > 0.72) sideHits[3] += 1;
   }
 
-  const sideCoverage = thirds.filter((count) => count >= Math.max(3, inside.length * 0.08)).length;
+  const sideCoverage = sideHits.filter((count) => count >= Math.max(3, inside.length * 0.08)).length;
   if (sideCoverage < 2) return null;
 
   const density = inside.length / Math.max(area, 1);
@@ -200,12 +200,18 @@ function buildWindowCandidates(edgePoints: EdgePoint[], projectionZone: Projecti
     merged = false;
     for (let i = 0; i < accepted.length; i += 1) {
       for (let j = i + 1; j < accepted.length; j += 1) {
-        const overlap = overlapAmount(accepted[i], accepted[j]);
-        const minArea = Math.min(accepted[i].width * accepted[i].height, accepted[j].width * accepted[j].height);
+        const first = accepted[i];
+        const second = accepted[j];
+        const overlap = overlapAmount(first, second);
+        const minArea = Math.min(first.width * first.height, second.width * second.height);
         if (overlap / Math.max(minArea, 1) > 0.2) {
-          const combined = mergeBoxes(accepted[i], accepted[j]);
+          const combined = mergeBoxes(first, second);
+          accepted[i] = {
+            ...combined,
+            score: Math.max(first.score, second.score),
+            edgeCount: first.edgeCount + second.edgeCount
+          };
           accepted.splice(j, 1);
-          accepted[i] = { ...combined, score: Math.max(accepted[i].score, accepted[j]?.score ?? 0), edgeCount: accepted[i].edgeCount + (accepted[j]?.edgeCount ?? 0) };
           merged = true;
           break;
         }
