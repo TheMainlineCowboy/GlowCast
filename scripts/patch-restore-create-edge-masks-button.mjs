@@ -8,6 +8,35 @@ if (source.includes(importAnchor) && !source.includes('import { generateContourM
   source = source.replace(importAnchor, 'import { generateContourMasks } from "./edgeContour";\n' + importAnchor);
 }
 
+const referenceBlock = `              <div className="panelBlock">
+                <h2>Reference Photo</h2>
+                <label className="uploadButton"><ImagePlus size={20} /> Change Surface Photo<input type="file" accept="image/*" onChange={handleImageUpload} /></label>
+                <button onClick={() => importProjectRef.current?.click()}><FolderOpen size={18} /> Load Project File</button>
+                <input ref={importProjectRef} className="hiddenInput" type="file" accept="application/json,.json" onChange={importProjectFile} />
+              </div>`;
+
+const referenceBlockWithRecent = `              <div className="panelBlock">
+                <h2>Reference Photo</h2>
+                <label className="uploadButton"><ImagePlus size={20} /> Change Surface Photo<input type="file" accept="image/*" onChange={handleImageUpload} /></label>
+                {visibleRecentPhotos.length > 0 && (
+                  <div className="recentPhotoBlock">
+                    <div className="recentHeader"><strong>Recent Photos</strong><span>Tap to reuse</span></div>
+                    <div className="recentPhotoRow">
+                      {visibleRecentPhotos.map((photo) => (
+                        <button key={photo.id} className="recentPhotoButton" onClick={() => loadRecentPhoto(photo)} title={photo.name}>
+                          <img src={photo.thumbnailUrl} alt={photo.name} />
+                          <span>{photo.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <button onClick={() => importProjectRef.current?.click()}><FolderOpen size={18} /> Load Project File</button>
+                <input ref={importProjectRef} className="hiddenInput" type="file" accept="application/json,.json" onChange={importProjectFile} />
+              </div>`;
+
+if (source.includes(referenceBlock)) source = source.replace(referenceBlock, referenceBlockWithRecent);
+
 const button = `              <button type="button" onClick={createMasksFromEdges} disabled={!imageUrl || edgeScanning || !edgePoints.length} className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg disabled:opacity-50" >
                 Create Edge Masks
               </button>`;
@@ -77,7 +106,7 @@ const contourFunction = `  function createMasksFromEdges() {
         const center = { x: zone.x + zone.width / 2, y: zone.y + zone.height / 2 };
         return pointInPolygon(center, polygon);
       })
-      .slice(0, 10);
+      .slice(0, 8);
 
     if (!usable.length) {
       setDetectMessage("No usable connected edge clusters found inside the selected projection surface.");
@@ -101,3 +130,12 @@ const contourFunction = `  function createMasksFromEdges() {
 
 source = source.slice(0, functionStart) + contourFunction + source.slice(functionEnd);
 writeFileSync(appPath, source);
+
+const contourPath = "src/edgeContour.ts";
+let contour = readFileSync(contourPath, "utf8");
+contour = contour.replace("for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++)M(g,W,Hh,gx+x,gy+y)", "for(let y=-2;y<=2;y++)for(let x=-2;x<=2;x++)M(g,W,Hh,gx+x,gy+y)");
+contour = contour.replace("for(let yy=-1;yy<=1;yy++)for(let xx=-1;xx<=1;xx++)M(d,W,Hh,x+xx,y+yy)", "for(let yy=-3;yy<=3;yy++)for(let xx=-3;xx<=3;xx++)M(d,W,Hh,x+xx,y+yy)");
+contour = contour.replace("if(cells.length<18)return null;", "if(cells.length<14)return null;");
+contour = contour.replace("if(b.width<z.width*.045||b.height<z.height*.055||area<za*.003||area>za*.3||asp<.22||asp>4.8)return null;", "if(b.width<z.width*.07||b.height<z.height*.09||area<za*.01||area>za*.28||asp<.35||asp>3.6)return null;");
+contour = contour.replace("if(acc.length>=10)break", "if(acc.length>=8)break");
+writeFileSync(contourPath, contour);
