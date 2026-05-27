@@ -33,4 +33,15 @@ if (!source.includes('function applySelectedEdgeCandidate()')) {
   source = source.replace(resetAnchor, helper + resetAnchor);
 }
 
+const maskStart = source.indexOf('{step === "mask" && (');
+const magneticIndex = source.indexOf('<label className="flex items-center gap-2 text-sm text-slate-200">', maskStart);
+if (maskStart !== -1 && magneticIndex !== -1 && !source.slice(maskStart, magneticIndex).includes('applySelectedEdgeCandidate')) {
+  const controls = `              <button type="button" onClick={applySelectedEdgeCandidate} disabled={!selectedZone || selectedZone.label !== "edge candidate"} className="primary">
+                Apply Selected Candidate
+              </button>
+              <button type="button" onClick={clearEdgeCandidates}>Clear Candidates</button>
+`;
+  source = source.slice(0, magneticIndex) + controls + source.slice(magneticIndex);
+}
+
 writeFileSync(appPath, source);
