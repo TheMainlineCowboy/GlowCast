@@ -29,6 +29,23 @@ if (source.includes(plainReference) && !source.includes('Reference Photo</h2>\n 
   source = source.replace(plainReference, referenceWithRecent);
 }
 
+const continueButton = `                <button className="primary" type="button" onClick={() => { setShowSurfaceHandles(false); setResizeAction(null); setSelectedTarget("zone"); setSelectedZoneId(null); setStep("mask"); }} disabled={!surfacePolygonClosed && !projectionArea}>Continue to Mask & Edit</button>`;
+source = source.replace(continueButton + "\n", "");
+const loadProjectButton = `<button onClick={() => importProjectRef.current?.click()}><FolderOpen size={18} /> Load Project File</button>`;
+const loadProjectWithContinue = `<button onClick={() => importProjectRef.current?.click()}><FolderOpen size={18} /> Load Project File</button>
+                ${continueButton}`;
+const startStepIndex = source.indexOf('{step === "start" && (');
+const startMaskIndex = source.indexOf('{step === "mask" && (');
+if (startStepIndex !== -1 && startMaskIndex !== -1) {
+  const startBlock = source.slice(startStepIndex, startMaskIndex);
+  if (startBlock.includes(loadProjectButton) && !startBlock.includes('Load Project File</button>\n                <button className="primary" type="button"')) {
+    const absoluteLoadIndex = source.indexOf(loadProjectButton, startStepIndex);
+    if (absoluteLoadIndex !== -1 && absoluteLoadIndex < startMaskIndex) {
+      source = source.slice(0, absoluteLoadIndex) + loadProjectWithContinue + source.slice(absoluteLoadIndex + loadProjectButton.length);
+    }
+  }
+}
+
 source = source.replace(/Create Edge Masks/g, "Create Edge Mask Candidates");
 source = source.replace('included: true,\n        label: "edge contour mask"', 'included: false,\n        label: "edge candidate"');
 source = source.replace(/edge fallback mask/g, "edge candidate");
