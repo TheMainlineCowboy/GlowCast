@@ -8,9 +8,33 @@ if (source.includes(importAnchor) && !source.includes('import { generateContourM
   source = source.replace(importAnchor, 'import { generateContourMasks } from "./edgeContour";\n' + importAnchor);
 }
 
+const plainReference = `<label className="uploadButton"><ImagePlus size={20} /> Change Surface Photo<input type="file" accept="image/*" onChange={handleImageUpload} /></label>
+                <button onClick={() => importProjectRef.current?.click()}><FolderOpen size={18} /> Load Project File</button>`;
+const referenceWithRecent = `<label className="uploadButton"><ImagePlus size={20} /> Change Surface Photo<input type="file" accept="image/*" onChange={handleImageUpload} /></label>
+                {visibleRecentPhotos.length > 0 && (
+                  <div className="recentPhotoBlock">
+                    <div className="recentHeader"><strong>Recent Photos</strong><span>Tap to reuse</span></div>
+                    <div className="recentPhotoRow">
+                      {visibleRecentPhotos.map((photo) => (
+                        <button key={photo.id} className="recentPhotoButton" onClick={() => loadRecentPhoto(photo)} title={photo.name}>
+                          <img src={photo.thumbnailUrl} alt={photo.name} />
+                          <span>{photo.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <button onClick={() => importProjectRef.current?.click()}><FolderOpen size={18} /> Load Project File</button>`;
+if (source.includes(plainReference) && !source.includes('Reference Photo</h2>\n                <label className="uploadButton"><ImagePlus size={20} /> Change Surface Photo<input type="file" accept="image/*" onChange={handleImageUpload} /></label>\n                {visibleRecentPhotos.length > 0')) {
+  source = source.replace(plainReference, referenceWithRecent);
+}
+
 source = source.replace(/Create Edge Masks/g, "Create Edge Mask Candidates");
 source = source.replace('included: true,\n        label: "edge contour mask"', 'included: false,\n        label: "edge candidate"');
 source = source.replace(/edge fallback mask/g, "edge candidate");
+source = source.replace(/Created " \+ usable\.length \+ " connected edge masks from visible edge paths\./g, 'Found " + usable.length + " connected edge mask candidates from visible edge paths.');
+source = source.replace(/Created " \+ usable\.length \+ " fallback edge masks from scanned edges\./g, 'Found " + usable.length + " fallback edge mask candidates from scanned edges.');
+source = source.replace(/Created " \+ usable\.length \+ " edge masks from scanned edges\./g, 'Found " + usable.length + " edge mask candidates from scanned edges.');
 
 const resetAnchor = '  function resetForPhoto(src: string, thumbnail: string | null, size: ImageSize, message: string) {';
 if (!source.includes('function applySelectedEdgeCandidate()')) {
