@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 
 const appPath = "src/App.tsx";
 let source = readFileSync(appPath, "utf8");
@@ -94,3 +94,35 @@ if (maskStart !== -1 && magneticIndex !== -1) {
 }
 
 writeFileSync(appPath, source);
+
+const edgePath = "src/edgeDetect.ts";
+if (existsSync(edgePath)) {
+  let edge = readFileSync(edgePath, "utf8");
+  edge = edge.replace(
+`  const merged = mergeNearbyPaneBoxes(accepted, projectionZone);
+  return merged.sort((a, b) => b.score - a.score).slice(0, 6);`,
+`  const merged = mergeNearbyPaneBoxes(accepted, projectionZone);
+  const sorted = merged
+    .filter((box) => {
+      const aspect = box.width / Math.max(box.height, 0.01);
+      return aspect >= 0.48 && aspect <= 2.6;
+    })
+    .sort((a, b) => (b.width * b.height) - (a.width * a.height) || b.score - a.score);
+  const cleaned: CellCandidate[] = [];
+  for (const candidate of sorted) {
+    const duplicateOrFragment = cleaned.some((existing) => {
+      const overlap = overlapAmount(existing, candidate);
+      const smallArea = Math.min(existing.width * existing.height, candidate.width * candidate.height);
+      const candidateArea = candidate.width * candidate.height;
+      const existingArea = existing.width * existing.height;
+      const overlapSmall = overlap / Math.max(smallArea, 1);
+      const candidateInsideExisting = overlap / Math.max(candidateArea, 1) > 0.42 && existingArea >= candidateArea;
+      return overlapSmall > 0.32 || candidateInsideExisting;
+    });
+    if (!duplicateOrFragment) cleaned.push(candidate);
+    if (cleaned.length >= 4) break;
+  }
+  return cleaned.sort((a, b) => b.score - a.score).slice(0, 4);`
+  );
+  writeFileSync(edgePath, edge);
+}
