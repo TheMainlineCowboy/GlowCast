@@ -99,29 +99,58 @@ const edgePath = "src/edgeDetect.ts";
 if (existsSync(edgePath)) {
   let edge = readFileSync(edgePath, "utf8");
   edge = edge.replace(
-`  const merged = mergeNearbyPaneBoxes(accepted, projectionZone);
+`  const accepted: CellCandidate[] = [];
+  for (const candidate of candidates.sort((a, b) => b.score - a.score)) {
+    const duplicate = accepted.some((existing) => {
+      const overlap = overlapAmount(existing, candidate);
+      const minArea = Math.min(existing.width * existing.height, candidate.width * candidate.height);
+      return overlap / Math.max(minArea, 1) > 0.35;
+    });
+    if (!duplicate) accepted.push(candidate);
+    if (accepted.length >= 12) break;
+  }
+
+  const merged = mergeNearbyPaneBoxes(accepted, projectionZone);
   return merged.sort((a, b) => b.score - a.score).slice(0, 6);`,
-`  const merged = mergeNearbyPaneBoxes(accepted, projectionZone);
-  const sorted = merged
+`  const accepted: CellCandidate[] = [];
+  for (const candidate of candidates.sort((a, b) => b.score - a.score)) {
+    const aspect = candidate.width / Math.max(candidate.height, 0.01);
+    if (aspect < 0.45 || aspect > 2.7) continue;
+    const duplicate = accepted.some((existing) => {
+      const overlap = overlapAmount(existing, candidate);
+      const minArea = Math.min(existing.width * existing.height, candidate.width * candidate.height);
+      return overlap / Math.max(minArea, 1) > 0.42;
+    });
+    if (!duplicate) accepted.push(candidate);
+    if (accepted.length >= 16) break;
+  }
+
+  const merged = mergeNearbyPaneBoxes(accepted, projectionZone);
+  const candidatesByArea = merged
     .filter((box) => {
       const aspect = box.width / Math.max(box.height, 0.01);
-      return aspect >= 0.48 && aspect <= 2.6;
+      const tooWideForOneObject = box.width > projectionZone.width * 0.42 && box.height < projectionZone.height * 0.34;
+      const tooFlat = box.height < projectionZone.height * 0.15;
+      const tooTallSkinny = box.width < projectionZone.width * 0.09;
+      return aspect >= 0.48 && aspect <= 2.45 && !tooWideForOneObject && !tooFlat && !tooTallSkinny;
     })
     .sort((a, b) => (b.width * b.height) - (a.width * a.height) || b.score - a.score);
+
   const cleaned: CellCandidate[] = [];
-  for (const candidate of sorted) {
+  for (const candidate of candidatesByArea) {
+    const candidateArea = candidate.width * candidate.height;
     const duplicateOrFragment = cleaned.some((existing) => {
-      const overlap = overlapAmount(existing, candidate);
-      const smallArea = Math.min(existing.width * existing.height, candidate.width * candidate.height);
-      const candidateArea = candidate.width * candidate.height;
       const existingArea = existing.width * existing.height;
-      const overlapSmall = overlap / Math.max(smallArea, 1);
-      const candidateInsideExisting = overlap / Math.max(candidateArea, 1) > 0.42 && existingArea >= candidateArea;
-      return overlapSmall > 0.32 || candidateInsideExisting;
+      const overlap = overlapAmount(existing, candidate);
+      const overlapCandidate = overlap / Math.max(candidateArea, 1);
+      const overlapExisting = overlap / Math.max(existingArea, 1);
+      const closeCenters = Math.abs((existing.x + existing.width / 2) - (candidate.x + candidate.width / 2)) < projectionZone.width * 0.035 && Math.abs((existing.y + existing.height / 2) - (candidate.y + candidate.height / 2)) < projectionZone.height * 0.035;
+      return overlapCandidate > 0.38 || overlapExisting > 0.72 || closeCenters;
     });
     if (!duplicateOrFragment) cleaned.push(candidate);
     if (cleaned.length >= 4) break;
   }
+
   return cleaned.sort((a, b) => b.score - a.score).slice(0, 4);`
   );
   writeFileSync(edgePath, edge);
