@@ -27,7 +27,7 @@ source = source.replace(
 const functionAnchor = "  function resetForPhoto(src: string, thumbnail: string | null, size: ImageSize, message: string) {";
 const functionBody = `  function createMasksFromEdges() {
     if (!edgePoints.length) {
-      setDetectMessage("Run the Edge Scanner first, then create edge masks.");
+      setDetectMessage("Run the Edge Scanner first, then create edge mask candidates.");
       return;
     }
 
@@ -67,8 +67,8 @@ const functionBody = `  function createMasksFromEdges() {
         y: mask.boundingBox.y,
         width: mask.boundingBox.width,
         height: mask.boundingBox.height,
-        included: true,
-        label: "edge mask",
+        included: false,
+        label: "edge candidate",
         shape: "rectangle" as MaskShape
       }))
       .filter((zone) => {
@@ -80,12 +80,12 @@ const functionBody = `  function createMasksFromEdges() {
       .slice(0, 24);
 
     if (!usable.length) {
-      setDetectMessage("No usable edge masks found inside the selected projection surface. Try tightening the projection outline around the windows.");
+      setDetectMessage("No usable edge mask candidates found inside the selected projection surface. Try tightening the projection outline around the windows.");
       return;
     }
 
     setZones((current) => [
-      ...current.filter((zone) => zone.label !== "edge mask"),
+      ...current.filter((zone) => zone.label !== "edge mask" && zone.label !== "edge candidate"),
       ...usable
     ]);
     setSelectedTarget("zone");
@@ -94,7 +94,7 @@ const functionBody = `  function createMasksFromEdges() {
     setCornerMode(false);
     setCornerPoints([]);
     setProjectionOnly(false);
-    setDetectMessage("Created " + usable.length + " edge masks from scanned edges.");
+    setDetectMessage("Found " + usable.length + " edge mask candidates from scanned edges.");
   }
 
 `;
