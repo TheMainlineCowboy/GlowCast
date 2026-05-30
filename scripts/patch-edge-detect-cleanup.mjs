@@ -32,8 +32,8 @@ const replacement = `function makeMaskFromBox(box: ProjectionZone, index: number
 }
 
 function buildLooseEdgeObjectCandidates(edgePoints: EdgePoint[], projectionZone: ProjectionZone): ComponentBox[] {
-  const gridWidth = 160;
-  const gridHeight = Math.max(70, Math.round(gridWidth * (projectionZone.height / Math.max(projectionZone.width, 1))));
+  const gridWidth = 145;
+  const gridHeight = Math.max(64, Math.round(gridWidth * (projectionZone.height / Math.max(projectionZone.width, 1))));
   const total = gridWidth * gridHeight;
   const grid = new Uint8Array(total);
   const visited = new Uint8Array(total);
@@ -53,14 +53,14 @@ function buildLooseEdgeObjectCandidates(edgePoints: EdgePoint[], projectionZone:
   };
 
   for (const point of edgePoints) {
-    if (point.strength < 62) continue;
+    if (point.strength < 48) continue;
     if (point.x < projectionZone.x || point.x > projectionZone.x + projectionZone.width) continue;
     if (point.y < projectionZone.y || point.y > projectionZone.y + projectionZone.height) continue;
     const nx = (point.x - projectionZone.x) / Math.max(projectionZone.width, 1);
     const ny = (point.y - projectionZone.y) / Math.max(projectionZone.height, 1);
     const gx = Math.max(0, Math.min(gridWidth - 1, Math.round(nx * (gridWidth - 1))));
     const gy = Math.max(0, Math.min(gridHeight - 1, Math.round(ny * (gridHeight - 1))));
-    mark(gx, gy, 2);
+    mark(gx, gy, 4);
   }
 
   const boxes: ComponentBox[] = [];
@@ -105,18 +105,18 @@ function buildLooseEdgeObjectCandidates(edgePoints: EdgePoint[], projectionZone:
         width: ((maxX - minX + 1) / gridWidth) * projectionZone.width,
         height: ((maxY - minY + 1) / gridHeight) * projectionZone.height
       };
-      const padX = Math.max(0.45, raw.width * 0.06);
-      const padY = Math.max(0.45, raw.height * 0.06);
+      const padX = Math.max(0.75, raw.width * 0.09);
+      const padY = Math.max(0.75, raw.height * 0.09);
       const box = clampToProjection(paddedBox(raw, padX, padY), projectionZone);
       const area = box.width * box.height;
       const aspect = box.width / Math.max(box.height, 0.01);
 
-      if (cells < 24) continue;
-      if (box.width < Math.max(4.2, projectionZone.width * 0.055)) continue;
-      if (box.height < Math.max(4.2, projectionZone.height * 0.075)) continue;
-      if (area < Math.max(18, projectionArea * 0.0035)) continue;
-      if (area > projectionArea * 0.22) continue;
-      if (aspect < 0.18 || aspect > 5.8) continue;
+      if (cells < 8) continue;
+      if (box.width < Math.max(3.2, projectionZone.width * 0.035)) continue;
+      if (box.height < Math.max(3.2, projectionZone.height * 0.045)) continue;
+      if (area < Math.max(10, projectionArea * 0.0018)) continue;
+      if (area > projectionArea * 0.26) continue;
+      if (aspect < 0.14 || aspect > 7.2) continue;
 
       boxes.push({ ...box, cells, edgeCount: cells, score: cells + area });
     }
@@ -151,4 +151,4 @@ export function generateAutoMasks(
 
 source = source.slice(0, start) + replacement + source.slice(end);
 writeFileSync(path, source);
-console.log("edge detector now uses loose connected visible-edge object candidates");
+console.log("edge detector now uses looser connected visible-edge object candidates");
