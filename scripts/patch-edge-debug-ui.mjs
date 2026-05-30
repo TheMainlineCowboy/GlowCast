@@ -41,6 +41,11 @@ if (source.includes(helperAnchor) && !source.includes("function edgeDebugSummary
   source = source.replace(helperAnchor, helper + helperAnchor);
 }
 
+const debugReadout = `              {edgeDebugMode && (
+                <pre className="detectMessage" style={{ whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.35, background: "rgba(15,23,42,.85)", border: "1px solid rgba(148,163,184,.35)", borderRadius: 12, padding: 12, overflowX: "auto", marginTop: 8 }}>{JSON.stringify(edgeDebugSummary(), null, 2)}</pre>
+              )}
+`;
+
 const maskStart = source.indexOf('{step === "mask" && (');
 const magneticIndex = source.indexOf('<label className="flex items-center gap-2 text-sm text-slate-200">', maskStart);
 if (maskStart !== -1 && magneticIndex !== -1) {
@@ -48,17 +53,21 @@ if (maskStart !== -1 && magneticIndex !== -1) {
   if (!maskControls.includes("setEdgeDebugMode")) {
     const debugButton = `              <button type="button" onClick={() => setEdgeDebugMode((value) => !value)}>{edgeDebugMode ? "Hide Edge Debug" : "Show Edge Debug"}</button>
 `;
-    source = source.slice(0, magneticIndex) + debugButton + source.slice(magneticIndex);
+    source = source.slice(0, magneticIndex) + debugButton + debugReadout + source.slice(magneticIndex);
+  } else if (!maskControls.includes("edgeDebugSummary(), null, 2")) {
+    source = source.slice(0, magneticIndex) + debugReadout + source.slice(magneticIndex);
   }
 }
 
-const detectAnchor = `{detectMessage && <p className="detectMessage">{detectMessage}</p>}`;
-if (source.includes(detectAnchor) && !source.includes("edgeDebugSummary(), null, 2")) {
-  const replacement = `{detectMessage && <p className="detectMessage">{detectMessage}</p>}
+const oldDetectDebug = `
             {edgeDebugMode && (
               <pre className="detectMessage" style={{ whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.35, background: "rgba(15,23,42,.8)", border: "1px solid rgba(148,163,184,.35)", borderRadius: 12, padding: 12, overflowX: "auto" }}>{JSON.stringify(edgeDebugSummary(), null, 2)}</pre>
             )}`;
-  source = source.replace(detectAnchor, replacement);
+source = source.replace(oldDetectDebug, "");
+
+const detectAnchor = `{detectMessage && <p className="detectMessage">{detectMessage}</p>}`;
+if (source.includes(detectAnchor) && !source.includes("edgeDebugSummary(), null, 2")) {
+  source = source.replace(detectAnchor, detectAnchor);
 }
 
 writeFileSync(appPath, source);
