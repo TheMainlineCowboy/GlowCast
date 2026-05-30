@@ -18,7 +18,7 @@ export type AutoMaskZone = {
 
 type ProjectionZone = { x: number; y: number; width: number; height: number };
 type AutoMaskOptions = { clusterRadius: number; minPoints: number; tolerance: number };
-type CellCandidate = ProjectionZone & { score: number; edgeCount: number };
+type ComponentBox = ProjectionZone & { score: number; edgeCount: number; cells: number };
 
 function loadScanImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -106,82 +106,14 @@ function rectPoints(box: ProjectionZone): Coordinate[] {
   ];
 }
 
-function overlapAmount(a: ProjectionZone, b: ProjectionZone) {
-  const xOverlap = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
-  const yOverlap = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
-  return xOverlap * yOverlap;
-}
-
-function overlapRatios(a: ProjectionZone, b: ProjectionZone) {
-  const xOverlap = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
-  const yOverlap = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
-  return {
-    xRatio: xOverlap / Math.max(0.01, Math.min(a.width, b.width)),
-    yRatio: yOverlap / Math.max(0.01, Math.min(a.height, b.height))
-  };
-}
-
-function gapBetween(a: ProjectionZone, b: ProjectionZone) {
-  const xGap = Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + a.width, b.x + b.width));
-  const yGap = Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.height, b.y + b.height));
-  return { xGap, yGap };
-}
-
 function pointInsideBox(point: EdgePoint, box: ProjectionZone) {
   return point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height;
 }
 
-function touchesProjectionBoundary(box: ProjectionZone, projectionZone: ProjectionZone) {
-  const marginX = Math.max(1.2, projectionZone.width * 0.025);
-  const marginY = Math.max(1.2, projectionZone.height * 0.025);
-  return box.x <= projectionZone.x + marginX || box.y <= projectionZone.y + marginY || box.x + box.width >= projectionZone.x + projectionZone.width - marginX || box.y + box.height >= projectionZone.y + projectionZone.height - marginY;
-}
-
-function scoreBox(points: EdgePoint[], box: ProjectionZone, projectionZone: ProjectionZone): CellCandidate | null {
-  if (touchesProjectionBoundary(box, projectionZone)) return null;
-  const inside = points.filter((point) => pointInsideBox(point, box));
-  if (inside.length < 22) return null;
-
-  const area = box.width * box.height;
-  const projectionArea = projectionZone.width * projectionZone.height;
-  const aspect = box.width / Math.max(box.height, 0.01);
-  if (area < 24 || area > projectionArea * 0.16) return null;
-  if (box.width < projectionZone.width * 0.08 || box.height < projectionZone.height * 0.14) return null;
-  if (box.width > projectionZone.width * 0.42 || box.height > projectionZone.height * 0.42) return null;
-  if (aspect < 0.45 || aspect > 2.65) return null;
-
-  const sideHits = [0, 0, 0, 0];
-  let centerHits = 0;
-  let middleVerticalHits = 0;
-  let middleHorizontalHits = 0;
-  for (const point of inside) {
-    const nx = (point.x - box.x) / Math.max(box.width, 0.01);
-    const ny = (point.y - box.y) / Math.max(box.height, 0.01);
-    if (ny < 0.22) sideHits[0] += 1;
-    if (ny > 0.78) sideHits[1] += 1;
-    if (nx < 0.24) sideHits[2] += 1;
-    if (nx > 0.76) sideHits[3] += 1;
-    if (nx >= 0.28 && nx <= 0.72 && ny >= 0.28 && ny <= 0.72) centerHits += 1;
-    if (nx >= 0.38 && nx <= 0.62) middleVerticalHits += 1;
-    if (ny >= 0.38 && ny <= 0.62) middleHorizontalHits += 1;
-  }
-
-  const requiredSideHits = Math.max(4, inside.length * 0.11);
-  const hasTop = sideHits[0] >= requiredSideHits;
-  const hasBottom = sideHits[1] >= requiredSideHits;
-  const hasLeft = sideHits[2] >= requiredSideHits;
-  const hasRight = sideHits[3] >= requiredSideHits;
-  if (!(hasLeft && hasRight && hasTop && hasBottom)) return null;
-  if (centerHits < Math.max(4, inside.length * 0.06)) return null;
-  if (middleVerticalHits < Math.max(5, inside.length * 0.12)) return null;
-  if (middleHorizontalHits < Math.max(5, inside.length * 0.12)) return null;
-
-  const density = inside.length / Math.max(area, 1);
-  const aspectBonus = aspect >= 0.65 && aspect <= 2.1 ? 1.45 : 0.9;
-  const centerBonus = centerHits >= Math.max(6, inside.length * 0.1) ? 0.45 : 0;
-  const sizePenalty = area / Math.max(projectionArea, 1);
-  const score = density * aspectBonus * (2 + centerBonus) - sizePenalty;
-  return { ...box, score, edgeCount: inside.length };
+function overlapAmount(a: ProjectionZone, b: ProjectionZone) {
+  const xOverlap = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+  const yOverlap = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+  return xOverlap * yOverlap;
 }
 
 function mergeBoxes(a: ProjectionZone, b: ProjectionZone): ProjectionZone {
@@ -192,103 +124,187 @@ function mergeBoxes(a: ProjectionZone, b: ProjectionZone): ProjectionZone {
   return { x, y, width: maxX - x, height: maxY - y };
 }
 
-function shouldMergePaneBoxes(a: ProjectionZone, b: ProjectionZone, projectionZone: ProjectionZone) {
-  const combined = mergeBoxes(a, b);
-  const combinedArea = combined.width * combined.height;
-  const projectionArea = projectionZone.width * projectionZone.height;
-  const aspect = combined.width / Math.max(combined.height, 0.01);
-  if (combinedArea > projectionArea * 0.22) return false;
-  if (combined.width > projectionZone.width * 0.44 || combined.height > projectionZone.height * 0.52) return false;
-  if (combined.width > Math.max(a.width, b.width) * 2.25 && combined.height > Math.max(a.height, b.height) * 1.18) return false;
-  if (aspect < 0.35 || aspect > 3.2) return false;
-
-  const overlap = overlapAmount(a, b);
-  const minArea = Math.min(a.width * a.height, b.width * b.height);
-  if (overlap / Math.max(minArea, 1) > 0.24) return true;
-
-  const { xGap, yGap } = gapBetween(a, b);
-  const { xRatio, yRatio } = overlapRatios(a, b);
-  const aCenterY = a.y + a.height / 2;
-  const bCenterY = b.y + b.height / 2;
-  const aCenterX = a.x + a.width / 2;
-  const bCenterX = b.x + b.width / 2;
-  const similarHeight = Math.min(a.height, b.height) / Math.max(a.height, b.height) >= 0.62;
-  const similarWidth = Math.min(a.width, b.width) / Math.max(a.width, b.width) >= 0.52;
-  const horizontalNeighbors =
-    xGap <= Math.max(1.25, projectionZone.width * 0.024) &&
-    yRatio >= 0.58 &&
-    similarHeight &&
-    Math.abs(aCenterY - bCenterY) <= Math.max(a.height, b.height) * 0.34;
-  const verticalNeighbors =
-    yGap <= Math.max(1.4, projectionZone.height * 0.034) &&
-    xRatio >= 0.58 &&
-    similarWidth &&
-    Math.abs(aCenterX - bCenterX) <= Math.max(a.width, b.width) * 0.38;
-  return horizontalNeighbors || verticalNeighbors;
+function paddedBox(box: ProjectionZone, padX: number, padY: number): ProjectionZone {
+  return {
+    x: box.x - padX,
+    y: box.y - padY,
+    width: box.width + padX * 2,
+    height: box.height + padY * 2
+  };
 }
 
-function mergeNearbyPaneBoxes(boxes: CellCandidate[], projectionZone: ProjectionZone): CellCandidate[] {
-  const mergedBoxes = [...boxes];
+function clampToProjection(box: ProjectionZone, projection: ProjectionZone): ProjectionZone {
+  const x = Math.max(projection.x, box.x);
+  const y = Math.max(projection.y, box.y);
+  const maxX = Math.min(projection.x + projection.width, box.x + box.width);
+  const maxY = Math.min(projection.y + projection.height, box.y + box.height);
+  return { x, y, width: Math.max(0, maxX - x), height: Math.max(0, maxY - y) };
+}
+
+function boxGap(a: ProjectionZone, b: ProjectionZone) {
+  return {
+    x: Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + a.width, b.x + b.width)),
+    y: Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.height, b.y + b.height))
+  };
+}
+
+function buildComponentBoxes(edgePoints: EdgePoint[], projectionZone: ProjectionZone): ComponentBox[] {
+  const marginX = Math.max(0.75, projectionZone.width * 0.015);
+  const marginY = Math.max(0.75, projectionZone.height * 0.018);
+  const inner = {
+    x: projectionZone.x + marginX,
+    y: projectionZone.y + marginY,
+    width: Math.max(1, projectionZone.width - marginX * 2),
+    height: Math.max(1, projectionZone.height - marginY * 2)
+  };
+
+  const strongPoints = edgePoints.filter((point) => pointInsideBox(point, inner) && point.strength >= 92);
+  if (!strongPoints.length) return [];
+
+  const cellSize = Math.max(0.32, Math.min(projectionZone.width, projectionZone.height) / 95);
+  const grid = new Map<string, { x: number; y: number; count: number; strength: number }>();
+
+  for (const point of strongPoints) {
+    const gx = Math.floor((point.x - projectionZone.x) / cellSize);
+    const gy = Math.floor((point.y - projectionZone.y) / cellSize);
+    const key = `${gx},${gy}`;
+    const current = grid.get(key);
+    if (current) {
+      current.count += 1;
+      current.strength += point.strength;
+    } else {
+      grid.set(key, { x: gx, y: gy, count: 1, strength: point.strength });
+    }
+  }
+
+  const visited = new Set<string>();
+  const boxes: ComponentBox[] = [];
+  const offsets = [-1, 0, 1];
+
+  for (const [key, first] of grid) {
+    if (visited.has(key)) continue;
+    const queue = [first];
+    visited.add(key);
+    let minGX = first.x;
+    let maxGX = first.x;
+    let minGY = first.y;
+    let maxGY = first.y;
+    let cells = 0;
+    let edgeCount = 0;
+    let strength = 0;
+
+    while (queue.length) {
+      const cell = queue.pop()!;
+      cells += 1;
+      edgeCount += cell.count;
+      strength += cell.strength;
+      minGX = Math.min(minGX, cell.x);
+      maxGX = Math.max(maxGX, cell.x);
+      minGY = Math.min(minGY, cell.y);
+      maxGY = Math.max(maxGY, cell.y);
+
+      for (const dx of offsets) {
+        for (const dy of offsets) {
+          if (dx === 0 && dy === 0) continue;
+          const nextKey = `${cell.x + dx},${cell.y + dy}`;
+          if (visited.has(nextKey)) continue;
+          const next = grid.get(nextKey);
+          if (!next) continue;
+          visited.add(nextKey);
+          queue.push(next);
+        }
+      }
+    }
+
+    const raw = {
+      x: projectionZone.x + minGX * cellSize,
+      y: projectionZone.y + minGY * cellSize,
+      width: (maxGX - minGX + 1) * cellSize,
+      height: (maxGY - minGY + 1) * cellSize
+    };
+    const box = clampToProjection(paddedBox(raw, cellSize * 1.6, cellSize * 1.6), projectionZone);
+    const area = box.width * box.height;
+    const projectionArea = projectionZone.width * projectionZone.height;
+    const aspect = box.width / Math.max(box.height, 0.01);
+    const density = edgeCount / Math.max(area, 1);
+
+    if (cells < 8 || edgeCount < 16) continue;
+    if (box.width < projectionZone.width * 0.045 || box.height < projectionZone.height * 0.07) continue;
+    if (area < projectionArea * 0.004 || area > projectionArea * 0.26) continue;
+    if (aspect < 0.22 || aspect > 4.2) continue;
+
+    boxes.push({ ...box, cells, edgeCount, score: density * 20 + Math.min(4, strength / Math.max(edgeCount, 1) / 40) });
+  }
+
+  return boxes;
+}
+
+function mergeRelatedComponents(boxes: ComponentBox[], projectionZone: ProjectionZone): ComponentBox[] {
+  const merged = [...boxes].sort((a, b) => b.score - a.score);
   let changed = true;
   while (changed) {
     changed = false;
-    for (let i = 0; i < mergedBoxes.length; i += 1) {
-      for (let j = i + 1; j < mergedBoxes.length; j += 1) {
-        if (!shouldMergePaneBoxes(mergedBoxes[i], mergedBoxes[j], projectionZone)) continue;
-        const first = mergedBoxes[i];
-        const second = mergedBoxes[j];
-        const combined = mergeBoxes(first, second);
-        mergedBoxes[i] = {
+    for (let i = 0; i < merged.length; i += 1) {
+      for (let j = i + 1; j < merged.length; j += 1) {
+        const a = merged[i];
+        const b = merged[j];
+        const combined = mergeBoxes(a, b);
+        const combinedArea = combined.width * combined.height;
+        const projectionArea = projectionZone.width * projectionZone.height;
+        const aspect = combined.width / Math.max(combined.height, 0.01);
+        const gap = boxGap(a, b);
+        const overlap = overlapAmount(a, b);
+        const minArea = Math.min(a.width * a.height, b.width * b.height);
+        const horizontal = gap.x <= Math.max(1.35, projectionZone.width * 0.028) && gap.y <= Math.max(a.height, b.height) * 0.42;
+        const vertical = gap.y <= Math.max(1.35, projectionZone.height * 0.045) && gap.x <= Math.max(a.width, b.width) * 0.42;
+        const overlapping = overlap / Math.max(minArea, 1) > 0.18;
+
+        if (!horizontal && !vertical && !overlapping) continue;
+        if (combinedArea > projectionArea * 0.22) continue;
+        if (combined.width > projectionZone.width * 0.50 || combined.height > projectionZone.height * 0.62) continue;
+        if (aspect < 0.24 || aspect > 4.0) continue;
+
+        merged[i] = {
           ...combined,
-          score: Math.max(first.score, second.score) + 0.2,
-          edgeCount: first.edgeCount + second.edgeCount
+          score: Math.max(a.score, b.score) + 0.35,
+          edgeCount: a.edgeCount + b.edgeCount,
+          cells: a.cells + b.cells
         };
-        mergedBoxes.splice(j, 1);
+        merged.splice(j, 1);
         changed = true;
         break;
       }
       if (changed) break;
     }
   }
-  return mergedBoxes;
+  return merged;
 }
 
-function buildWindowCandidates(edgePoints: EdgePoint[], projectionZone: ProjectionZone): CellCandidate[] {
-  const points = edgePoints.filter((point) => pointInsideBox(point, projectionZone));
-  const candidates: CellCandidate[] = [];
-  const minW = Math.max(5, projectionZone.width * 0.1);
-  const maxW = Math.max(minW + 1, projectionZone.width * 0.34);
-  const minH = Math.max(6, projectionZone.height * 0.16);
-  const maxH = Math.max(minH + 1, projectionZone.height * 0.38);
-  const stepX = Math.max(1.5, projectionZone.width / 34);
-  const stepY = Math.max(1.5, projectionZone.height / 34);
-  const widths = [minW, (minW + maxW) / 2, maxW];
-  const heights = [minH, (minH + maxH) / 2, maxH];
+function buildWindowCandidates(edgePoints: EdgePoint[], projectionZone: ProjectionZone): ComponentBox[] {
+  const components = buildComponentBoxes(edgePoints, projectionZone);
+  const merged = mergeRelatedComponents(components, projectionZone);
+  const projectionArea = projectionZone.width * projectionZone.height;
+  const sorted = merged
+    .filter((box) => {
+      const area = box.width * box.height;
+      const aspect = box.width / Math.max(box.height, 0.01);
+      return area >= projectionArea * 0.006 && area <= projectionArea * 0.24 && aspect >= 0.25 && aspect <= 4.0;
+    })
+    .sort((a, b) => b.score - a.score);
 
-  for (const width of widths) {
-    for (const height of heights) {
-      for (let y = projectionZone.y; y <= projectionZone.y + projectionZone.height - height; y += stepY) {
-        for (let x = projectionZone.x; x <= projectionZone.x + projectionZone.width - width; x += stepX) {
-          const scored = scoreBox(points, { x, y, width, height }, projectionZone);
-          if (scored) candidates.push(scored);
-        }
-      }
-    }
-  }
-
-  const accepted: CellCandidate[] = [];
-  for (const candidate of candidates.sort((a, b) => b.score - a.score)) {
+  const accepted: ComponentBox[] = [];
+  for (const candidate of sorted) {
     const duplicate = accepted.some((existing) => {
       const overlap = overlapAmount(existing, candidate);
       const minArea = Math.min(existing.width * existing.height, candidate.width * candidate.height);
-      return overlap / Math.max(minArea, 1) > 0.35;
+      return overlap / Math.max(minArea, 1) > 0.42;
     });
-    if (!duplicate) accepted.push(candidate);
-    if (accepted.length >= 12) break;
+    if (duplicate) continue;
+    accepted.push(candidate);
+    if (accepted.length >= 8) break;
   }
 
-  const merged = mergeNearbyPaneBoxes(accepted, projectionZone);
-  return merged.sort((a, b) => b.score - a.score).slice(0, 6);
+  return accepted;
 }
 
 export function generateAutoMasks(
