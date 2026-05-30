@@ -64,6 +64,16 @@ if (!source.includes('function applySelectedEdgeCandidate()')) {
     setDetectMessage("Applied selected edge candidate as a real mask.");
   }
 
+  function applyAllEdgeCandidates() {
+    let count = 0;
+    setZones((current) => current.map((zone) => {
+      if (zone.label !== "edge candidate") return zone;
+      count += 1;
+      return { ...zone, included: true, label: "approved edge mask" };
+    }));
+    setDetectMessage(count ? "Applied " + count + " edge candidates as real masks." : "No edge candidates to apply.");
+  }
+
   function clearEdgeCandidates() {
     setZones((current) => current.filter((zone) => zone.label !== "edge candidate"));
     if (selectedZone?.label === "edge candidate") setSelectedZoneId(null);
@@ -72,6 +82,29 @@ if (!source.includes('function applySelectedEdgeCandidate()')) {
 
 `;
   source = source.replace(resetAnchor, helper + resetAnchor);
+} else if (!source.includes('function applyAllEdgeCandidates()')) {
+  const insertAfter = `  function applySelectedEdgeCandidate() {
+    if (!selectedZone || selectedZone.label !== "edge candidate") {
+      setDetectMessage("Select an edge candidate first.");
+      return;
+    }
+    setZones((current) => current.map((zone) => zone.id === selectedZone.id ? { ...zone, included: true, label: "approved edge mask" } : zone));
+    setDetectMessage("Applied selected edge candidate as a real mask.");
+  }
+
+`;
+  const applyAll = `  function applyAllEdgeCandidates() {
+    let count = 0;
+    setZones((current) => current.map((zone) => {
+      if (zone.label !== "edge candidate") return zone;
+      count += 1;
+      return { ...zone, included: true, label: "approved edge mask" };
+    }));
+    setDetectMessage(count ? "Applied " + count + " edge candidates as real masks." : "No edge candidates to apply.");
+  }
+
+`;
+  if (source.includes(insertAfter)) source = source.replace(insertAfter, insertAfter + applyAll);
 }
 
 const maskStart = source.indexOf('{step === "mask" && (');
@@ -85,11 +118,21 @@ if (maskStart !== -1 && magneticIndex !== -1) {
   const controls = `              <button type="button" onClick={applySelectedEdgeCandidate} disabled={!selectedZone || selectedZone.label !== "edge candidate"} className="primary">
                 Apply Selected Candidate
               </button>
+              <button type="button" onClick={applyAllEdgeCandidates}>Apply All Candidates</button>
               <button type="button" onClick={clearEdgeCandidates}>Clear Candidates</button>
 `;
   let insert = "";
   if (!chunk.includes('onClick={createMasksFromEdges}')) insert += createButton;
   if (!chunk.includes('applySelectedEdgeCandidate')) insert += controls;
+  else if (!chunk.includes('applyAllEdgeCandidates')) {
+    const selectedButton = `<button type="button" onClick={applySelectedEdgeCandidate} disabled={!selectedZone || selectedZone.label !== "edge candidate"} className="primary">
+                Apply Selected Candidate
+              </button>
+`;
+    const withAll = selectedButton + `              <button type="button" onClick={applyAllEdgeCandidates}>Apply All Candidates</button>
+`;
+    source = source.replace(selectedButton, withAll);
+  }
   if (insert) source = source.slice(0, magneticIndex) + insert + source.slice(magneticIndex);
 }
 
