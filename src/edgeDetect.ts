@@ -288,7 +288,11 @@ function buildWindowCandidates(edgePoints: EdgePoint[], projectionZone: Projecti
     .filter((box) => {
       const area = box.width * box.height;
       const aspect = box.width / Math.max(box.height, 0.01);
-      return area >= projectionArea * 0.006 && area <= projectionArea * 0.24 && aspect >= 0.25 && aspect <= 4.0;
+      const bigEnoughObject =
+        box.width >= Math.max(7.5, projectionZone.width * 0.105) &&
+        box.height >= Math.max(7.5, projectionZone.height * 0.13) &&
+        area >= Math.max(70, projectionArea * 0.018);
+      return bigEnoughObject && area <= projectionArea * 0.24 && aspect >= 0.25 && aspect <= 4.0;
     })
     .sort((a, b) => b.score - a.score);
 
