@@ -8,147 +8,24 @@ source = source.replace(
   "type AutoMaskOptions = { clusterRadius: number; minPoints: number; tolerance: number; preferredShape?: string };"
 );
 
-const start = source.indexOf("export function generateAutoMasks(");
-const end = source.indexOf("\nexport function drawProjectionWithMasks(");
+source = source.replace("pointInsideBox(point, inner) && point.strength >= 92", "pointInsideBox(point, inner) && point.strength >= 45");
+source = source.replace("Math.min(projectionZone.width, projectionZone.height) / 95", "Math.min(projectionZone.width, projectionZone.height) / 62");
+source = source.replace("if (cells < 8 || edgeCount < 16) continue;", "if (cells < 3 || edgeCount < 5) continue;");
+source = source.replace(
+  "if (box.width < projectionZone.width * 0.045 || box.height < projectionZone.height * 0.07) continue;",
+  "if (box.width < projectionZone.width * 0.018 || box.height < projectionZone.height * 0.025) continue;"
+);
+source = source.replace("if (area < projectionArea * 0.004 || area > projectionArea * 0.26) continue;", "if (area < projectionArea * 0.001 || area > projectionArea * 0.30) continue;");
+source = source.replace("if (aspect < 0.22 || aspect > 4.2) continue;", "if (aspect < 0.10 || aspect > 8.0) continue;");
+source = source.replace("if (combinedArea > projectionArea * 0.22) continue;", "if (combinedArea > projectionArea * 0.30) continue;");
+source = source.replace("if (combined.width > projectionZone.width * 0.50 || combined.height > projectionZone.height * 0.62) continue;", "if (combined.width > projectionZone.width * 0.65 || combined.height > projectionZone.height * 0.75) continue;");
+source = source.replace("if (aspect < 0.24 || aspect > 4.0) continue;", "if (aspect < 0.10 || aspect > 8.0) continue;");
+source = source.replace(
+  "box.width >= Math.max(7.5, projectionZone.width * 0.105) &&\n        box.height >= Math.max(7.5, projectionZone.height * 0.13) &&\n        area >= Math.max(70, projectionArea * 0.018)",
+  "box.width >= Math.max(3.0, projectionZone.width * 0.025) &&\n        box.height >= Math.max(3.0, projectionZone.height * 0.035) &&\n        area >= Math.max(8, projectionArea * 0.0015)"
+);
+source = source.replace("return bigEnoughObject && area <= projectionArea * 0.24 && aspect >= 0.25 && aspect <= 4.0;", "return bigEnoughObject && area <= projectionArea * 0.30 && aspect >= 0.10 && aspect <= 8.0;");
+source = source.replace("if (accepted.length >= 8) break;", "if (accepted.length >= 16) break;");
 
-if (start === -1 || end === -1 || end <= start) {
-  throw new Error("Could not find generateAutoMasks block to replace.");
-}
-
-const replacement = `function makeMaskFromBox(box: ProjectionZone, index: number): AutoMaskZone {
-  return {
-    id: \`auto_mask_\${Date.now()}_\${index}\`,
-    type: "auto-generated",
-    shape: "polygon",
-    points: rectPoints(box),
-    boundingBox: {
-      x: Number(box.x.toFixed(2)),
-      y: Number(box.y.toFixed(2)),
-      width: Number(box.width.toFixed(2)),
-      height: Number(box.height.toFixed(2))
-    },
-    enabled: true
-  };
-}
-
-function buildLooseEdgeObjectCandidates(edgePoints: EdgePoint[], projectionZone: ProjectionZone): ComponentBox[] {
-  const gridWidth = 145;
-  const gridHeight = Math.max(64, Math.round(gridWidth * (projectionZone.height / Math.max(projectionZone.width, 1))));
-  const total = gridWidth * gridHeight;
-  const grid = new Uint8Array(total);
-  const visited = new Uint8Array(total);
-  const indexFor = (x: number, y: number) => y * gridWidth + x;
-  const projectionArea = projectionZone.width * projectionZone.height;
-
-  const mark = (x: number, y: number, radius: number) => {
-    for (let dy = -radius; dy <= radius; dy += 1) {
-      for (let dx = -radius; dx <= radius; dx += 1) {
-        if (dx * dx + dy * dy > radius * radius) continue;
-        const gx = x + dx;
-        const gy = y + dy;
-        if (gx < 0 || gy < 0 || gx >= gridWidth || gy >= gridHeight) continue;
-        grid[indexFor(gx, gy)] = 1;
-      }
-    }
-  };
-
-  for (const point of edgePoints) {
-    if (point.strength < 48) continue;
-    if (point.x < projectionZone.x || point.x > projectionZone.x + projectionZone.width) continue;
-    if (point.y < projectionZone.y || point.y > projectionZone.y + projectionZone.height) continue;
-    const nx = (point.x - projectionZone.x) / Math.max(projectionZone.width, 1);
-    const ny = (point.y - projectionZone.y) / Math.max(projectionZone.height, 1);
-    const gx = Math.max(0, Math.min(gridWidth - 1, Math.round(nx * (gridWidth - 1))));
-    const gy = Math.max(0, Math.min(gridHeight - 1, Math.round(ny * (gridHeight - 1))));
-    mark(gx, gy, 4);
-  }
-
-  const boxes: ComponentBox[] = [];
-  const neighbors = [-1, 0, 1];
-  for (let y = 0; y < gridHeight; y += 1) {
-    for (let x = 0; x < gridWidth; x += 1) {
-      const startIdx = indexFor(x, y);
-      if (!grid[startIdx] || visited[startIdx]) continue;
-
-      const queue: Array<[number, number]> = [[x, y]];
-      visited[startIdx] = 1;
-      let minX = x;
-      let maxX = x;
-      let minY = y;
-      let maxY = y;
-      let cells = 0;
-
-      while (queue.length) {
-        const [cx, cy] = queue.pop()!;
-        cells += 1;
-        minX = Math.min(minX, cx);
-        maxX = Math.max(maxX, cx);
-        minY = Math.min(minY, cy);
-        maxY = Math.max(maxY, cy);
-        for (const dx of neighbors) {
-          for (const dy of neighbors) {
-            if (dx === 0 && dy === 0) continue;
-            const nx = cx + dx;
-            const ny = cy + dy;
-            if (nx < 0 || ny < 0 || nx >= gridWidth || ny >= gridHeight) continue;
-            const idx = indexFor(nx, ny);
-            if (!grid[idx] || visited[idx]) continue;
-            visited[idx] = 1;
-            queue.push([nx, ny]);
-          }
-        }
-      }
-
-      const raw = {
-        x: projectionZone.x + (minX / gridWidth) * projectionZone.width,
-        y: projectionZone.y + (minY / gridHeight) * projectionZone.height,
-        width: ((maxX - minX + 1) / gridWidth) * projectionZone.width,
-        height: ((maxY - minY + 1) / gridHeight) * projectionZone.height
-      };
-      const padX = Math.max(0.75, raw.width * 0.09);
-      const padY = Math.max(0.75, raw.height * 0.09);
-      const box = clampToProjection(paddedBox(raw, padX, padY), projectionZone);
-      const area = box.width * box.height;
-      const aspect = box.width / Math.max(box.height, 0.01);
-
-      if (cells < 8) continue;
-      if (box.width < Math.max(3.2, projectionZone.width * 0.035)) continue;
-      if (box.height < Math.max(3.2, projectionZone.height * 0.045)) continue;
-      if (area < Math.max(10, projectionArea * 0.0018)) continue;
-      if (area > projectionArea * 0.26) continue;
-      if (aspect < 0.14 || aspect > 7.2) continue;
-
-      boxes.push({ ...box, cells, edgeCount: cells, score: cells + area });
-    }
-  }
-
-  const accepted: ComponentBox[] = [];
-  for (const candidate of boxes.sort((a, b) => b.score - a.score)) {
-    const duplicate = accepted.some((existing) => {
-      const overlap = overlapAmount(existing, candidate);
-      const minArea = Math.min(existing.width * existing.height, candidate.width * candidate.height);
-      return overlap / Math.max(minArea, 1) > 0.42;
-    });
-    if (duplicate) continue;
-    accepted.push(candidate);
-    if (accepted.length >= 12) break;
-  }
-  return accepted;
-}
-
-export function generateAutoMasks(
-  edgePoints: EdgePoint[],
-  projectionZone: ProjectionZone,
-  _options: AutoMaskOptions = { clusterRadius: 1.8, minPoints: 14, tolerance: 0.8 }
-): AutoMaskZone[] {
-  const looseCandidates = buildLooseEdgeObjectCandidates(edgePoints, projectionZone).map(makeMaskFromBox);
-  if (looseCandidates.length) return looseCandidates;
-
-  const fallbackCandidates = buildWindowCandidates(edgePoints, projectionZone).map(makeMaskFromBox);
-  return fallbackCandidates;
-}
-`;
-
-source = source.slice(0, start) + replacement + source.slice(end);
 writeFileSync(path, source);
-console.log("edge detector now uses looser connected visible-edge object candidates");
+console.log("edge detector now uses minimal loose threshold candidate filtering");
