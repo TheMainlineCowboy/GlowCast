@@ -3,6 +3,11 @@ import { readFileSync, writeFileSync } from "node:fs";
 const path = "src/edgeDetect.ts";
 let source = readFileSync(path, "utf8");
 
+source = source.replace(
+  "type AutoMaskOptions = { clusterRadius: number; minPoints: number; tolerance: number };",
+  "type AutoMaskOptions = { clusterRadius: number; minPoints: number; tolerance: number; preferredShape?: string };"
+);
+
 const start = source.indexOf("export function generateAutoMasks(");
 const end = source.indexOf("\nexport function drawProjectionWithMasks(");
 
