@@ -9,4 +9,4 @@ source = source.replace(
 );
 
 writeFileSync(path, source);
-console.log("edge detector stable baseline restored");
+console.log("edge cleanup baseline active");
