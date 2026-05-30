@@ -207,16 +207,9 @@ function buildEnclosedEdgeCandidates(edgePoints: EdgePoint[], projectionZone: Pr
     .map(({ score, ...candidate }) => candidate);
 }
 
-export function generateAutoMasks(
-  edgePoints: EdgePoint[],
-  projectionZone: ProjectionZone,
-  _options: AutoMaskOptions = { clusterRadius: 1.8, minPoints: 14, tolerance: 0.8 }
-): AutoMaskZone[] {
-  const enclosedCandidates = buildEnclosedEdgeCandidates(edgePoints, projectionZone);
-  if (enclosedCandidates.length) return enclosedCandidates;
-  const fallbackCandidates = buildWindowCandidates(edgePoints, projectionZone);
-  return fallbackCandidates.map((box, index) => ({
-    id: \`auto_mask_\${Date.now()}_fallback_\${index}\`,
+function makeMaskFromBox(box: ProjectionZone, index: number): AutoMaskZone {
+  return {
+    id: \`auto_mask_\${Date.now()}_\${index}\`,
     type: "auto-generated",
     shape: "polygon",
     points: rectPoints(box),
@@ -227,10 +220,27 @@ export function generateAutoMasks(
       height: Number(box.height.toFixed(2))
     },
     enabled: true
-  }));
+  };
+}
+
+export function generateAutoMasks(
+  edgePoints: EdgePoint[],
+  projectionZone: ProjectionZone,
+  _options: AutoMaskOptions = { clusterRadius: 1.8, minPoints: 14, tolerance: 0.8 }
+): AutoMaskZone[] {
+  const fallbackCandidates = buildWindowCandidates(edgePoints, projectionZone).map(makeMaskFromBox);
+  const largeFallbackCandidates = fallbackCandidates.filter((candidate) => {
+    const area = candidate.boundingBox.width * candidate.boundingBox.height;
+    const projectionArea = projectionZone.width * projectionZone.height;
+    return area >= Math.max(65, projectionArea * 0.012);
+  });
+  if (largeFallbackCandidates.length) return largeFallbackCandidates;
+
+  const enclosedCandidates = buildEnclosedEdgeCandidates(edgePoints, projectionZone);
+  return enclosedCandidates;
 }
 `;
 
 source = source.slice(0, start) + replacement + source.slice(end);
 writeFileSync(path, source);
-console.log("edge detector now generates candidates from enclosed edge contours");
+console.log("edge detector now prefers larger edge clusters over tiny enclosed contour pockets");
