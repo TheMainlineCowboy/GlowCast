@@ -50,11 +50,14 @@ function floodConvexHull(points: Coordinate[]): Coordinate[] {
   return lower.slice(0, -1).concat(upper.slice(0, -1));
 }
 
-function simplifyFloodPolygon(points: Coordinate[], maxPoints = 36): Coordinate[] {
-  if (points.length <= maxPoints) return points;
+function simplifyFloodPolygon(points: Coordinate[], maxPoints = 42): Coordinate[] {
+  if (points.length <= maxPoints) return points.map((point) => ({ x: Number(point.x.toFixed(2)), y: Number(point.y.toFixed(2)) }));
   const simplified: Coordinate[] = [];
   const step = points.length / maxPoints;
-  for (let i = 0; i < maxPoints; i += 1) simplified.push(points[Math.floor(i * step)]);
+  for (let i = 0; i < maxPoints; i += 1) {
+    const point = points[Math.floor(i * step)];
+    simplified.push({ x: Number(point.x.toFixed(2)), y: Number(point.y.toFixed(2)) });
+  }
   return simplified;
 }
 
@@ -86,14 +89,9 @@ export function generateAutoMasks(
   const projectionArea = projectionZone.width * projectionZone.height;
   if (!edgePoints.length || projectionArea <= 0) return [];
 
-  // Treat the edge scan as a stencil, not as a shape guesser. Edges become walls.
-  // Flood-fill from outside the projection surface. Anything the flood-fill cannot
-  // reach is an enclosed object/opening and becomes a custom polygon mask.
-  const gridW = 220;
-  const gridH = Math.max(80, Math.min(220, Math.round((projectionZone.height / Math.max(projectionZone.width, 1)) * gridW)));
+  const gridW = 260;
+  const gridH = Math.max(90, Math.min(260, Math.round((projectionZone.height / Math.max(projectionZone.width, 1)) * gridW)));
   const total = gridW * gridH;
-  const blocked = new Uint8Array(total);
-  const outside = new Uint8Array(total);
   const toIndex = (x: number, y: number) => y * gridW + x;
   const toGridX = (x: number) => Math.max(0, Math.min(gridW - 1, Math.round(((x - projectionZone.x) / projectionZone.width) * (gridW - 1))));
   const toGridY = (y: number) => Math.max(0, Math.min(gridH - 1, Math.round(((y - projectionZone.y) / projectionZone.height) * (gridH - 1))));
@@ -102,24 +100,42 @@ export function generateAutoMasks(
     y: projectionZone.y + (y / Math.max(1, gridH - 1)) * projectionZone.height
   });
 
-  const strong = edgePoints.filter((point) => pointInsideBox(point, projectionZone) && point.strength >= 58);
+  const sourceEdges = new Uint8Array(total);
+  const strong = edgePoints.filter((point) => pointInsideBox(point, projectionZone) && point.strength >= 50);
   if (!strong.length) return [];
 
-  const edgeRadius = Math.max(2, Math.round(Math.min(gridW, gridH) / 72));
-  for (const point of strong) {
-    const gx = toGridX(point.x);
-    const gy = toGridY(point.y);
-    for (let dy = -edgeRadius; dy <= edgeRadius; dy += 1) {
-      for (let dx = -edgeRadius; dx <= edgeRadius; dx += 1) {
-        if (dx * dx + dy * dy > edgeRadius * edgeRadius) continue;
-        const x = gx + dx;
-        const y = gy + dy;
+  const markDisk = (grid: Uint8Array, cx: number, cy: number, radius: number) => {
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        if (dx * dx + dy * dy > radius * radius) continue;
+        const x = cx + dx;
+        const y = cy + dy;
         if (x < 0 || x >= gridW || y < 0 || y >= gridH) continue;
-        blocked[toIndex(x, y)] = 1;
+        grid[toIndex(x, y)] = 1;
       }
     }
-  }
+  };
 
+  for (const point of strong) markDisk(sourceEdges, toGridX(point.x), toGridY(point.y), 1);
+
+  const dilate = (input: Uint8Array, radius: number) => {
+    const output = new Uint8Array(total);
+    for (let y = 0; y < gridH; y += 1) {
+      for (let x = 0; x < gridW; x += 1) {
+        if (!input[toIndex(x, y)]) continue;
+        markDisk(output, x, y, radius);
+      }
+    }
+    return output;
+  };
+
+  // This is the important change: use the visible edge layer as a stencil.
+  // Thickening the stencil closes tiny camera/compression gaps so flood fill can
+  // separate object interiors from the outside wall area instead of requiring a
+  // mathematically perfect unbroken outline.
+  const blocked = dilate(dilate(sourceEdges, 2), 1);
+
+  const outside = new Uint8Array(total);
   const queue: Array<{ x: number; y: number }> = [];
   const pushOutside = (x: number, y: number) => {
     if (x < 0 || x >= gridW || y < 0 || y >= gridH) return;
@@ -146,33 +162,65 @@ export function generateAutoMasks(
     pushOutside(cell.x, cell.y - 1);
   }
 
+  const candidates: Array<{ points: Coordinate[]; box: ProjectionZone; score: number; source: string }> = [];
+  const minCells = Math.max(24, Math.round(total * 0.0009));
+  const maxCells = Math.round(total * 0.30);
   const visited = new Uint8Array(total);
-  const candidates: Array<{ points: Coordinate[]; box: ProjectionZone; score: number }> = [];
-  const minCells = Math.max(18, Math.round(total * 0.0012));
-  const maxCells = Math.round(total * 0.24);
-  const edgeGrow = edgeRadius + 2;
 
+  const addCandidateFromCells = (cells: Array<{ x: number; y: number }>, source: string) => {
+    if (cells.length < minCells || cells.length > maxCells) return;
+    let minGX = gridW;
+    let minGY = gridH;
+    let maxGX = 0;
+    let maxGY = 0;
+    for (const cell of cells) {
+      minGX = Math.min(minGX, cell.x);
+      minGY = Math.min(minGY, cell.y);
+      maxGX = Math.max(maxGX, cell.x);
+      maxGY = Math.max(maxGY, cell.y);
+    }
+
+    const baseBox = floodPolygonBounds([toWorld(minGX, minGY), toWorld(maxGX, minGY), toWorld(maxGX, maxGY), toWorld(minGX, maxGY)]);
+    const area = baseBox.width * baseBox.height;
+    const aspect = baseBox.width / Math.max(baseBox.height, 0.01);
+    if (baseBox.width < Math.max(4.0, projectionZone.width * 0.04)) return;
+    if (baseBox.height < Math.max(3.0, projectionZone.height * 0.045)) return;
+    if (area < Math.max(10, projectionArea * 0.0025) || area > projectionArea * 0.28) return;
+    if (aspect < 0.16 || aspect > 6.5) return;
+
+    const edgePad = Math.max(5, Math.round(Math.min(gridW, gridH) / 38));
+    const pointCloud: Coordinate[] = [];
+
+    // Keep the hole/interior cells, then add the actual surrounding edge pixels.
+    // The hull then lands on the outside trim/border instead of the inner glass/open space.
+    const sampleStep = Math.max(1, Math.floor(cells.length / 180));
+    for (let i = 0; i < cells.length; i += sampleStep) pointCloud.push(toWorld(cells[i].x, cells[i].y));
+
+    for (let y = Math.max(0, minGY - edgePad); y <= Math.min(gridH - 1, maxGY + edgePad); y += 1) {
+      for (let x = Math.max(0, minGX - edgePad); x <= Math.min(gridW - 1, maxGX + edgePad); x += 1) {
+        if (!sourceEdges[toIndex(x, y)] && !blocked[toIndex(x, y)]) continue;
+        pointCloud.push(toWorld(x, y));
+      }
+    }
+
+    const hull = simplifyFloodPolygon(floodConvexHull(pointCloud));
+    if (hull.length < 3) return;
+    const expanded = expandFloodPolygon(hull, Math.max(0.25, Math.min(baseBox.width, baseBox.height) * 0.045), projectionZone);
+    const box = floodPolygonBounds(expanded);
+    candidates.push({ points: expanded, box, score: cells.length + area * (source === "hole" ? 2.0 : 0.8), source });
+  };
+
+  // Primary path: fill closed regions made by the edge stencil.
   for (let startY = 1; startY < gridH - 1; startY += 1) {
     for (let startX = 1; startX < gridW - 1; startX += 1) {
       const startIndex = toIndex(startX, startY);
       if (visited[startIndex] || blocked[startIndex] || outside[startIndex]) continue;
-
       const componentQueue = [{ x: startX, y: startY }];
       visited[startIndex] = 1;
       const cells: Array<{ x: number; y: number }> = [];
-      let minGX = startX;
-      let maxGX = startX;
-      let minGY = startY;
-      let maxGY = startY;
-
       while (componentQueue.length) {
         const cell = componentQueue.pop()!;
         cells.push(cell);
-        minGX = Math.min(minGX, cell.x);
-        maxGX = Math.max(maxGX, cell.x);
-        minGY = Math.min(minGY, cell.y);
-        maxGY = Math.max(maxGY, cell.y);
-
         const neighbors = [
           { x: cell.x + 1, y: cell.y },
           { x: cell.x - 1, y: cell.y },
@@ -187,46 +235,48 @@ export function generateAutoMasks(
           componentQueue.push(next);
         }
       }
-
-      if (cells.length < minCells || cells.length > maxCells) continue;
-
-      const baseCorners = [toWorld(minGX, minGY), toWorld(maxGX, minGY), toWorld(maxGX, maxGY), toWorld(minGX, maxGY)];
-      const baseBox = floodPolygonBounds(baseCorners);
-      const area = baseBox.width * baseBox.height;
-      const aspect = baseBox.width / Math.max(baseBox.height, 0.01);
-      if (baseBox.width < Math.max(4.0, projectionZone.width * 0.045)) continue;
-      if (baseBox.height < Math.max(3.2, projectionZone.height * 0.055)) continue;
-      if (area < Math.max(12, projectionArea * 0.0035) || area > projectionArea * 0.26) continue;
-      if (aspect < 0.18 || aspect > 5.8) continue;
-
-      const pointCloud: Coordinate[] = [];
-      const sampleStep = Math.max(1, Math.floor(cells.length / 220));
-      for (let i = 0; i < cells.length; i += sampleStep) pointCloud.push(toWorld(cells[i].x, cells[i].y));
-
-      // Add the surrounding edge-wall cells so the mask expands to the real outer edge
-      // instead of stopping at the empty interior of a window/door/opening.
-      for (let y = Math.max(0, minGY - edgeGrow); y <= Math.min(gridH - 1, maxGY + edgeGrow); y += 1) {
-        for (let x = Math.max(0, minGX - edgeGrow); x <= Math.min(gridW - 1, maxGX + edgeGrow); x += 1) {
-          if (!blocked[toIndex(x, y)]) continue;
-          const nearX = x >= minGX - edgeGrow && x <= maxGX + edgeGrow;
-          const nearY = y >= minGY - edgeGrow && y <= maxGY + edgeGrow;
-          if (nearX && nearY) pointCloud.push(toWorld(x, y));
-        }
-      }
-
-      const hull = simplifyFloodPolygon(floodConvexHull(pointCloud));
-      if (hull.length < 3) continue;
-      const expanded = expandFloodPolygon(hull, Math.max(0.45, Math.min(baseBox.width, baseBox.height) * 0.075), projectionZone);
-      const box = floodPolygonBounds(expanded);
-      candidates.push({ points: expanded, box, score: cells.length + area * 1.5 });
+      addCandidateFromCells(cells, "hole");
     }
   }
 
-  const accepted: Array<{ points: Coordinate[]; box: ProjectionZone; score: number }> = [];
+  // Fallback path: if an object outline is visibly present but has a small gap,
+  // use the connected edge component itself. This prevents the all-or-nothing
+  // failure where Edge-only View looks correct but Create Edge Mask Candidates says 0.
+  const edgeVisited = new Uint8Array(total);
+  for (let startY = 1; startY < gridH - 1; startY += 1) {
+    for (let startX = 1; startX < gridW - 1; startX += 1) {
+      const startIndex = toIndex(startX, startY);
+      if (edgeVisited[startIndex] || !blocked[startIndex]) continue;
+      const componentQueue = [{ x: startX, y: startY }];
+      edgeVisited[startIndex] = 1;
+      const cells: Array<{ x: number; y: number }> = [];
+      while (componentQueue.length) {
+        const cell = componentQueue.pop()!;
+        cells.push(cell);
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = cell.x + dx;
+            const ny = cell.y + dy;
+            if (nx <= 0 || nx >= gridW - 1 || ny <= 0 || ny >= gridH - 1) continue;
+            const nextIndex = toIndex(nx, ny);
+            if (edgeVisited[nextIndex] || !blocked[nextIndex]) continue;
+            edgeVisited[nextIndex] = 1;
+            componentQueue.push({ x: nx, y: ny });
+          }
+        }
+      }
+      addCandidateFromCells(cells, "component");
+    }
+  }
+
+  const accepted: Array<{ points: Coordinate[]; box: ProjectionZone; score: number; source: string }> = [];
   for (const candidate of candidates.sort((a, b) => b.score - a.score)) {
-    if (accepted.some((existing) => floodOverlapRatio(existing.box, candidate.box) > 0.34)) continue;
+    if (accepted.some((existing) => floodOverlapRatio(existing.box, candidate.box) > 0.32)) continue;
+    // Do not keep candidates that are basically the entire selected surface or surface border.
+    if (candidate.box.width > projectionZone.width * 0.72 || candidate.box.height > projectionZone.height * 0.82) continue;
     accepted.push(candidate);
-    if (accepted.length >= 10) break;
+    if (accepted.length >= 12) break;
   }
 
   return accepted.map((candidate, index) => ({
@@ -247,4 +297,4 @@ export function generateAutoMasks(
 
 source = source.slice(0, start) + replacement + source.slice(end);
 writeFileSync(path, source);
-console.log("edge mask candidates now use flood-fill enclosed regions from scanned edges");
+console.log("edge mask candidates now use robust edge-stencil flood fill with component fallback");
