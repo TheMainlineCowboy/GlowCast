@@ -26,18 +26,23 @@ const newBlock = `        const localPoints = mask.points.map((point) => ({
           width: mask.boundingBox.width,
           height: mask.boundingBox.height,
           included: false,
-          label: "edge filled mask",
-          shape: "freehand",
+          label: "edge candidate",
+          shape: "freehand" as MaskShape,
           points: localPoints
         });`;
 
 if (app.includes(oldBlock)) {
   app = app.replace(oldBlock, newBlock);
-} else if (!app.includes('label: "edge filled mask"')) {
+} else if (app.includes('label: "edge filled mask"')) {
+  app = app.replaceAll('label: "edge filled mask"', 'label: "edge candidate"');
+} else if (!app.includes('label: "edge candidate"')) {
   throw new Error("Could not find edge candidate mapping block to convert polygon masks.");
 }
 
-app = app.replaceAll('zone.label !== "edge mask" && zone.label !== "edge candidate"', 'zone.label !== "edge mask" && zone.label !== "edge candidate" && zone.label !== "edge filled mask"');
+app = app.replaceAll('label: "edge filled mask"', 'label: "edge candidate"');
+app = app.replaceAll('selectedZone.label !== "edge candidate"', 'selectedZone.label !== "edge candidate"');
+app = app.replaceAll('zone.label !== "edge mask" && zone.label !== "edge candidate" && zone.label !== "edge filled mask"', 'zone.label !== "edge mask" && zone.label !== "edge candidate"');
+app = app.replaceAll('zone.label !== "edge mask" && zone.label !== "edge candidate"', 'zone.label !== "edge mask" && zone.label !== "edge candidate"');
 app = app.replaceAll('Found " + usable.length + " edge-outline mask candidates from scanned edges.', 'Filled " + usable.length + " closed edge outlines into polygon mask candidates.');
 app = app.replaceAll('No usable edge mask candidates found inside the selected projection surface. Try tightening the projection outline around the object.', 'No closed edge outlines found inside the projection surface. Use Edge-only view to check whether the object outline is fully connected.');
 
@@ -52,4 +57,4 @@ const newSvgMask = `            {includedZones.map((zone) => zone.points?.length
 if (app.includes(oldSvgMask)) app = app.replace(oldSvgMask, newSvgMask);
 
 writeFileSync(path, app);
-console.log("edge candidates now preserve scanned polygon outlines as real freehand mask zones");
+console.log("edge candidates preserve scanned polygon outlines and remain selectable candidates");
