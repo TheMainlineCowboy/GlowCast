@@ -111,6 +111,15 @@ function expandPolygon(points: Coordinate[], amount: number, projectionZone: Pro
   });
 }
 
+function outerTrimExpansionAmount(box: ProjectionZone, projectionZone: ProjectionZone) {
+  const objectSize = Math.min(box.width, box.height);
+  const wallRelativeMinimum = Math.min(projectionZone.width, projectionZone.height) * 0.018;
+  const objectRelative = objectSize * 0.22;
+  // The flood-fill finds the inside glass / inside opening. Grow that closed loop outward
+  // so the usable mask begins on the outer window trim / object frame instead.
+  return Math.max(0.8, wallRelativeMinimum, Math.min(objectRelative, 3.2));
+}
+
 function gridPointToProjection(x: number, y: number, width: number, height: number, projectionZone: ProjectionZone): Coordinate {
   return {
     x: projectionZone.x + (x / Math.max(1, width - 1)) * projectionZone.width,
@@ -247,7 +256,7 @@ function buildFilledClosedOutlineCandidates(edgePoints: EdgePoint[], projectionZ
       ];
       const hull = simplifyPolygon(convexHull(rawPoints));
       if (hull.length < 3) continue;
-      const expanded = expandPolygon(hull, Math.max(0.35, Math.min(box.width, box.height) * 0.09), projectionZone);
+      const expanded = expandPolygon(hull, outerTrimExpansionAmount(box, projectionZone), projectionZone);
       const boundingBox = boundsFromPoints(expanded);
       candidates.push({ points: expanded, boundingBox, cellCount: cells.length });
     }
@@ -291,4 +300,4 @@ export function generateAutoMasks(
 
 source = source.slice(0, start) + replacement + source.slice(end);
 writeFileSync(path, source);
-console.log("closed edge outlines now flood-fill into real polygon mask candidates");
+console.log("closed edge outlines now grow outward to the exterior trim edge");
