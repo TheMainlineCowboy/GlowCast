@@ -71,9 +71,7 @@ function simplifyOutline(points: Coordinate[], maxPoints = 28): Coordinate[] {
   if (points.length <= maxPoints) return points;
   const simplified: Coordinate[] = [];
   const step = points.length / maxPoints;
-  for (let i = 0; i < maxPoints; i += 1) {
-    simplified.push(points[Math.floor(i * step)]);
-  }
+  for (let i = 0; i < maxPoints; i += 1) simplified.push(points[Math.floor(i * step)]);
   return simplified;
 }
 
@@ -93,16 +91,25 @@ function expandOutline(points: Coordinate[], amount: number, projectionZone: Pro
   });
 }
 
+function isMostlyProjectionBorder(box: ProjectionZone, projectionZone: ProjectionZone) {
+  const touchesLeft = Math.abs(box.x - projectionZone.x) < 0.9;
+  const touchesRight = Math.abs(box.x + box.width - (projectionZone.x + projectionZone.width)) < 0.9;
+  const touchesTop = Math.abs(box.y - projectionZone.y) < 0.9;
+  const touchesBottom = Math.abs(box.y + box.height - (projectionZone.y + projectionZone.height)) < 0.9;
+  const edgeTouches = [touchesLeft, touchesRight, touchesTop, touchesBottom].filter(Boolean).length;
+  return edgeTouches >= 2 && (box.width > projectionZone.width * 0.65 || box.height > projectionZone.height * 0.65);
+}
+
 function buildOutlineCandidatesFromEdges(edgePoints: EdgePoint[], projectionZone: ProjectionZone): EdgeOutlineCandidate[] {
   const projectionArea = projectionZone.width * projectionZone.height;
-  const cellSize = Math.max(0.28, Math.min(projectionZone.width, projectionZone.height) / 115);
-  const bridgeCells = 3;
-  const innerPadX = Math.max(0.35, projectionZone.width * 0.004);
-  const innerPadY = Math.max(0.35, projectionZone.height * 0.006);
+  const cellSize = Math.max(0.22, Math.min(projectionZone.width, projectionZone.height) / 145);
+  const bridgeCells = 4;
+  const innerPadX = Math.max(0.18, projectionZone.width * 0.002);
+  const innerPadY = Math.max(0.18, projectionZone.height * 0.003);
   const cells = new Map<string, { gx: number; gy: number; points: Coordinate[]; edgeCount: number }>();
 
   for (const point of edgePoints) {
-    if (point.strength < 62) continue;
+    if (point.strength < 48) continue;
     if (point.x < projectionZone.x + innerPadX || point.x > projectionZone.x + projectionZone.width - innerPadX) continue;
     if (point.y < projectionZone.y + innerPadY || point.y > projectionZone.y + projectionZone.height - innerPadY) continue;
     const gx = Math.round((point.x - projectionZone.x) / cellSize);
@@ -145,45 +152,56 @@ function buildOutlineCandidatesFromEdges(edgePoints: EdgePoint[], projectionZone
       }
     }
 
-    if (componentPoints.length < 10 || edgeCount < 10) continue;
+    if (componentPoints.length < 6 || edgeCount < 6) continue;
     const box = makeBounds(componentPoints);
     const area = box.width * box.height;
-    if (box.width < Math.max(4.2, projectionZone.width * 0.055)) continue;
-    if (box.height < Math.max(4.0, projectionZone.height * 0.075)) continue;
-    if (area < Math.max(22, projectionArea * 0.0045) || area > projectionArea * 0.22) continue;
+    const aspect = box.width / Math.max(box.height, 0.01);
+    if (isMostlyProjectionBorder(box, projectionZone)) continue;
+    if (box.width < Math.max(2.8, projectionZone.width * 0.032)) continue;
+    if (box.height < Math.max(2.8, projectionZone.height * 0.045)) continue;
+    if (area < Math.max(9, projectionArea * 0.0016) || area > projectionArea * 0.20) continue;
+    if (aspect < 0.16 || aspect > 6.5) continue;
     components.push({ ...box, points: componentPoints, edgeCount });
   }
 
   const merged: EdgeOutlineCandidate[] = [];
   for (const candidate of components.sort((a, b) => b.edgeCount - a.edgeCount)) {
-    let mergedIndex = -1;
+    let didMerge = false;
     for (let i = 0; i < merged.length; i += 1) {
       const existing = merged[i];
       const gap = boxGap(existing, candidate);
       const overlap = overlapAmount(existing, candidate);
-      const near = gap.x <= Math.max(1.8, projectionZone.width * 0.035) && gap.y <= Math.max(1.8, projectionZone.height * 0.055);
-      const overlapping = overlap / Math.max(Math.min(existing.width * existing.height, candidate.width * candidate.height), 1) > 0.04;
+      const near = gap.x <= Math.max(1.1, projectionZone.width * 0.022) && gap.y <= Math.max(1.1, projectionZone.height * 0.035);
+      const overlapping = overlap / Math.max(Math.min(existing.width * existing.height, candidate.width * candidate.height), 1) > 0.02;
       if (!near && !overlapping) continue;
       const combinedPoints = existing.points.concat(candidate.points);
       const combinedBox = makeBounds(combinedPoints);
       const combinedArea = combinedBox.width * combinedBox.height;
-      if (combinedArea > projectionArea * 0.24) continue;
-      if (combinedBox.width > projectionZone.width * 0.46 || combinedBox.height > projectionZone.height * 0.66) continue;
+      if (isMostlyProjectionBorder(combinedBox, projectionZone)) continue;
+      if (combinedArea > projectionArea * 0.22) continue;
+      if (combinedBox.width > projectionZone.width * 0.55 || combinedBox.height > projectionZone.height * 0.72) continue;
       merged[i] = { ...combinedBox, points: combinedPoints, edgeCount: existing.edgeCount + candidate.edgeCount };
-      mergedIndex = i;
+      didMerge = true;
       break;
     }
-    if (mergedIndex === -1) merged.push(candidate);
+    if (!didMerge) merged.push(candidate);
   }
 
-  return merged
-    .filter((candidate) => {
-      const area = candidate.width * candidate.height;
-      const aspect = candidate.width / Math.max(candidate.height, 0.01);
-      return candidate.edgeCount >= 14 && area >= projectionArea * 0.005 && area <= projectionArea * 0.22 && aspect >= 0.22 && aspect <= 4.8;
-    })
-    .sort((a, b) => b.edgeCount - a.edgeCount)
-    .slice(0, 10);
+  const accepted: EdgeOutlineCandidate[] = [];
+  for (const candidate of merged.sort((a, b) => b.edgeCount - a.edgeCount)) {
+    const area = candidate.width * candidate.height;
+    const aspect = candidate.width / Math.max(candidate.height, 0.01);
+    if (candidate.edgeCount < 7 || area < projectionArea * 0.0018 || area > projectionArea * 0.22 || aspect < 0.16 || aspect > 6.5) continue;
+    const duplicate = accepted.some((existing) => {
+      const overlap = overlapAmount(existing, candidate);
+      const minArea = Math.min(existing.width * existing.height, candidate.width * candidate.height);
+      return overlap / Math.max(minArea, 1) > 0.34;
+    });
+    if (!duplicate) accepted.push(candidate);
+    if (accepted.length >= 10) break;
+  }
+
+  return accepted;
 }
 
 export function generateAutoMasks(
@@ -194,7 +212,7 @@ export function generateAutoMasks(
   const candidates = buildOutlineCandidatesFromEdges(edgePoints, projectionZone);
   return candidates.map((candidate, index) => {
     const hull = convexHull(candidate.points);
-    const outline = expandOutline(simplifyOutline(hull), Math.max(0.45, Math.min(candidate.width, candidate.height) * 0.035), projectionZone);
+    const outline = expandOutline(simplifyOutline(hull), Math.max(0.28, Math.min(candidate.width, candidate.height) * 0.025), projectionZone);
     const boundingBox = makeBounds(outline);
     return {
       id: \`auto_mask_\${Date.now()}_\${index}\`,
@@ -215,4 +233,4 @@ export function generateAutoMasks(
 
 source = source.slice(0, start) + replacement + source.slice(end);
 writeFileSync(path, source);
-console.log("edge masks now use connected edge outlines as filled polygon masks");
+console.log("edge masks now use connected edge outlines as filled polygon masks with relaxed detection");
