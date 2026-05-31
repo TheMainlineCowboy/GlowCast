@@ -3,87 +3,84 @@ import { readFileSync, writeFileSync } from "node:fs";
 const appPath = "src/App.tsx";
 let app = readFileSync(appPath, "utf8");
 
-function mustReplace(needle, replacement, label) {
-  if (!app.includes(needle)) {
-    if (app.includes(replacement.trim().slice(0, 40))) {
-      console.log(`edge-only preview patch kept ${label}; already present`);
-      return;
-    }
-    throw new Error(`Edge-only preview patch could not find ${label}`);
-  }
+function replaceOnce(needle, replacement, label) {
+  if (app.includes(replacement)) return;
+  if (!app.includes(needle)) throw new Error(`Edge-only preview patch could not find ${label}`);
   app = app.replace(needle, replacement);
 }
 
-if (!app.includes("edgeOnlyPreview")) {
-  mustReplace(
-    `  const [showEdges, setShowEdges] = useState(false);\n  const [edgeOverlayUrl, setEdgeOverlayUrl] = useState<string | null>(null);`,
-    `  const [showEdges, setShowEdges] = useState(false);\n  const [edgeOnlyPreview, setEdgeOnlyPreview] = useState(false);\n  const [edgeOverlayUrl, setEdgeOverlayUrl] = useState<string | null>(null);`,
-    "edge-only state"
-  );
+// State: force a real app-level edge-only preview state. Do not skip the whole patch just because
+// another partial patch left the word edgeOnlyPreview somewhere else.
+replaceOnce(
+  `  const [showEdges, setShowEdges] = useState(false);\n  const [edgeOverlayUrl, setEdgeOverlayUrl] = useState<string | null>(null);`,
+  `  const [showEdges, setShowEdges] = useState(false);\n  const [edgeOnlyPreview, setEdgeOnlyPreview] = useState(false);\n  const [edgeOverlayUrl, setEdgeOverlayUrl] = useState<string | null>(null);`,
+  "edge-only state"
+);
 
-  mustReplace(
-    `    setShowEdges(false);\n    setEdgeOverlayUrl(null);`,
-    `    setShowEdges(false);\n    setEdgeOnlyPreview(false);\n    setEdgeOverlayUrl(null);`,
-    "edge scanner reset"
-  );
+app = app.replace(
+  `    setShowEdges(false);\n    setEdgeOverlayUrl(null);`,
+  `    setShowEdges(false);\n    setEdgeOnlyPreview(false);\n    setEdgeOverlayUrl(null);`
+);
 
-  mustReplace(
-    `    if (showEdges) {\n      setShowEdges(false);\n      return;\n    }`,
-    `    if (showEdges) {\n      setShowEdges(false);\n      setEdgeOnlyPreview(false);\n      return;\n    }`,
-    "edge scanner hide"
-  );
+app = app.replace(
+  `    if (showEdges) {\n      setShowEdges(false);\n      return;\n    }`,
+  `    if (showEdges) {\n      setShowEdges(false);\n      setEdgeOnlyPreview(false);\n      return;\n    }`
+);
 
-  mustReplace(
-    `      setEdgeOverlayUrl(result.edgeCanvasUrl);\n      setEdgePoints(result.edgePoints);\n      setShowEdges(true);`,
-    `      setEdgeOverlayUrl(result.edgeCanvasUrl);\n      setEdgePoints(result.edgePoints);\n      setShowEdges(true);\n      setEdgeOnlyPreview(false);`,
-    "edge scanner complete"
-  );
+app = app.replace(
+  `      setEdgeOverlayUrl(result.edgeCanvasUrl);\n      setEdgePoints(result.edgePoints);\n      setShowEdges(true);`,
+  `      setEdgeOverlayUrl(result.edgeCanvasUrl);\n      setEdgePoints(result.edgePoints);\n      setShowEdges(true);\n      setEdgeOnlyPreview(false);`
+);
 
-  mustReplace(
-    `  const stage = (\n    <div className={\`stage \${projectionOnly ? "projectionOnly" : ""}\`}>`,
-    `  const stage = (\n    <div className={\`stage \${projectionOnly ? "projectionOnly" : ""} \${edgeOnlyPreview ? "edgeOnlyPreview" : ""}\`}>`,
-    "stage class"
-  );
+app = app.replaceAll(`setProjectionOnly(false);`, `setProjectionOnly(false);\n    setEdgeOnlyPreview(false);`);
+app = app.replaceAll(`setProjectionOnly((value) => !value);`, `setEdgeOnlyPreview(false);\n                    setProjectionOnly((value) => !value);`);
 
-  app = app.replaceAll(`setProjectionOnly(false);`, `setProjectionOnly(false);\n    setEdgeOnlyPreview(false);`);
-  app = app.replaceAll(`setProjectionOnly((value) => !value);`, `setEdgeOnlyPreview(false); setProjectionOnly((value) => !value);`);
+// Stage class controls CSS that hides the house and all overlays except the edge image.
+replaceOnce(
+  `  const stage = (\n    <div className={\`stage \${projectionOnly ? "projectionOnly" : ""}\`}>`,
+  `  const stage = (\n    <div className={\`stage \${projectionOnly ? "projectionOnly" : ""} \${edgeOnlyPreview ? "edgeOnlyPreview" : ""}\`}>`,
+  "stage class"
+);
 
-  app = app.replace(
-    `          {surfacePolygonOverlay()}\n          {cornerOverlay()}\n\n          {surfacePolygonClosed ? renderPolygonProjectionLayer() : null}`,
-    `          {!edgeOnlyPreview ? surfacePolygonOverlay() : null}\n          {!edgeOnlyPreview ? cornerOverlay() : null}\n\n          {!edgeOnlyPreview && surfacePolygonClosed ? renderPolygonProjectionLayer() : null}`
-  );
+app = app.replace(
+  `          {showEdges && edgeOverlayUrl && !projectionOnly ? (\n            <img src={edgeOverlayUrl} className="edgeOverlay" alt="" draggable={false} />\n          ) : null}`,
+  `          {showEdges && edgeOverlayUrl && !projectionOnly ? (\n            <img src={edgeOverlayUrl} className="edgeOverlay" alt="" draggable={false} />\n          ) : null}`
+);
 
-  app = app.replace(
-    `          {projectionArea && showSurfaceHandles && !projectionOnly && !cornerMode && !surfacePolygonMode ? (`,
-    `          {projectionArea && showSurfaceHandles && !projectionOnly && !edgeOnlyPreview && !cornerMode && !surfacePolygonMode ? (`
-  );
-  app = app.replace(
-    `          {invertMode && projectionArea && !surfacePolygonClosed && (`,
-    `          {!edgeOnlyPreview && invertMode && projectionArea && !surfacePolygonClosed && (`
-  );
-  app = app.replace(
-    `          {invertMode && includedZones.map((zone) => (`,
-    `          {!edgeOnlyPreview && invertMode && includedZones.map((zone) => (`
-  );
-  app = app.replace(
-    `          {!invertMode && includedZones.map((zone) => (`,
-    `          {!edgeOnlyPreview && !invertMode && includedZones.map((zone) => (`
-  );
-  app = app.replace(
-    `          {!projectionOnly && !cornerMode && !surfacePolygonMode && zones.map((zone, index) => (`,
-    `          {!edgeOnlyPreview && !projectionOnly && !cornerMode && !surfacePolygonMode && zones.map((zone, index) => (`
-  );
-  app = app.replace(
-    `          {draftRect && !projectionOnly && !cornerMode && !surfacePolygonMode && (`,
-    `          {!edgeOnlyPreview && draftRect && !projectionOnly && !cornerMode && !surfacePolygonMode && (`
-  );
+app = app.replace(
+  `          {surfacePolygonOverlay()}\n          {cornerOverlay()}\n\n          {surfacePolygonClosed ? renderPolygonProjectionLayer() : null}`,
+  `          {!edgeOnlyPreview ? surfacePolygonOverlay() : null}\n          {!edgeOnlyPreview ? cornerOverlay() : null}\n\n          {!edgeOnlyPreview && surfacePolygonClosed ? renderPolygonProjectionLayer() : null}`
+);
 
-  mustReplace(
-    `              <label className="flex items-center gap-2 text-sm text-slate-200">\n                <input type="checkbox" checked={snapEnabled} onChange={(event) => setSnapEnabled(event.target.checked)} /> Magnetic snap\n              </label>`,
-    `              <label className="flex items-center gap-2 text-sm text-slate-200">\n                <input type="checkbox" checked={snapEnabled} onChange={(event) => setSnapEnabled(event.target.checked)} /> Magnetic snap\n              </label>\n              <label className="flex items-center gap-2 text-sm text-slate-200">\n                <input type="checkbox" checked={edgeOnlyPreview} disabled={!showEdges || !edgeOverlayUrl} onChange={(event) => setEdgeOnlyPreview(event.target.checked)} /> Edge-only view\n              </label>`,
-    "edge-only toggle control"
-  );
-}
+app = app.replace(
+  `          {projectionArea && showSurfaceHandles && !projectionOnly && !cornerMode && !surfacePolygonMode ? (`,
+  `          {projectionArea && showSurfaceHandles && !projectionOnly && !edgeOnlyPreview && !cornerMode && !surfacePolygonMode ? (`
+);
+app = app.replace(
+  `          {invertMode && projectionArea && !surfacePolygonClosed && (`,
+  `          {!edgeOnlyPreview && invertMode && projectionArea && !surfacePolygonClosed && (`
+);
+app = app.replace(
+  `          {invertMode && includedZones.map((zone) => (`,
+  `          {!edgeOnlyPreview && invertMode && includedZones.map((zone) => (`
+);
+app = app.replace(
+  `          {!invertMode && includedZones.map((zone) => (`,
+  `          {!edgeOnlyPreview && !invertMode && includedZones.map((zone) => (`
+);
+app = app.replace(
+  `          {!projectionOnly && !cornerMode && !surfacePolygonMode && zones.map((zone, index) => (`,
+  `          {!edgeOnlyPreview && !projectionOnly && !cornerMode && !surfacePolygonMode && zones.map((zone, index) => (`
+);
+app = app.replace(
+  `          {draftRect && !projectionOnly && !cornerMode && !surfacePolygonMode && (`,
+  `          {!edgeOnlyPreview && draftRect && !projectionOnly && !cornerMode && !surfacePolygonMode && (`
+);
+
+// Put the control where it cannot be missed: directly below Show/Hide Edge Scanner.
+const edgeButtonNeedle = `              <button type="button" onClick={toggleEdgeScanner} disabled={!imageUrl || edgeScanning} className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg disabled:opacity-50" >\n                {edgeScanning ? "Scanning Edges..." : showEdges ? "Hide Edge Scanner" : "Show Edge Scanner"}\n              </button>`;
+const edgeButtonReplacement = `${edgeButtonNeedle}\n              <button type="button" onClick={() => setEdgeOnlyPreview((value) => !value)} disabled={!showEdges || !edgeOverlayUrl} className={edgeOnlyPreview ? "activeEffect" : ""} >\n                {edgeOnlyPreview ? "Show Photo + Edges" : "Edge-only View"}\n              </button>`;
+replaceOnce(edgeButtonNeedle, edgeButtonReplacement, "visible edge-only button");
 
 writeFileSync(appPath, app);
 
@@ -97,4 +94,4 @@ const cssPatch = `
 `;
 if (!css.includes(".stage.edgeOnlyPreview")) css += cssPatch;
 writeFileSync(cssPath, css);
-console.log("added edge-only scanned edge preview toggle");
+console.log("added visible Edge-only View button and true edge-only stage mode");
