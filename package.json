@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "node scripts/patch-native-edge-masks.mjs && node scripts/patch-restore-create-edge-masks-button.mjs && node scripts/patch-edge-debug-ui.mjs && node scripts/patch-edge-detect-cleanup.mjs && node scripts/patch-edge-candidate-dedupe.mjs && node scripts/patch-disable-edge-template-guessing.mjs && node scripts/patch-edge-outline-components.mjs && node scripts/patch-edge-outer-trim-growth.mjs && node scripts/patch-edge-polygon-zone-mapping.mjs && node scripts/patch-edge-only-preview-toggle.mjs && node scripts/patch-edge-freehand-type.mjs && tsc && vite build",
+    "build": "node scripts/patch-native-edge-masks.mjs && node scripts/patch-restore-create-edge-masks-button.mjs && node scripts/patch-edge-debug-ui.mjs && node scripts/patch-edge-detect-cleanup.mjs && node scripts/patch-edge-candidate-dedupe.mjs && node scripts/patch-disable-edge-template-guessing.mjs && node scripts/patch-edge-outline-components.mjs && node scripts/patch-edge-outer-trim-growth.mjs && node scripts/patch-edge-polygon-zone-mapping.mjs && node scripts/patch-edge-general-component-polygons.mjs && node scripts/patch-edge-only-preview-toggle.mjs && node scripts/patch-edge-freehand-type.mjs && tsc && vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
