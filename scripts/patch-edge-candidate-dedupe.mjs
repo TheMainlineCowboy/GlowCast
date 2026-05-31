@@ -34,15 +34,22 @@ const replacement = `function mergeCandidateBoxes(boxes: ComponentBox[]): Compon
       const overlap = overlapAmount(existing, candidate);
       const minArea = Math.min(existing.width * existing.height, candidate.width * candidate.height);
       const overlapRatio = overlap / Math.max(minArea, 1);
-      const centerDistance = Math.hypot(candidateCenter.x - existingCenter.x, candidateCenter.y - existingCenter.y);
+      const dx = Math.abs(candidateCenter.x - existingCenter.x);
+      const dy = Math.abs(candidateCenter.y - existingCenter.y);
+      const centerDistance = Math.hypot(dx, dy);
+      const sameNonRectFamily =
+        candidate.detectedShape !== "rectangle" &&
+        existing.detectedShape !== "rectangle" &&
+        candidate.detectedShape === existing.detectedShape;
+      const sameObjectCluster = sameNonRectFamily && dx < 22 && dy < 20;
       const closeCenters = centerDistance < Math.max(4.5, Math.min(existing.width + candidate.width, existing.height + candidate.height) * 0.42);
-      const nearSameObject = closeCenters && overlapRatio > 0.08;
-      return overlapRatio > 0.28 || nearSameObject;
+      const nearSameObject = closeCenters && overlapRatio > 0.06;
+      return overlapRatio > 0.24 || nearSameObject || sameObjectCluster;
     });
 
     if (duplicate) continue;
     accepted.push(candidate);
-    if (accepted.length >= 8) break;
+    if (accepted.length >= 6) break;
   }
 
   return accepted;
@@ -51,4 +58,4 @@ const replacement = `function mergeCandidateBoxes(boxes: ComponentBox[]): Compon
 
 source = source.slice(0, start) + replacement + source.slice(end);
 writeFileSync(path, source);
-console.log("edge candidate dedupe keeps one mask per outlined object");
+console.log("edge candidate dedupe clusters duplicate shape masks by object center");
