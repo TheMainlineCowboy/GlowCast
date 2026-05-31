@@ -45,7 +45,7 @@ const oldSvgMask = `            {includedZones.map((zone) => (
               <rect key={\`pm-\${zone.id}\`} x={zone.x} y={zone.y} width={zone.width} height={zone.height} fill="black" />
             ))}`;
 const newSvgMask = `            {includedZones.map((zone) => zone.points?.length ? (
-              <polygon key={\`pm-\${zone.id}\`} points={zone.points.map((point) => \`${zone.x + (point.x * zone.width) / 100},${zone.y + (point.y * zone.height) / 100}\`).join(" ")} fill="black" />
+              <polygon key={\`pm-\${zone.id}\`} points={zone.points.map((point) => String(zone.x + (point.x * zone.width) / 100) + "," + String(zone.y + (point.y * zone.height) / 100)).join(" ")} fill="black" />
             ) : (
               <rect key={\`pm-\${zone.id}\`} x={zone.x} y={zone.y} width={zone.width} height={zone.height} fill="black" />
             ))}`;
