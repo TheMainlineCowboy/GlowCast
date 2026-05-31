@@ -80,8 +80,8 @@ export function generateAutoMasks(\n`
 
 source = source.replace(
   "  const candidates = buildWindowCandidates(edgePoints, projectionZone);\n  return candidates.map((box, index) => ({",
-  "  const candidates = mergeCandidateBoxes([...buildWindowCandidates(edgePoints, projectionZone), ...buildDensityCandidates(edgePoints, projectionZone)]);\n  return candidates.map((box, index) => ({"
+  "  const baseCandidates = buildWindowCandidates(edgePoints, projectionZone);\n  const shape = _options.preferredShape ?? \"rectangle\";\n  const candidates = shape === \"rectangle\" ? baseCandidates : mergeCandidateBoxes([...baseCandidates, ...buildDensityCandidates(edgePoints, projectionZone)]);\n  return candidates.map((box, index) => ({"
 );
 
 writeFileSync(path, source);
-console.log("edge detector adds density candidate pass");
+console.log("edge detector limits density pass to non-rectangle shapes");
