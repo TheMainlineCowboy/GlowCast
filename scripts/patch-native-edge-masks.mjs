@@ -58,20 +58,23 @@ const functionBody = `  function createMasksFromEdges() {
       clusterRadius: 1.6,
       minPoints: 18,
       tolerance: 0.8,
-      preferredShape: drawShape
+      preferredShape: "auto"
     });
 
     const usable = autoMasks
-      .map((mask, index) => clampZone({
-        id: Date.now() + index,
-        x: mask.boundingBox.x,
-        y: mask.boundingBox.y,
-        width: mask.boundingBox.width,
-        height: mask.boundingBox.height,
-        included: false,
-        label: "edge candidate",
-        shape: drawShape
-      }))
+      .map((mask, index) => {
+        const shape = (mask.detectedShape ?? "rectangle") as MaskShape;
+        return clampZone({
+          id: Date.now() + index,
+          x: mask.boundingBox.x,
+          y: mask.boundingBox.y,
+          width: mask.boundingBox.width,
+          height: mask.boundingBox.height,
+          included: false,
+          label: "edge candidate",
+          shape
+        });
+      })
       .filter((zone) => {
         if (zone.width < 2 || zone.height < 2) return false;
         if (!polygon) return true;
@@ -81,7 +84,7 @@ const functionBody = `  function createMasksFromEdges() {
       .slice(0, 24);
 
     if (!usable.length) {
-      setDetectMessage("No usable edge mask candidates found inside the selected projection surface. Try a different shape button or tighten the projection outline around the object.");
+      setDetectMessage("No usable edge mask candidates found inside the selected projection surface. Try tightening the projection outline around the object.");
       return;
     }
 
@@ -95,7 +98,7 @@ const functionBody = `  function createMasksFromEdges() {
     setCornerMode(false);
     setCornerPoints([]);
     setProjectionOnly(false);
-    setDetectMessage("Found " + usable.length + " " + drawShape + " edge mask candidates from scanned edges.");
+    setDetectMessage("Found " + usable.length + " edge-outline mask candidates from scanned edges.");
   }
 
 `;
@@ -208,3 +211,4 @@ if (existsSync(cssPath)) {
 }
 
 writeFileSync(path, source);
+console.log("native edge masks use auto outline shapes");
