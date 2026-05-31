@@ -8,55 +8,138 @@ source = source.replace(
   "type AutoMaskOptions = { clusterRadius: number; minPoints: number; tolerance: number; preferredShape?: string };"
 );
 
-if (!source.includes("function buildDensityCandidates(")) {
-  source = source.replace(
-    "export function generateAutoMasks(\n",
-    `function buildDensityCandidates(edgePoints: EdgePoint[], projectionZone: ProjectionZone): ComponentBox[] {
-  const projectionArea = projectionZone.width * projectionZone.height;
-  const points = edgePoints.filter((point) => pointInsideBox(point, projectionZone) && point.strength >= 58);
-  if (points.length < 20) return [];
+source = source.replace(
+  "type ComponentBox = ProjectionZone & { score: number; edgeCount: number; cells: number };",
+  "type DetectedMaskShape = \"rectangle\" | \"circle\" | \"oval\" | \"triangle\";\ntype ComponentBox = ProjectionZone & { score: number; edgeCount: number; cells: number; detectedShape?: DetectedMaskShape };"
+);
 
-  const sizes = [0.12, 0.16, 0.20, 0.24];
+source = source.replace(
+  "  boundingBox: { x: number; y: number; width: number; height: number };\n  enabled: boolean;",
+  "  boundingBox: { x: number; y: number; width: number; height: number };\n  detectedShape?: DetectedMaskShape;\n  enabled: boolean;"
+);
+
+const helperAnchor = "export function generateAutoMasks(";
+const helperBlock = `function ellipsePoints(box: ProjectionZone, steps = 28): Coordinate[] {
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  const rx = box.width / 2;
+  const ry = box.height / 2;
+  return Array.from({ length: steps }, (_, i) => {
+    const angle = (Math.PI * 2 * i) / steps;
+    return { x: cx + Math.cos(angle) * rx, y: cy + Math.sin(angle) * ry };
+  });
+}
+
+function trianglePoints(box: ProjectionZone): Coordinate[] {
+  return [
+    { x: box.x + box.width / 2, y: box.y },
+    { x: box.x + box.width, y: box.y + box.height },
+    { x: box.x, y: box.y + box.height }
+  ];
+}
+
+function maskPointsForShape(box: ProjectionZone, shape: DetectedMaskShape): Coordinate[] {
+  if (shape === "circle" || shape === "oval") return ellipsePoints(box, 32);
+  if (shape === "triangle") return trianglePoints(box);
+  return rectPoints(box);
+}
+
+function makeEdgeGrid(edgePoints: EdgePoint[], projectionZone: ProjectionZone, cellSize = 1) {
+  const cols = Math.ceil(100 / cellSize) + 2;
+  const rows = Math.ceil(100 / cellSize) + 2;
+  const occupied = new Set<string>();
+  const strengths = edgePoints.map((point) => point.strength).sort((a, b) => a - b);
+  const threshold = Math.max(52, strengths[Math.floor(strengths.length * 0.40)] ?? 52);
+  for (const point of edgePoints) {
+    if (point.strength < threshold || !pointInsideBox(point, projectionZone)) continue;
+    occupied.add(\`\${Math.floor(point.x / cellSize)},\${Math.floor(point.y / cellSize)}\`);
+  }
+  const hasHit = (x: number, y: number, radius = 1) => {
+    const cx = Math.floor(x / cellSize);
+    const cy = Math.floor(y / cellSize);
+    for (let ox = -radius; ox <= radius; ox += 1) {
+      for (let oy = -radius; oy <= radius; oy += 1) {
+        if (occupied.has(\`\${cx + ox},\${cy + oy}\`)) return true;
+      }
+    }
+    return false;
+  };
+  return { cols, rows, hasHit };
+}
+
+function sampledLineHits(a: Coordinate, b: Coordinate, samples: number, hasHit: (x: number, y: number, radius?: number) => boolean) {
+  let hits = 0;
+  for (let i = 0; i < samples; i += 1) {
+    const t = samples <= 1 ? 0 : i / (samples - 1);
+    const x = a.x + (b.x - a.x) * t;
+    const y = a.y + (b.y - a.y) * t;
+    if (hasHit(x, y, 1)) hits += 1;
+  }
+  return hits / Math.max(1, samples);
+}
+
+function scoreShapeOutline(box: ProjectionZone, shape: DetectedMaskShape, hasHit: (x: number, y: number, radius?: number) => boolean) {
+  if (shape === "triangle") {
+    const points = trianglePoints(box);
+    return (
+      sampledLineHits(points[0], points[1], 18, hasHit) +
+      sampledLineHits(points[1], points[2], 18, hasHit) +
+      sampledLineHits(points[2], points[0], 18, hasHit)
+    ) / 3;
+  }
+
+  if (shape === "circle" || shape === "oval") {
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    const rx = box.width / 2;
+    const ry = box.height / 2;
+    let hits = 0;
+    const samples = 44;
+    for (let i = 0; i < samples; i += 1) {
+      const angle = (Math.PI * 2 * i) / samples;
+      if (hasHit(cx + Math.cos(angle) * rx, cy + Math.sin(angle) * ry, 1)) hits += 1;
+    }
+    return hits / samples;
+  }
+
+  const points = rectPoints(box);
+  return (
+    sampledLineHits(points[0], points[1], 18, hasHit) +
+    sampledLineHits(points[1], points[2], 18, hasHit) +
+    sampledLineHits(points[2], points[3], 18, hasHit) +
+    sampledLineHits(points[3], points[0], 18, hasHit)
+  ) / 4;
+}
+
+function templateShapeCandidates(edgePoints: EdgePoint[], projectionZone: ProjectionZone): ComponentBox[] {
+  const { hasHit } = makeEdgeGrid(edgePoints, projectionZone, 1);
   const proposals: ComponentBox[] = [];
+  const projectionArea = projectionZone.width * projectionZone.height;
+  const shapes: DetectedMaskShape[] = ["circle", "oval", "triangle"];
 
-  for (const size of sizes) {
-    const w = projectionZone.width * size;
-    const h = projectionZone.height * Math.min(0.36, size * 1.45);
-    const stepX = Math.max(1.2, w * 0.32);
-    const stepY = Math.max(1.2, h * 0.32);
-
-    for (let y = projectionZone.y; y <= projectionZone.y + projectionZone.height - h; y += stepY) {
-      for (let x = projectionZone.x; x <= projectionZone.x + projectionZone.width - w; x += stepX) {
-        let count = 0;
-        let strong = 0;
-        for (const point of points) {
-          if (point.x < x || point.x > x + w || point.y < y || point.y > y + h) continue;
-          count += 1;
-          if (point.strength >= 92) strong += 1;
-        }
+  for (const shape of shapes) {
+    const widths = [0.12, 0.16, 0.20, 0.24, 0.28].map((scale) => projectionZone.width * scale);
+    for (const w of widths) {
+      const heights = shape === "circle" ? [w] : shape === "triangle" ? [w * 0.85, w * 1.05, w * 1.25] : [w * 0.65, w * 0.85, w * 1.15];
+      for (const h of heights) {
+        if (w < 6 || h < 6) continue;
         const area = w * h;
-        const score = count / Math.sqrt(Math.max(area, 1)) + strong * 0.2;
-        if (count < 16 || strong < 3) continue;
-        if (area < projectionArea * 0.006 || area > projectionArea * 0.09) continue;
-        if (score < 8.5) continue;
-        const box = clampToProjection(paddedBox({ x, y, width: w, height: h }, w * 0.08, h * 0.08), projectionZone);
-        proposals.push({ ...box, cells: count, edgeCount: count, score });
+        if (area < projectionArea * 0.006 || area > projectionArea * 0.11) continue;
+        const stepX = Math.max(1.5, w * 0.18);
+        const stepY = Math.max(1.5, h * 0.18);
+        for (let y = projectionZone.y; y <= projectionZone.y + projectionZone.height - h; y += stepY) {
+          for (let x = projectionZone.x; x <= projectionZone.x + projectionZone.width - w; x += stepX) {
+            const box = clampToProjection({ x, y, width: w, height: h }, projectionZone);
+            const score = scoreShapeOutline(box, shape, hasHit);
+            if (score < (shape === "triangle" ? 0.34 : 0.36)) continue;
+            proposals.push({ ...box, cells: 0, edgeCount: 0, score: score * 10, detectedShape: shape });
+          }
+        }
       }
     }
   }
 
-  const accepted: ComponentBox[] = [];
-  for (const candidate of proposals.sort((a, b) => b.score - a.score)) {
-    const duplicate = accepted.some((existing) => {
-      const overlap = overlapAmount(existing, candidate);
-      const minArea = Math.min(existing.width * existing.height, candidate.width * candidate.height);
-      return overlap / Math.max(minArea, 1) > 0.35;
-    });
-    if (duplicate) continue;
-    accepted.push(candidate);
-    if (accepted.length >= 8) break;
-  }
-  return accepted;
+  return proposals;
 }
 
 function mergeCandidateBoxes(boxes: ComponentBox[]): ComponentBox[] {
@@ -65,7 +148,7 @@ function mergeCandidateBoxes(boxes: ComponentBox[]): ComponentBox[] {
     const duplicate = accepted.some((existing) => {
       const overlap = overlapAmount(existing, candidate);
       const minArea = Math.min(existing.width * existing.height, candidate.width * candidate.height);
-      return overlap / Math.max(minArea, 1) > 0.42;
+      return overlap / Math.max(minArea, 1) > 0.48;
     });
     if (duplicate) continue;
     accepted.push(candidate);
@@ -74,14 +157,63 @@ function mergeCandidateBoxes(boxes: ComponentBox[]): ComponentBox[] {
   return accepted;
 }
 
-export function generateAutoMasks(\n`
-  );
+function classifyBoxShape(box: ProjectionZone): DetectedMaskShape {
+  const aspect = box.width / Math.max(box.height, 0.01);
+  if (aspect > 0.82 && aspect < 1.18) return "circle";
+  if (aspect >= 1.18 && aspect < 1.9) return "oval";
+  return "rectangle";
 }
 
-source = source.replace(
-  "  const candidates = buildWindowCandidates(edgePoints, projectionZone);\n  return candidates.map((box, index) => ({",
-  "  const baseCandidates = buildWindowCandidates(edgePoints, projectionZone);\n  const shape = _options.preferredShape ?? \"rectangle\";\n  const candidates = shape === \"rectangle\" ? baseCandidates : mergeCandidateBoxes([...baseCandidates, ...buildDensityCandidates(edgePoints, projectionZone)]);\n  return candidates.map((box, index) => ({"
-);
+`;
+
+if (!source.includes("function templateShapeCandidates(")) {
+  if (!source.includes(helperAnchor)) throw new Error("Edge cleanup patch failed: generateAutoMasks anchor not found.");
+  source = source.replace(helperAnchor, helperBlock + helperAnchor);
+}
+
+const generateStart = source.indexOf("export function generateAutoMasks(");
+const drawStart = source.indexOf("export function drawProjectionWithMasks(", generateStart);
+if (generateStart === -1 || drawStart === -1) throw new Error("Edge cleanup patch failed: generateAutoMasks block not found.");
+
+const generateBlock = `export function generateAutoMasks(
+  edgePoints: EdgePoint[],
+  projectionZone: ProjectionZone,
+  _options: AutoMaskOptions = { clusterRadius: 1.8, minPoints: 14, tolerance: 0.8 }
+): AutoMaskZone[] {
+  const requestedShape = _options.preferredShape ?? "auto";
+  const rectangleCandidates = buildWindowCandidates(edgePoints, projectionZone).map((box) => ({
+    ...box,
+    detectedShape: requestedShape === "rectangle" ? "rectangle" as DetectedMaskShape : classifyBoxShape(box)
+  }));
+  const shapeCandidates = requestedShape === "rectangle" ? [] : templateShapeCandidates(edgePoints, projectionZone)
+    .filter((box) => requestedShape === "auto" || box.detectedShape === requestedShape);
+  const candidates = mergeCandidateBoxes([...rectangleCandidates, ...shapeCandidates]);
+
+  return candidates.map((box, index) => {
+    const detectedShape = box.detectedShape ?? "rectangle";
+    return {
+      id: \`auto_mask_\${Date.now()}_\${index}\`,
+      type: "auto-generated",
+      shape: "polygon",
+      points: maskPointsForShape(box, detectedShape).map((point) => ({
+        x: Number(point.x.toFixed(2)),
+        y: Number(point.y.toFixed(2))
+      })),
+      boundingBox: {
+        x: Number(box.x.toFixed(2)),
+        y: Number(box.y.toFixed(2)),
+        width: Number(box.width.toFixed(2)),
+        height: Number(box.height.toFixed(2))
+      },
+      detectedShape,
+      enabled: true
+    };
+  });
+}
+
+`;
+
+source = source.slice(0, generateStart) + generateBlock + source.slice(drawStart);
 
 writeFileSync(path, source);
-console.log("edge detector limits density pass to non-rectangle shapes");
+console.log("edge detector converts outlines into shape masks");
