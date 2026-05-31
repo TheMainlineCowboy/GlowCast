@@ -9,8 +9,6 @@ function replaceOnce(needle, replacement, label) {
   app = app.replace(needle, replacement);
 }
 
-// State: force a real app-level edge-only preview state. Do not skip the whole patch just because
-// another partial patch left the word edgeOnlyPreview somewhere else.
 replaceOnce(
   `  const [showEdges, setShowEdges] = useState(false);\n  const [edgeOverlayUrl, setEdgeOverlayUrl] = useState<string | null>(null);`,
   `  const [showEdges, setShowEdges] = useState(false);\n  const [edgeOnlyPreview, setEdgeOnlyPreview] = useState(false);\n  const [edgeOverlayUrl, setEdgeOverlayUrl] = useState<string | null>(null);`,
@@ -35,16 +33,10 @@ app = app.replace(
 app = app.replaceAll(`setProjectionOnly(false);`, `setProjectionOnly(false);\n    setEdgeOnlyPreview(false);`);
 app = app.replaceAll(`setProjectionOnly((value) => !value);`, `setEdgeOnlyPreview(false);\n                    setProjectionOnly((value) => !value);`);
 
-// Stage class controls CSS that hides the house and all overlays except the edge image.
 replaceOnce(
   `  const stage = (\n    <div className={\`stage \${projectionOnly ? "projectionOnly" : ""}\`}>`,
   `  const stage = (\n    <div className={\`stage \${projectionOnly ? "projectionOnly" : ""} \${edgeOnlyPreview ? "edgeOnlyPreview" : ""}\`}>`,
   "stage class"
-);
-
-app = app.replace(
-  `          {showEdges && edgeOverlayUrl && !projectionOnly ? (\n            <img src={edgeOverlayUrl} className="edgeOverlay" alt="" draggable={false} />\n          ) : null}`,
-  `          {showEdges && edgeOverlayUrl && !projectionOnly ? (\n            <img src={edgeOverlayUrl} className="edgeOverlay" alt="" draggable={false} />\n          ) : null}`
 );
 
 app = app.replace(
@@ -77,7 +69,6 @@ app = app.replace(
   `          {!edgeOnlyPreview && draftRect && !projectionOnly && !cornerMode && !surfacePolygonMode && (`
 );
 
-// Put the control where it cannot be missed: directly below Show/Hide Edge Scanner.
 const edgeButtonNeedle = `              <button type="button" onClick={toggleEdgeScanner} disabled={!imageUrl || edgeScanning} className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg disabled:opacity-50" >\n                {edgeScanning ? "Scanning Edges..." : showEdges ? "Hide Edge Scanner" : "Show Edge Scanner"}\n              </button>`;
 const edgeButtonReplacement = `${edgeButtonNeedle}\n              <button type="button" onClick={() => setEdgeOnlyPreview((value) => !value)} disabled={!showEdges || !edgeOverlayUrl} className={edgeOnlyPreview ? "activeEffect" : ""} >\n                {edgeOnlyPreview ? "Show Photo + Edges" : "Edge-only View"}\n              </button>`;
 replaceOnce(edgeButtonNeedle, edgeButtonReplacement, "visible edge-only button");
