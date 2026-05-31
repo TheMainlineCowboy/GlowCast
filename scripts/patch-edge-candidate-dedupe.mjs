@@ -11,51 +11,70 @@ if (start === -1 || end === -1) {
 }
 
 const replacement = `function mergeCandidateBoxes(boxes: ComponentBox[]): ComponentBox[] {
-  const accepted: ComponentBox[] = [];
-
   const centerOf = (box: ProjectionZone) => ({
     x: box.x + box.width / 2,
     y: box.y + box.height / 2
   });
 
   const rank = (box: ComponentBox) => {
-    const shapeBonus = box.detectedShape && box.detectedShape !== "rectangle" ? 1.5 : 0;
-    const area = box.width * box.height;
-    const tinyPenalty = area < 40 ? 1.2 : 0;
-    return box.score + shapeBonus - tinyPenalty;
+    const shapeBonus = box.detectedShape === "triangle" ? 2.5 : box.detectedShape === "circle" || box.detectedShape === "oval" ? 1.5 : 0;
+    return box.score + shapeBonus;
   };
 
+  const chooseShape = (a?: DetectedMaskShape, b?: DetectedMaskShape): DetectedMaskShape => {
+    if (a === "triangle" || b === "triangle") return "triangle";
+    if (a === "circle" || b === "circle") return "circle";
+    if (a === "oval" || b === "oval") return "oval";
+    return "rectangle";
+  };
+
+  const accepted: ComponentBox[] = [];
   const sorted = [...boxes].sort((a, b) => rank(b) - rank(a));
 
   for (const candidate of sorted) {
-    const candidateCenter = centerOf(candidate);
-    const duplicate = accepted.some((existing) => {
-      const existingCenter = centerOf(existing);
+    const c = centerOf(candidate);
+    let mergedInto = -1;
+
+    for (let i = 0; i < accepted.length; i += 1) {
+      const existing = accepted[i];
+      const e = centerOf(existing);
       const overlap = overlapAmount(existing, candidate);
       const minArea = Math.min(existing.width * existing.height, candidate.width * candidate.height);
       const overlapRatio = overlap / Math.max(minArea, 1);
-      const dx = Math.abs(candidateCenter.x - existingCenter.x);
-      const dy = Math.abs(candidateCenter.y - existingCenter.y);
-      const centerDistance = Math.hypot(dx, dy);
-      const sameNonRectFamily =
-        candidate.detectedShape !== "rectangle" &&
-        existing.detectedShape !== "rectangle" &&
-        candidate.detectedShape === existing.detectedShape;
-      const sameObjectCluster = sameNonRectFamily && dx < 22 && dy < 20;
-      const closeCenters = centerDistance < Math.max(4.5, Math.min(existing.width + candidate.width, existing.height + candidate.height) * 0.42);
-      const nearSameObject = closeCenters && overlapRatio > 0.06;
-      return overlapRatio > 0.24 || nearSameObject || sameObjectCluster;
-    });
+      const dx = Math.abs(c.x - e.x);
+      const dy = Math.abs(c.y - e.y);
+      const closeSameObject = dx < Math.max(8, Math.max(existing.width, candidate.width) * 0.95) && dy < Math.max(7, Math.max(existing.height, candidate.height) * 1.25);
+      const edgePartOfSameObject = overlapRatio > 0.05 || closeSameObject;
+      if (!edgePartOfSameObject) continue;
 
-    if (duplicate) continue;
-    accepted.push(candidate);
-    if (accepted.length >= 6) break;
+      const x = Math.min(existing.x, candidate.x);
+      const y = Math.min(existing.y, candidate.y);
+      const maxX = Math.max(existing.x + existing.width, candidate.x + candidate.width);
+      const maxY = Math.max(existing.y + existing.height, candidate.y + candidate.height);
+      accepted[i] = {
+        x,
+        y,
+        width: maxX - x,
+        height: maxY - y,
+        score: Math.max(existing.score, candidate.score) + 0.75,
+        edgeCount: existing.edgeCount + candidate.edgeCount,
+        cells: existing.cells + candidate.cells,
+        detectedShape: chooseShape(existing.detectedShape, candidate.detectedShape)
+      };
+      mergedInto = i;
+      break;
+    }
+
+    if (mergedInto === -1) accepted.push(candidate);
   }
 
-  return accepted;
+  return accepted
+    .filter((box) => box.width >= 5 && box.height >= 5)
+    .sort((a, b) => rank(b) - rank(a))
+    .slice(0, 8);
 }
 `;
 
 source = source.slice(0, start) + replacement + source.slice(end);
 writeFileSync(path, source);
-console.log("edge candidate dedupe clusters duplicate shape masks by object center");
+console.log("edge outline fragments cluster into whole object mask candidates");
