@@ -3,12 +3,16 @@ import { readFileSync, writeFileSync } from "node:fs";
 const path = "src/edgeDetect.ts";
 let source = readFileSync(path, "utf8");
 
-const helperNeedle = "function componentHullCross(";
+const helperNeedles = [
+  "function componentHullCross(",
+  "function contourClamp(",
+  "function holeMaskClamp("
+];
 const functionNeedle = "export function generateAutoMasks(";
 const endNeedle = "export function drawProjectionWithMasks(";
-const helperStart = source.indexOf(helperNeedle);
 const functionStart = source.indexOf(functionNeedle);
-const start = helperStart !== -1 && helperStart < functionStart ? helperStart : functionStart;
+const helperStarts = helperNeedles.map((needle) => source.indexOf(needle)).filter((index) => index !== -1 && index < functionStart);
+const start = helperStarts.length ? Math.min(...helperStarts) : functionStart;
 const end = source.indexOf(endNeedle, functionStart);
 if (start === -1 || functionStart === -1 || end === -1) {
   throw new Error("Connected contour edge mask patch failed: generateAutoMasks block not found.");
@@ -19,149 +23,186 @@ const replacement = `export function generateAutoMasks(
   projectionZone: ProjectionZone,
   _options: AutoMaskOptions = { clusterRadius: 1.8, minPoints: 14, tolerance: 0.8 }
 ): AutoMaskZone[] {
-  type ContourCell = { gx: number; gy: number; points: EdgePoint[]; count: number; strength: number };
-  type ContourCandidate = {
+  type HoleCandidate = {
     points: Coordinate[];
     boundingBox: ProjectionZone;
+    areaCells: number;
     score: number;
-    edgeCount: number;
   };
 
   const projectionArea = projectionZone.width * projectionZone.height;
   if (!edgePoints.length || projectionArea <= 0) return [];
 
-  const marginX = Math.max(0.35, projectionZone.width * 0.006);
-  const marginY = Math.max(0.35, projectionZone.height * 0.006);
-  const minObjectWidth = Math.max(3.8, projectionZone.width * 0.055);
-  const minObjectHeight = Math.max(3.8, projectionZone.height * 0.075);
-  const cellSize = Math.max(0.24, Math.min(projectionZone.width, projectionZone.height) / 145);
+  const runHolePass = (strengthFloor: number, dilation: number): HoleCandidate[] => {
+    const cols = 150;
+    const rows = Math.max(70, Math.round(cols * projectionZone.height / Math.max(projectionZone.width, 1)));
+    const total = cols * rows;
+    const edge = new Uint8Array(total);
+    const blocked = new Uint8Array(total);
+    const outside = new Uint8Array(total);
 
-  const inProjection = (point: EdgePoint) =>
-    point.x >= projectionZone.x + marginX &&
-    point.x <= projectionZone.x + projectionZone.width - marginX &&
-    point.y >= projectionZone.y + marginY &&
-    point.y <= projectionZone.y + projectionZone.height - marginY;
+    const toIndex = (x: number, y: number) => y * cols + x;
+    const toGridX = (x: number) => Math.round(((x - projectionZone.x) / projectionZone.width) * (cols - 1));
+    const toGridY = (y: number) => Math.round(((y - projectionZone.y) / projectionZone.height) * (rows - 1));
+    const toWorldX = (gx: number) => projectionZone.x + (gx / (cols - 1)) * projectionZone.width;
+    const toWorldY = (gy: number) => projectionZone.y + (gy / (rows - 1)) * projectionZone.height;
 
-  const makeCandidates = (strengthFloor: number, bridgeRadius: number) => {
-    const grid = new Map<string, ContourCell>();
+    const marginX = Math.max(0.35, projectionZone.width * 0.006);
+    const marginY = Math.max(0.35, projectionZone.height * 0.006);
 
     for (const point of edgePoints) {
-      if (point.strength < strengthFloor || !inProjection(point)) continue;
-      const gx = Math.floor((point.x - projectionZone.x) / cellSize);
-      const gy = Math.floor((point.y - projectionZone.y) / cellSize);
-      const key = gx + "," + gy;
-      const current = grid.get(key);
-      if (current) {
-        current.points.push(point);
-        current.count += 1;
-        current.strength += point.strength;
-      } else {
-        grid.set(key, { gx, gy, points: [point], count: 1, strength: point.strength });
-      }
+      if (point.strength < strengthFloor) continue;
+      if (point.x <= projectionZone.x + marginX || point.x >= projectionZone.x + projectionZone.width - marginX) continue;
+      if (point.y <= projectionZone.y + marginY || point.y >= projectionZone.y + projectionZone.height - marginY) continue;
+
+      const gx = holeMaskClamp(Math.round(toGridX(point.x)), 1, cols - 2);
+      const gy = holeMaskClamp(Math.round(toGridY(point.y)), 1, rows - 2);
+      edge[toIndex(gx, gy)] = 1;
     }
 
-    const visited = new Set<string>();
-    const rawCandidates: ContourCandidate[] = [];
-
-    for (const [firstKey, firstCell] of grid) {
-      if (visited.has(firstKey)) continue;
-      const queue = [firstCell];
-      const componentPoints: EdgePoint[] = [];
-      let edgeCount = 0;
-      let totalStrength = 0;
-      visited.add(firstKey);
-
-      while (queue.length) {
-        const cell = queue.pop()!;
-        componentPoints.push(...cell.points);
-        edgeCount += cell.count;
-        totalStrength += cell.strength;
-
-        for (let dx = -bridgeRadius; dx <= bridgeRadius; dx += 1) {
-          for (let dy = -bridgeRadius; dy <= bridgeRadius; dy += 1) {
-            if (dx === 0 && dy === 0) continue;
-            const nextKey = cell.gx + dx + "," + (cell.gy + dy);
-            if (visited.has(nextKey)) continue;
-            const next = grid.get(nextKey);
-            if (!next) continue;
-            visited.add(nextKey);
-            queue.push(next);
+    for (let y = 1; y < rows - 1; y += 1) {
+      for (let x = 1; x < cols - 1; x += 1) {
+        if (!edge[toIndex(x, y)]) continue;
+        for (let dy = -dilation; dy <= dilation; dy += 1) {
+          for (let dx = -dilation; dx <= dilation; dx += 1) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+            blocked[toIndex(nx, ny)] = 1;
           }
         }
       }
-
-      if (edgeCount < Math.max(14, _options.minPoints)) continue;
-
-      const xs = componentPoints.map((point) => point.x);
-      const ys = componentPoints.map((point) => point.y);
-      const minX = Math.min(...xs);
-      const maxX = Math.max(...xs);
-      const minY = Math.min(...ys);
-      const maxY = Math.max(...ys);
-      const width = maxX - minX;
-      const height = maxY - minY;
-      const area = width * height;
-      const aspect = width / Math.max(height, 0.01);
-
-      if (width < minObjectWidth || height < minObjectHeight) continue;
-      if (area < projectionArea * 0.0045 || area > projectionArea * 0.34) continue;
-      if (aspect < 0.18 || aspect > 5.5) continue;
-
-      const sideBandX = Math.max(cellSize * 2.4, width * 0.16);
-      const sideBandY = Math.max(cellSize * 2.4, height * 0.16);
-      const top = componentPoints.filter((point) => Math.abs(point.y - minY) <= sideBandY).length;
-      const bottom = componentPoints.filter((point) => Math.abs(point.y - maxY) <= sideBandY).length;
-      const left = componentPoints.filter((point) => Math.abs(point.x - minX) <= sideBandX).length;
-      const right = componentPoints.filter((point) => Math.abs(point.x - maxX) <= sideBandX).length;
-      const sideMinimum = Math.max(2, edgeCount * 0.045);
-      const sidesCovered = [top, bottom, left, right].filter((count) => count >= sideMinimum).length;
-      if (sidesCovered < 3) continue;
-
-      const hull = contourConvexHull(componentPoints.map((point) => ({ x: point.x, y: point.y })));
-      if (hull.length < 3) continue;
-
-      const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
-      const pad = Math.max(0.25, Math.min(width, height) * 0.045);
-      const paddedHull = hull.map((point) => {
-        const dx = point.x - center.x;
-        const dy = point.y - center.y;
-        const len = Math.hypot(dx, dy) || 1;
-        return {
-          x: contourClamp(point.x + (dx / len) * pad, projectionZone.x, projectionZone.x + projectionZone.width),
-          y: contourClamp(point.y + (dy / len) * pad, projectionZone.y, projectionZone.y + projectionZone.height)
-        };
-      });
-      const simplified = contourSimplifyPolygon(paddedHull, 20);
-      const finalBox = contourBoundingBoxForPoints(simplified);
-      const density = edgeCount / Math.max(area, 0.01);
-      const strengthScore = totalStrength / Math.max(edgeCount, 1) / 255;
-
-      rawCandidates.push({
-        points: simplified,
-        boundingBox: {
-          x: Number(finalBox.x.toFixed(2)),
-          y: Number(finalBox.y.toFixed(2)),
-          width: Number(finalBox.width.toFixed(2)),
-          height: Number(finalBox.height.toFixed(2))
-        },
-        edgeCount,
-        score: sidesCovered * 4 + Math.min(8, density) + strengthScore * 4 + Math.min(3, edgeCount / 80)
-      });
     }
 
-    return rawCandidates;
+    const queue: Array<[number, number]> = [];
+    const addOutside = (x: number, y: number) => {
+      const index = toIndex(x, y);
+      if (outside[index] || blocked[index]) return;
+      outside[index] = 1;
+      queue.push([x, y]);
+    };
+
+    for (let x = 0; x < cols; x += 1) {
+      addOutside(x, 0);
+      addOutside(x, rows - 1);
+    }
+    for (let y = 0; y < rows; y += 1) {
+      addOutside(0, y);
+      addOutside(cols - 1, y);
+    }
+
+    while (queue.length) {
+      const [x, y] = queue.pop()!;
+      const neighbors = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (const [dx, dy] of neighbors) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+        addOutside(nx, ny);
+      }
+    }
+
+    const seen = new Uint8Array(total);
+    const candidates: HoleCandidate[] = [];
+    const minWidth = Math.max(3.4, projectionZone.width * 0.045);
+    const minHeight = Math.max(3.4, projectionZone.height * 0.065);
+
+    for (let y = 1; y < rows - 1; y += 1) {
+      for (let x = 1; x < cols - 1; x += 1) {
+        const startIndex = toIndex(x, y);
+        if (seen[startIndex] || outside[startIndex] || blocked[startIndex]) continue;
+
+        const cells: Array<[number, number]> = [];
+        const fillQueue: Array<[number, number]> = [[x, y]];
+        seen[startIndex] = 1;
+        let minGX = x;
+        let maxGX = x;
+        let minGY = y;
+        let maxGY = y;
+
+        while (fillQueue.length) {
+          const [cx, cy] = fillQueue.pop()!;
+          cells.push([cx, cy]);
+          minGX = Math.min(minGX, cx);
+          maxGX = Math.max(maxGX, cx);
+          minGY = Math.min(minGY, cy);
+          maxGY = Math.max(maxGY, cy);
+
+          const neighbors = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+          for (const [dx, dy] of neighbors) {
+            const nx = cx + dx;
+            const ny = cy + dy;
+            if (nx <= 0 || nx >= cols - 1 || ny <= 0 || ny >= rows - 1) continue;
+            const nextIndex = toIndex(nx, ny);
+            if (seen[nextIndex] || outside[nextIndex] || blocked[nextIndex]) continue;
+            seen[nextIndex] = 1;
+            fillQueue.push([nx, ny]);
+          }
+        }
+
+        const x1 = toWorldX(minGX);
+        const x2 = toWorldX(maxGX + 1);
+        const y1 = toWorldY(minGY);
+        const y2 = toWorldY(maxGY + 1);
+        const width = x2 - x1;
+        const height = y2 - y1;
+        const area = width * height;
+        const aspect = width / Math.max(height, 0.01);
+        const fillRatio = cells.length / Math.max(1, (maxGX - minGX + 1) * (maxGY - minGY + 1));
+
+        if (width < minWidth || height < minHeight) continue;
+        if (area < projectionArea * 0.0038 || area > projectionArea * 0.2) continue;
+        if (aspect < 0.22 || aspect > 5.2) continue;
+        if (fillRatio < 0.35) continue;
+
+        const padX = Math.max(0.25, width * 0.055);
+        const padY = Math.max(0.25, height * 0.055);
+        const box = {
+          x: holeMaskClamp(x1 - padX, projectionZone.x, projectionZone.x + projectionZone.width),
+          y: holeMaskClamp(y1 - padY, projectionZone.y, projectionZone.y + projectionZone.height),
+          width: 0,
+          height: 0
+        };
+        const right = holeMaskClamp(x2 + padX, projectionZone.x, projectionZone.x + projectionZone.width);
+        const bottom = holeMaskClamp(y2 + padY, projectionZone.y, projectionZone.y + projectionZone.height);
+        box.width = Math.max(0.01, right - box.x);
+        box.height = Math.max(0.01, bottom - box.y);
+
+        // A real enclosed object should not be created from the selected projection surface border.
+        const touchesSurfaceBorder =
+          box.x <= projectionZone.x + projectionZone.width * 0.01 ||
+          box.y <= projectionZone.y + projectionZone.height * 0.01 ||
+          box.x + box.width >= projectionZone.x + projectionZone.width * 0.99 ||
+          box.y + box.height >= projectionZone.y + projectionZone.height * 0.99;
+        if (touchesSurfaceBorder) continue;
+
+        candidates.push({
+          points: holeMaskBoxPoints(box),
+          boundingBox: {
+            x: Number(box.x.toFixed(2)),
+            y: Number(box.y.toFixed(2)),
+            width: Number(box.width.toFixed(2)),
+            height: Number(box.height.toFixed(2))
+          },
+          areaCells: cells.length,
+          score: cells.length + fillRatio * 100 - Math.abs(1 - aspect) * 8
+        });
+      }
+    }
+
+    return candidates;
   };
 
-  let candidates = makeCandidates(72, 1);
-  if (candidates.length < 2) candidates = [...candidates, ...makeCandidates(58, 1)];
-  if (candidates.length < 2) candidates = [...candidates, ...makeCandidates(58, 2)];
+  let candidates = runHolePass(76, 1);
+  if (candidates.length < 2) candidates = candidates.concat(runHolePass(62, 1));
+  if (candidates.length < 2) candidates = candidates.concat(runHolePass(58, 2));
 
-  const accepted: ContourCandidate[] = [];
+  const accepted: HoleCandidate[] = [];
   for (const candidate of candidates.sort((a, b) => b.score - a.score)) {
     const duplicate = accepted.some((existing) => {
       const overlap = overlapAmount(existing.boundingBox, candidate.boundingBox);
       const smaller = Math.min(existing.boundingBox.width * existing.boundingBox.height, candidate.boundingBox.width * candidate.boundingBox.height);
-      return overlap / Math.max(smaller, 0.01) > 0.38;
+      return overlap / Math.max(smaller, 0.01) > 0.42;
     });
     if (duplicate) continue;
     accepted.push(candidate);
@@ -172,60 +213,27 @@ const replacement = `export function generateAutoMasks(
     id: \`auto_mask_\${Date.now()}_\${index}\`,
     type: "auto-generated",
     shape: "polygon",
-    points: candidate.points.map((point) => ({ x: Number(point.x.toFixed(2)), y: Number(point.y.toFixed(2)) })),
+    points: candidate.points,
     boundingBox: candidate.boundingBox,
     enabled: true
   }));
 }
 
-function contourClamp(value: number, min = 0, max = 100) {
+function holeMaskClamp(value: number, min = 0, max = 100) {
   return Math.min(max, Math.max(min, value));
 }
 
-function contourBoundingBoxForPoints(points: Coordinate[]): ProjectionZone {
-  const xs = points.map((point) => point.x);
-  const ys = points.map((point) => point.y);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  return { x: minX, y: minY, width: Math.max(0.01, maxX - minX), height: Math.max(0.01, maxY - minY) };
-}
-
-function contourConvexHull(points: Coordinate[]): Coordinate[] {
-  const unique = [...new Map(points.map((point) => [point.x.toFixed(2) + "," + point.y.toFixed(2), point])).values()]
-    .sort((a, b) => a.x === b.x ? a.y - b.y : a.x - b.x);
-  if (unique.length <= 3) return unique;
-
-  const cross = (o: Coordinate, a: Coordinate, b: Coordinate) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
-  const lower: Coordinate[] = [];
-  for (const point of unique) {
-    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) lower.pop();
-    lower.push(point);
-  }
-  const upper: Coordinate[] = [];
-  for (let i = unique.length - 1; i >= 0; i -= 1) {
-    const point = unique[i];
-    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) upper.pop();
-    upper.push(point);
-  }
-  lower.pop();
-  upper.pop();
-  return [...lower, ...upper];
-}
-
-function contourSimplifyPolygon(points: Coordinate[], maxPoints: number) {
-  if (points.length <= maxPoints) return points;
-  const step = points.length / maxPoints;
-  const simplified: Coordinate[] = [];
-  for (let i = 0; i < maxPoints; i += 1) {
-    simplified.push(points[Math.floor(i * step)]);
-  }
-  return simplified;
+function holeMaskBoxPoints(box: ProjectionZone): Coordinate[] {
+  return [
+    { x: Number(box.x.toFixed(2)), y: Number(box.y.toFixed(2)) },
+    { x: Number((box.x + box.width).toFixed(2)), y: Number(box.y.toFixed(2)) },
+    { x: Number((box.x + box.width).toFixed(2)), y: Number((box.y + box.height).toFixed(2)) },
+    { x: Number(box.x.toFixed(2)), y: Number((box.y + box.height).toFixed(2)) }
+  ];
 }
 
 `;
 
 source = source.slice(0, start) + replacement + source.slice(end);
 writeFileSync(path, source);
-console.log("edge masks now come from connected contour hulls, not template guesses");
+console.log("edge masks now come from flood-filled closed holes instead of connected-edge hull guesses");
