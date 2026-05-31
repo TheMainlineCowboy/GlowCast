@@ -3,11 +3,14 @@ import { readFileSync, writeFileSync } from "node:fs";
 const path = "src/edgeDetect.ts";
 let source = readFileSync(path, "utf8");
 
-const startNeedle = "export function generateAutoMasks(";
+const helperNeedle = "function componentHullCross(";
+const functionNeedle = "export function generateAutoMasks(";
 const endNeedle = "export function drawProjectionWithMasks(";
-const start = source.indexOf(startNeedle);
-const end = source.indexOf(endNeedle, start);
-if (start === -1 || end === -1) {
+const helperStart = source.indexOf(helperNeedle);
+const functionStart = source.indexOf(functionNeedle);
+const start = helperStart !== -1 && helperStart < functionStart ? helperStart : functionStart;
+const end = source.indexOf(endNeedle, functionStart);
+if (start === -1 || functionStart === -1 || end === -1) {
   throw new Error("Connected contour edge mask patch failed: generateAutoMasks block not found.");
 }
 
@@ -16,8 +19,8 @@ const replacement = `export function generateAutoMasks(
   projectionZone: ProjectionZone,
   _options: AutoMaskOptions = { clusterRadius: 1.8, minPoints: 14, tolerance: 0.8 }
 ): AutoMaskZone[] {
-  type Cell = { gx: number; gy: number; points: EdgePoint[]; count: number; strength: number };
-  type Candidate = {
+  type ContourCell = { gx: number; gy: number; points: EdgePoint[]; count: number; strength: number };
+  type ContourCandidate = {
     points: Coordinate[];
     boundingBox: ProjectionZone;
     score: number;
@@ -40,7 +43,7 @@ const replacement = `export function generateAutoMasks(
     point.y <= projectionZone.y + projectionZone.height - marginY;
 
   const makeCandidates = (strengthFloor: number, bridgeRadius: number) => {
-    const grid = new Map<string, Cell>();
+    const grid = new Map<string, ContourCell>();
 
     for (const point of edgePoints) {
       if (point.strength < strengthFloor || !inProjection(point)) continue;
@@ -58,7 +61,7 @@ const replacement = `export function generateAutoMasks(
     }
 
     const visited = new Set<string>();
-    const rawCandidates: Candidate[] = [];
+    const rawCandidates: ContourCandidate[] = [];
 
     for (const [firstKey, firstCell] of grid) {
       if (visited.has(firstKey)) continue;
@@ -114,7 +117,7 @@ const replacement = `export function generateAutoMasks(
       const sidesCovered = [top, bottom, left, right].filter((count) => count >= sideMinimum).length;
       if (sidesCovered < 3) continue;
 
-      const hull = convexHull(componentPoints.map((point) => ({ x: point.x, y: point.y })));
+      const hull = contourConvexHull(componentPoints.map((point) => ({ x: point.x, y: point.y })));
       if (hull.length < 3) continue;
 
       const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
@@ -124,12 +127,12 @@ const replacement = `export function generateAutoMasks(
         const dy = point.y - center.y;
         const len = Math.hypot(dx, dy) || 1;
         return {
-          x: clamp(point.x + (dx / len) * pad, projectionZone.x, projectionZone.x + projectionZone.width),
-          y: clamp(point.y + (dy / len) * pad, projectionZone.y, projectionZone.y + projectionZone.height)
+          x: contourClamp(point.x + (dx / len) * pad, projectionZone.x, projectionZone.x + projectionZone.width),
+          y: contourClamp(point.y + (dy / len) * pad, projectionZone.y, projectionZone.y + projectionZone.height)
         };
       });
-      const simplified = simplifyPolygon(paddedHull, 20);
-      const finalBox = boundingBoxForPoints(simplified);
+      const simplified = contourSimplifyPolygon(paddedHull, 20);
+      const finalBox = contourBoundingBoxForPoints(simplified);
       const density = edgeCount / Math.max(area, 0.01);
       const strengthScore = totalStrength / Math.max(edgeCount, 1) / 255;
 
@@ -153,7 +156,7 @@ const replacement = `export function generateAutoMasks(
   if (candidates.length < 2) candidates = [...candidates, ...makeCandidates(58, 1)];
   if (candidates.length < 2) candidates = [...candidates, ...makeCandidates(58, 2)];
 
-  const accepted: Candidate[] = [];
+  const accepted: ContourCandidate[] = [];
   for (const candidate of candidates.sort((a, b) => b.score - a.score)) {
     const duplicate = accepted.some((existing) => {
       const overlap = overlapAmount(existing.boundingBox, candidate.boundingBox);
@@ -175,11 +178,11 @@ const replacement = `export function generateAutoMasks(
   }));
 }
 
-function clamp(value: number, min = 0, max = 100) {
+function contourClamp(value: number, min = 0, max = 100) {
   return Math.min(max, Math.max(min, value));
 }
 
-function boundingBoxForPoints(points: Coordinate[]): ProjectionZone {
+function contourBoundingBoxForPoints(points: Coordinate[]): ProjectionZone {
   const xs = points.map((point) => point.x);
   const ys = points.map((point) => point.y);
   const minX = Math.min(...xs);
@@ -189,7 +192,7 @@ function boundingBoxForPoints(points: Coordinate[]): ProjectionZone {
   return { x: minX, y: minY, width: Math.max(0.01, maxX - minX), height: Math.max(0.01, maxY - minY) };
 }
 
-function convexHull(points: Coordinate[]): Coordinate[] {
+function contourConvexHull(points: Coordinate[]): Coordinate[] {
   const unique = [...new Map(points.map((point) => [point.x.toFixed(2) + "," + point.y.toFixed(2), point])).values()]
     .sort((a, b) => a.x === b.x ? a.y - b.y : a.x - b.x);
   if (unique.length <= 3) return unique;
@@ -211,7 +214,7 @@ function convexHull(points: Coordinate[]): Coordinate[] {
   return [...lower, ...upper];
 }
 
-function simplifyPolygon(points: Coordinate[], maxPoints: number) {
+function contourSimplifyPolygon(points: Coordinate[], maxPoints: number) {
   if (points.length <= maxPoints) return points;
   const step = points.length / maxPoints;
   const simplified: Coordinate[] = [];
