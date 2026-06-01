@@ -16,7 +16,7 @@ if (!app.includes("function traceLocalEdgeMask")) {
     const right = Math.min(projectionArea.x + projectionArea.width, Math.max(...xs) + 1.2);
     const bottom = Math.min(projectionArea.y + projectionArea.height, Math.max(...ys) + 1.2);
     const id = Date.now();
-    const zone = clampZone({ id, x: left, y: top, width: right - left, height: bottom - top, included: false, label: "edge trace candidate", shape: "rectangle" });
+    const zone: ProjectZone = clampZone({ id, x: left, y: top, width: right - left, height: bottom - top, included: false, label: "edge trace candidate", shape: "rectangle" as MaskShape });
     if (zone.width < 2 || zone.height < 2) { setDetectMessage("Trace was too small. Tap closer to the full outline."); return; }
     setZones((current) => [...current.filter((item) => item.label !== "edge trace candidate"), zone]);
     setSelectedTarget("zone");
