@@ -1,0 +1,28 @@
+@media (max-width: 960px) {
+  .workspace.maskOnlyWorkspace {
+    width: 100% !important;
+    max-width: 100% !important;
+    align-items: stretch !important;
+    overflow-x: hidden !important;
+  }
+
+  .workspace.maskOnlyWorkspace > .toolPanel,
+  .workspace.maskOnlyWorkspace .compactPanel {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    align-self: stretch !important;
+    justify-self: stretch !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .workspace.maskOnlyWorkspace .toolPanel button,
+  .workspace.maskOnlyWorkspace .shapeToolRow,
+  .workspace.maskOnlyWorkspace .edgeDebugPanel,
+  .workspace.maskOnlyWorkspace .toggle {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+}
