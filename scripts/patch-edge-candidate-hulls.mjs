@@ -59,4 +59,6 @@ console.log("edge candidates restored to stable closed edge hull masks");
 
 await import("./patch-edge-visible-closure.mjs");
 await import("./patch-final-edge-flow.mjs");
+await import("./patch-guided-trace-state-button.mjs");
+await import("./patch-guided-trace-tap.mjs");
 await import("./patch-fix-app-syntax-line1538.mjs");
