@@ -18,25 +18,14 @@ const replacement = String.raw`export function generateAutoMasks(
   const candidates: { box: ProjectionZone; points: Coordinate[]; score: number }[] = [];
   for (const hole of holes) {
     const rawBox = toPercentBox(hole.box, 260, 260);
-    const searchBox = expandBox(expandBox(rawBox, projectionZone), projectionZone);
-    const nearbyEdges = edgePoints.filter((point) =>
-      point.x >= searchBox.x && point.x <= searchBox.x + searchBox.width &&
-      point.y >= searchBox.y && point.y <= searchBox.y + searchBox.height &&
-      point.strength >= 58
-    );
-    let box = expandBox(rawBox, projectionZone);
-    if (nearbyEdges.length >= 8) {
-      const xs = nearbyEdges.map((point) => point.x);
-      const ys = nearbyEdges.map((point) => point.y);
-      box = expandBox({
-        x: Math.min(...xs),
-        y: Math.min(...ys),
-        width: Math.max(...xs) - Math.min(...xs),
-        height: Math.max(...ys) - Math.min(...ys)
-      }, projectionZone);
-    }
-    const points = pointsForBox(box);
-    candidates.push({ box, points, score: hole.area * hole.fillRatio });
+    const box = expandBox(rawBox, projectionZone);
+    const cx = rawBox.x + rawBox.width / 2;
+    const cy = rawBox.y + rawBox.height / 2;
+    const grownPoints = hole.points.map((point) => ({
+      x: clamp(cx + (point.x - cx) * 1.18, box.x, box.x + box.width),
+      y: clamp(cy + (point.y - cy) * 1.18, box.y, box.y + box.height)
+    }));
+    candidates.push({ box, points: grownPoints.length >= 3 ? grownPoints : pointsForBox(box), score: hole.area * hole.fillRatio });
   }
 
   const accepted: { box: ProjectionZone; points: Coordinate[] }[] = [];
@@ -66,7 +55,7 @@ const replacement = String.raw`export function generateAutoMasks(
 
 source = `${source.slice(0, start)}${replacement}${source.slice(end)}`;
 writeFileSync(path, source);
-console.log("edge candidates now use surrounding edge pixels to size masks around the outer frame");
+console.log("edge candidates restored to closed edge hull masks");
 
 await import("./patch-edge-visible-closure.mjs");
 await import("./patch-edge-cluster-fallback.mjs");
