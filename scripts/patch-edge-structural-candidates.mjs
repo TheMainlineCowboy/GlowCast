@@ -13,106 +13,66 @@ const replacement = String.raw`export function generateAutoMasks(
   _options: AutoMaskOptions = { clusterRadius: 1.8, minPoints: 14, tolerance: 0.8 }
 ): AutoMaskZone[] {
   const projectionArea = projectionZone.width * projectionZone.height;
-  const boundaryPadX = Math.max(0.8, projectionZone.width * 0.018);
-  const boundaryPadY = Math.max(0.8, projectionZone.height * 0.024);
-  const topLimit = projectionZone.y + projectionZone.height * 0.18;
-  const touchesProjectionBoundary = (box: ProjectionZone) =>
-    box.x <= projectionZone.x + boundaryPadX ||
-    box.y <= projectionZone.y + boundaryPadY ||
-    box.x + box.width >= projectionZone.x + projectionZone.width - boundaryPadX ||
-    box.y + box.height >= projectionZone.y + projectionZone.height - boundaryPadY;
-  const isTopBlob = (box: ProjectionZone) => box.y <= topLimit && (box.width > projectionZone.width * 0.16 || box.height < projectionZone.height * 0.25);
+  const points = edgePoints.filter((point) =>
+    point.strength >= 70 &&
+    point.x >= projectionZone.x && point.x <= projectionZone.x + projectionZone.width &&
+    point.y >= projectionZone.y && point.y <= projectionZone.y + projectionZone.height
+  );
+  const candidates: { box: ProjectionZone; score: number }[] = [];
+
   const span = (values: number[]) => values.length ? Math.max(...values) - Math.min(...values) : 0;
-  const sideSupport = (box: ProjectionZone) => {
-    const points = edgePoints.filter((point) => point.strength >= 70 && point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height);
-    if (points.length < 18) return 0;
-    const bandX = Math.max(0.75, box.width * 0.16);
-    const bandY = Math.max(0.75, box.height * 0.16);
-    const leftYs = points.filter((point) => point.x <= box.x + bandX).map((point) => point.y);
-    const rightYs = points.filter((point) => point.x >= box.x + box.width - bandX).map((point) => point.y);
-    const topXs = points.filter((point) => point.y <= box.y + bandY).map((point) => point.x);
-    const bottomXs = points.filter((point) => point.y >= box.y + box.height - bandY).map((point) => point.x);
-    const left = leftYs.length >= 3 && span(leftYs) >= box.height * 0.34;
-    const right = rightYs.length >= 3 && span(rightYs) >= box.height * 0.34;
-    const top = topXs.length >= 3 && span(topXs) >= box.width * 0.34;
-    const bottom = bottomXs.length >= 3 && span(bottomXs) >= box.width * 0.34;
-    return [left, right, top, bottom].filter(Boolean).length;
-  };
-  const usable = (box: ProjectionZone) => {
-    const area = box.width * box.height;
+  const scoreBox = (box: ProjectionZone) => {
+    const bandX = Math.max(0.7, box.width * 0.12);
+    const bandY = Math.max(0.7, box.height * 0.12);
+    const inside = points.filter((p) => p.x >= box.x && p.x <= box.x + box.width && p.y >= box.y && p.y <= box.y + box.height);
+    if (inside.length < 12) return 0;
+    const left = inside.filter((p) => p.x <= box.x + bandX);
+    const right = inside.filter((p) => p.x >= box.x + box.width - bandX);
+    const top = inside.filter((p) => p.y <= box.y + bandY);
+    const bottom = inside.filter((p) => p.y >= box.y + box.height - bandY);
+    const leftOk = left.length >= 3 && span(left.map((p) => p.y)) >= box.height * 0.35;
+    const rightOk = right.length >= 3 && span(right.map((p) => p.y)) >= box.height * 0.35;
+    const topOk = top.length >= 3 && span(top.map((p) => p.x)) >= box.width * 0.35;
+    const bottomOk = bottom.length >= 3 && span(bottom.map((p) => p.x)) >= box.width * 0.35;
+    const sides = [leftOk, rightOk, topOk, bottomOk].filter(Boolean).length;
+    if (sides < 3) return 0;
+    const borderCount = left.length + right.length + top.length + bottom.length;
+    const interiorCount = inside.length - borderCount;
     const aspect = box.width / Math.max(box.height, 0.01);
-    if (touchesProjectionBoundary(box)) return false;
-    if (isTopBlob(box)) return false;
-    if (sideSupport(box) < 3) return false;
-    if (box.width < Math.max(4.0, projectionZone.width * 0.055)) return false;
-    if (box.height < Math.max(4.0, projectionZone.height * 0.075)) return false;
-    if (area < projectionArea * 0.008 || area > projectionArea * 0.18) return false;
-    if (aspect < 0.18 || aspect > 4.5) return false;
-    return true;
+    const aspectPenalty = Math.abs(Math.log(aspect));
+    return sides * 100 + borderCount * 2 - interiorCount * 0.8 - aspectPenalty * 18;
   };
 
-  const boxes: ProjectionZone[] = [];
-
-  const cell = Math.max(0.45, Math.min(projectionZone.width, projectionZone.height) / 70);
-  const grid = new Map<string, { x: number; y: number; count: number }>();
-  for (const point of edgePoints) {
-    if (point.strength < 76) continue;
-    if (point.x < projectionZone.x + boundaryPadX || point.x > projectionZone.x + projectionZone.width - boundaryPadX) continue;
-    if (point.y < projectionZone.y + boundaryPadY || point.y > projectionZone.y + projectionZone.height - boundaryPadY) continue;
-    const gx = Math.floor((point.x - projectionZone.x) / cell);
-    const gy = Math.floor((point.y - projectionZone.y) / cell);
-    const key = gx + "," + gy;
-    const current = grid.get(key);
-    if (current) current.count += 1;
-    else grid.set(key, { x: gx, y: gy, count: 1 });
-  }
-
-  const visited = new Set<string>();
-  const offsets = [-1, 0, 1];
-  for (const [key, first] of grid) {
-    if (visited.has(key)) continue;
-    const queue = [first];
-    visited.add(key);
-    let x0 = first.x, x1 = first.x, y0 = first.y, y1 = first.y, cells = 0, count = 0;
-    while (queue.length) {
-      const current = queue.pop()!;
-      cells += 1;
-      count += current.count;
-      x0 = Math.min(x0, current.x); x1 = Math.max(x1, current.x);
-      y0 = Math.min(y0, current.y); y1 = Math.max(y1, current.y);
-      for (const dx of offsets) for (const dy of offsets) {
-        if (dx === 0 && dy === 0) continue;
-        const nextKey = (current.x + dx) + "," + (current.y + dy);
-        if (visited.has(nextKey)) continue;
-        const next = grid.get(nextKey);
-        if (!next) continue;
-        visited.add(nextKey);
-        queue.push(next);
+  const widths = [0.10, 0.14, 0.18, 0.24, 0.32].map((value) => projectionZone.width * value);
+  const heights = [0.14, 0.20, 0.28, 0.38, 0.52].map((value) => projectionZone.height * value);
+  for (const width of widths) {
+    for (const height of heights) {
+      const area = width * height;
+      const aspect = width / Math.max(height, 0.01);
+      if (area < projectionArea * 0.008 || area > projectionArea * 0.22) continue;
+      if (aspect < 0.20 || aspect > 4.8) continue;
+      const stepX = Math.max(1.8, width * 0.22);
+      const stepY = Math.max(1.8, height * 0.22);
+      for (let y = projectionZone.y + projectionZone.height * 0.05; y + height <= projectionZone.y + projectionZone.height * 0.95; y += stepY) {
+        for (let x = projectionZone.x + projectionZone.width * 0.03; x + width <= projectionZone.x + projectionZone.width * 0.97; x += stepX) {
+          const box = { x, y, width, height };
+          const score = scoreBox(box);
+          if (score > 260) candidates.push({ box: expandBox(box, projectionZone), score });
+        }
       }
     }
-    const raw = {
-      x: projectionZone.x + x0 * cell,
-      y: projectionZone.y + y0 * cell,
-      width: (x1 - x0 + 1) * cell,
-      height: (y1 - y0 + 1) * cell
-    };
-    const box = expandBox(raw, projectionZone);
-    const density = count / Math.max(1, box.width * box.height);
-    if (cells < 8 || count < 14) continue;
-    if (density < 0.12) continue;
-    if (usable(box)) boxes.push(box);
   }
 
   const accepted: ProjectionZone[] = [];
-  for (const box of boxes.sort((a, b) => (b.width * b.height) - (a.width * a.height))) {
+  for (const candidate of candidates.sort((a, b) => b.score - a.score)) {
     const duplicate = accepted.some((existing) => {
-      const overlap = overlapAmount(existing, box);
-      const minArea = Math.min(existing.width * existing.height, box.width * box.height);
-      return overlap / Math.max(minArea, 0.01) > 0.45;
+      const overlap = overlapAmount(existing, candidate.box);
+      const minArea = Math.min(existing.width * existing.height, candidate.box.width * candidate.box.height);
+      return overlap / Math.max(minArea, 0.01) > 0.35;
     });
     if (duplicate) continue;
-    accepted.push(box);
-    if (accepted.length >= 12) break;
+    accepted.push(candidate.box);
+    if (accepted.length >= 10) break;
   }
 
   return accepted
@@ -130,4 +90,4 @@ const replacement = String.raw`export function generateAutoMasks(
 
 source = source.slice(0, start) + replacement + source.slice(end);
 writeFileSync(path, source);
-console.log("edge masks now require real perimeter side spans");
+console.log("edge masks now use border scoring instead of connected blobs");
