@@ -191,7 +191,7 @@ const maskBlock = String.raw`      {step === "mask" && (
               </div>
               <button onClick={() => { setDrawMode((value) => !value); setProjectionOnly(false); setCornerMode(false); setCornerPoints([]); setSurfacePolygonMode(false); }} disabled={!imageUrl}>
                 {drawMode ? <MousePointer2 size={18} /> : <Pencil size={18} />}
-                {drawMode ? `Drawing ${drawShape}` : "Draw Avoid Zone"}
+                {drawMode ? "Drawing " + drawShape : "Draw Avoid Zone"}
               </button>
               <button onClick={() => addZone(drawShape)} disabled={!imageUrl || cornerMode || surfacePolygonMode}>
                 <Plus size={18} /> Add {drawShape} Zone
@@ -203,7 +203,7 @@ const maskBlock = String.raw`      {step === "mask" && (
               </button>
 
               <p className="helperText">
-                {drawMode ? `Drag directly on the photo to draw a ${drawShape} avoid mask.` : detectMessage}
+                {drawMode ? "Drag directly on the photo to draw a " + drawShape + " avoid mask." : detectMessage}
               </p>
             </div>
             <div className="panelBlock">
@@ -217,7 +217,7 @@ const maskBlock = String.raw`      {step === "mask" && (
           {selectedEditable && !projectionOnly && !cornerMode && !surfacePolygonMode && (
             <div className="zoneEditor">
               <strong>
-                {selectedTarget === "surface" ? "Projection Surface" : `Zone ${zones.findIndex((zone) => zone.id === selectedZoneId) + 1}`}
+                {selectedTarget === "surface" ? "Projection Surface" : "Zone " + (zones.findIndex((zone) => zone.id === selectedZoneId) + 1)}
               </strong>
               {(["x", "y", "width", "height"] as const).map((key) => (
                 <label key={key}>
@@ -243,7 +243,7 @@ const maskBlock = String.raw`      {step === "mask" && (
           {selectedTarget === "zone" && selectedZone && !projectionOnly && !cornerMode && !surfacePolygonMode && (
             <div className="shapeEditor">
               {shapeOptions.map((shape) => (
-                <button key={shape.id} className={selectedZone.shape === shape.id ? "activeEffect" : ""} onClick={() => updateSelectedZone({ shape: shape.id, label: `manual ${shape.id} avoid zone`, points: undefined })}>
+                <button key={shape.id} className={selectedZone.shape === shape.id ? "activeEffect" : ""} onClick={() => updateSelectedZone({ shape: shape.id, label: "manual " + shape.id + " avoid zone", points: undefined })}>
                   {shape.name}
                 </button>
               ))}
