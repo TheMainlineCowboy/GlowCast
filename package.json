@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "node scripts/patch-stable-edge-masks.mjs && node scripts/patch-edge-candidate-hulls.mjs && tsc && vite build",
+    "build": "node scripts/fix-edge-patch-script-templates.mjs && node scripts/patch-stable-edge-masks.mjs && node scripts/patch-edge-candidate-hulls.mjs && tsc && vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
