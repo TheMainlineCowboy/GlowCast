@@ -266,3 +266,6 @@ if (!css.includes("emptyStartPage")) {
 writeFileSync("styles.css", css);
 
 console.log("start page now owns photo setup and projection surface confirmation");
+
+await import("./patch-guided-trace-state-button.mjs");
+await import("./patch-guided-trace-tap.mjs");
