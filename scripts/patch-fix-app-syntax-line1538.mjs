@@ -3,6 +3,16 @@ import { readFileSync, writeFileSync } from "node:fs";
 const path = "src/App.tsx";
 let app = readFileSync(path, "utf8");
 
+// The final edge flow patch can be applied after the stable patch has already
+// inserted edgeOnlyMode. Keep only one state declaration so TypeScript does not
+// fail with Cannot redeclare block-scoped variable.
+const edgeOnlyStateLine = '  const [edgeOnlyMode, setEdgeOnlyMode] = useState(false);';
+const firstEdgeOnlyState = app.indexOf(edgeOnlyStateLine);
+if (firstEdgeOnlyState !== -1) {
+  app = app.slice(0, firstEdgeOnlyState + edgeOnlyStateLine.length) +
+    app.slice(firstEdgeOnlyState + edgeOnlyStateLine.length).replaceAll('\n' + edgeOnlyStateLine, '');
+}
+
 app = app.replaceAll(
   '<polygon points={zone.points.map((point) => point.x + "," + point.y).join(" ")} />',
   '<polygon points={zone.points.map((point) => point.x + "," + point.y).join(" ")} />'
@@ -24,4 +34,4 @@ app = app.replace(
 );
 
 writeFileSync(path, app);
-console.log("fixed malformed freehand edge candidate JSX");
+console.log("fixed malformed freehand edge candidate JSX and duplicate edge-only state");
