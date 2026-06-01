@@ -58,5 +58,6 @@ writeFileSync(path, source);
 console.log("edge candidates now use closed edge hulls instead of made-up templates");
 
 await import("./patch-edge-visible-closure.mjs");
+await import("./patch-edge-cluster-fallback.mjs");
 await import("./patch-final-edge-flow.mjs");
 await import("./patch-fix-app-syntax-line1538.mjs");
