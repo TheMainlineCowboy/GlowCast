@@ -22,15 +22,20 @@ const replacement = String.raw`export function generateAutoMasks(
     box.x + box.width >= projectionZone.x + projectionZone.width - boundaryPadX ||
     box.y + box.height >= projectionZone.y + projectionZone.height - boundaryPadY;
   const isTopBlob = (box: ProjectionZone) => box.y <= topLimit && (box.width > projectionZone.width * 0.16 || box.height < projectionZone.height * 0.25);
+  const span = (values: number[]) => values.length ? Math.max(...values) - Math.min(...values) : 0;
   const sideSupport = (box: ProjectionZone) => {
     const points = edgePoints.filter((point) => point.strength >= 70 && point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height);
-    if (points.length < 10) return 0;
-    const bandX = Math.max(0.75, box.width * 0.18);
-    const bandY = Math.max(0.75, box.height * 0.18);
-    const left = points.some((point) => point.x <= box.x + bandX);
-    const right = points.some((point) => point.x >= box.x + box.width - bandX);
-    const top = points.some((point) => point.y <= box.y + bandY);
-    const bottom = points.some((point) => point.y >= box.y + box.height - bandY);
+    if (points.length < 18) return 0;
+    const bandX = Math.max(0.75, box.width * 0.16);
+    const bandY = Math.max(0.75, box.height * 0.16);
+    const leftYs = points.filter((point) => point.x <= box.x + bandX).map((point) => point.y);
+    const rightYs = points.filter((point) => point.x >= box.x + box.width - bandX).map((point) => point.y);
+    const topXs = points.filter((point) => point.y <= box.y + bandY).map((point) => point.x);
+    const bottomXs = points.filter((point) => point.y >= box.y + box.height - bandY).map((point) => point.x);
+    const left = leftYs.length >= 3 && span(leftYs) >= box.height * 0.34;
+    const right = rightYs.length >= 3 && span(rightYs) >= box.height * 0.34;
+    const top = topXs.length >= 3 && span(topXs) >= box.width * 0.34;
+    const bottom = bottomXs.length >= 3 && span(bottomXs) >= box.width * 0.34;
     return [left, right, top, bottom].filter(Boolean).length;
   };
   const usable = (box: ProjectionZone) => {
@@ -39,23 +44,19 @@ const replacement = String.raw`export function generateAutoMasks(
     if (touchesProjectionBoundary(box)) return false;
     if (isTopBlob(box)) return false;
     if (sideSupport(box) < 3) return false;
-    if (box.width < Math.max(2.5, projectionZone.width * 0.035)) return false;
-    if (box.height < Math.max(2.5, projectionZone.height * 0.05)) return false;
-    if (area < projectionArea * 0.004 || area > projectionArea * 0.18) return false;
-    if (aspect < 0.12 || aspect > 5.2) return false;
+    if (box.width < Math.max(4.0, projectionZone.width * 0.055)) return false;
+    if (box.height < Math.max(4.0, projectionZone.height * 0.075)) return false;
+    if (area < projectionArea * 0.008 || area > projectionArea * 0.18) return false;
+    if (aspect < 0.18 || aspect > 4.5) return false;
     return true;
   };
 
   const boxes: ProjectionZone[] = [];
-  for (const hole of findEnclosedHoles(edgePoints, projectionZone)) {
-    const box = expandBox(toPercentBox(hole.box, 260, 260), projectionZone);
-    if (usable(box)) boxes.push(box);
-  }
 
-  const cell = Math.max(0.45, Math.min(projectionZone.width, projectionZone.height) / 90);
+  const cell = Math.max(0.45, Math.min(projectionZone.width, projectionZone.height) / 70);
   const grid = new Map<string, { x: number; y: number; count: number }>();
   for (const point of edgePoints) {
-    if (point.strength < 90) continue;
+    if (point.strength < 76) continue;
     if (point.x < projectionZone.x + boundaryPadX || point.x > projectionZone.x + projectionZone.width - boundaryPadX) continue;
     if (point.y < projectionZone.y + boundaryPadY || point.y > projectionZone.y + projectionZone.height - boundaryPadY) continue;
     const gx = Math.floor((point.x - projectionZone.x) / cell);
@@ -97,8 +98,8 @@ const replacement = String.raw`export function generateAutoMasks(
     };
     const box = expandBox(raw, projectionZone);
     const density = count / Math.max(1, box.width * box.height);
-    if (cells < 10 || count < 18) continue;
-    if (density < 0.35) continue;
+    if (cells < 8 || count < 14) continue;
+    if (density < 0.12) continue;
     if (usable(box)) boxes.push(box);
   }
 
@@ -129,4 +130,4 @@ const replacement = String.raw`export function generateAutoMasks(
 
 source = source.slice(0, start) + replacement + source.slice(end);
 writeFileSync(path, source);
-console.log("edge masks reject projection-boundary blobs and require multi-side edge support");
+console.log("edge masks now require real perimeter side spans");
