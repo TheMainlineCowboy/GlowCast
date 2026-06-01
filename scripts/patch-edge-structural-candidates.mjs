@@ -13,16 +13,36 @@ const replacement = String.raw`export function generateAutoMasks(
   _options: AutoMaskOptions = { clusterRadius: 1.8, minPoints: 14, tolerance: 0.8 }
 ): AutoMaskZone[] {
   const projectionArea = projectionZone.width * projectionZone.height;
-  const topLimit = projectionZone.y + projectionZone.height * 0.16;
-  const isTopBlob = (box: ProjectionZone) => box.y <= topLimit && box.width > projectionZone.width * 0.22 && box.height < projectionZone.height * 0.24;
+  const boundaryPadX = Math.max(0.8, projectionZone.width * 0.018);
+  const boundaryPadY = Math.max(0.8, projectionZone.height * 0.024);
+  const topLimit = projectionZone.y + projectionZone.height * 0.18;
+  const touchesProjectionBoundary = (box: ProjectionZone) =>
+    box.x <= projectionZone.x + boundaryPadX ||
+    box.y <= projectionZone.y + boundaryPadY ||
+    box.x + box.width >= projectionZone.x + projectionZone.width - boundaryPadX ||
+    box.y + box.height >= projectionZone.y + projectionZone.height - boundaryPadY;
+  const isTopBlob = (box: ProjectionZone) => box.y <= topLimit && (box.width > projectionZone.width * 0.16 || box.height < projectionZone.height * 0.25);
+  const sideSupport = (box: ProjectionZone) => {
+    const points = edgePoints.filter((point) => point.strength >= 70 && point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height);
+    if (points.length < 10) return 0;
+    const bandX = Math.max(0.75, box.width * 0.18);
+    const bandY = Math.max(0.75, box.height * 0.18);
+    const left = points.some((point) => point.x <= box.x + bandX);
+    const right = points.some((point) => point.x >= box.x + box.width - bandX);
+    const top = points.some((point) => point.y <= box.y + bandY);
+    const bottom = points.some((point) => point.y >= box.y + box.height - bandY);
+    return [left, right, top, bottom].filter(Boolean).length;
+  };
   const usable = (box: ProjectionZone) => {
     const area = box.width * box.height;
     const aspect = box.width / Math.max(box.height, 0.01);
+    if (touchesProjectionBoundary(box)) return false;
     if (isTopBlob(box)) return false;
+    if (sideSupport(box) < 3) return false;
     if (box.width < Math.max(2.5, projectionZone.width * 0.035)) return false;
     if (box.height < Math.max(2.5, projectionZone.height * 0.05)) return false;
-    if (area < projectionArea * 0.004 || area > projectionArea * 0.28) return false;
-    if (aspect < 0.10 || aspect > 6.5) return false;
+    if (area < projectionArea * 0.004 || area > projectionArea * 0.18) return false;
+    if (aspect < 0.12 || aspect > 5.2) return false;
     return true;
   };
 
@@ -36,8 +56,8 @@ const replacement = String.raw`export function generateAutoMasks(
   const grid = new Map<string, { x: number; y: number; count: number }>();
   for (const point of edgePoints) {
     if (point.strength < 90) continue;
-    if (point.x < projectionZone.x || point.x > projectionZone.x + projectionZone.width) continue;
-    if (point.y < projectionZone.y || point.y > projectionZone.y + projectionZone.height) continue;
+    if (point.x < projectionZone.x + boundaryPadX || point.x > projectionZone.x + projectionZone.width - boundaryPadX) continue;
+    if (point.y < projectionZone.y + boundaryPadY || point.y > projectionZone.y + projectionZone.height - boundaryPadY) continue;
     const gx = Math.floor((point.x - projectionZone.x) / cell);
     const gy = Math.floor((point.y - projectionZone.y) / cell);
     const key = gx + "," + gy;
@@ -109,4 +129,4 @@ const replacement = String.raw`export function generateAutoMasks(
 
 source = source.slice(0, start) + replacement + source.slice(end);
 writeFileSync(path, source);
-console.log("edge masks now combine closed holes with structural edge components");
+console.log("edge masks reject projection-boundary blobs and require multi-side edge support");
