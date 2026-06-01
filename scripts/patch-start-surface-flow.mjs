@@ -35,7 +35,7 @@ if (startStart === -1 || startEnd === -1 || startEnd <= startStart) {
 }
 
 const startBlock = String.raw`      {step === "start" && (
-        <section className={imageUrl ? "workspace startSurfaceWorkspace" : "startPage"}>
+        <section className={imageUrl ? "workspace startSurfaceWorkspace" : "startPage emptyStartPage"}>
           <aside className="toolPanel startSetupPanel">
             <div className="panelBlock">
               <h2>Start with a reference photo</h2>
@@ -258,9 +258,9 @@ app = app.slice(0, maskStart) + maskBlock + app.slice(maskEnd);
 writeFileSync(appPath, app);
 
 let css = readFileSync("styles.css", "utf8");
-if (!css.includes("startSurfaceWorkspace")) {
+if (!css.includes("emptyStartPage")) {
   css += `
-.startSurfaceWorkspace{align-items:start}.startSetupPanel{min-width:0}.surfaceSetupBlock .primary{margin-top:4px}.maskOnlyWorkspace .toolPanel{align-self:start}@media(max-width:960px){.startSurfaceWorkspace,.maskOnlyWorkspace{grid-template-columns:1fr!important}.startSurfaceWorkspace .stage,.maskOnlyWorkspace .stage{min-width:0!important;width:100%!important}.startSetupPanel{width:100%!important;max-width:100%!important}.toolPanel{min-width:0!important}.stepNav{position:static!important}.glowcastApp header{position:static!important}}
+.emptyStartPage{grid-template-columns:minmax(0,1fr)!important;width:100%!important;max-width:100%!important;overflow:hidden}.emptyStartPage .startSetupPanel,.emptyStartPage .startCard{width:100%!important;max-width:100%!important;min-width:0!important;overflow:hidden}.emptyStartPage .uploadButton{width:100%!important;max-width:100%!important;min-width:0!important}.emptyStartPage .recentPhotoBlock,.emptyStartPage .recentPhotoRow,.emptyStartPage .recentProjectList{width:100%!important;max-width:100%!important;min-width:0!important}.emptyStartPage .recentPhotoRow{overflow-x:auto!important;overflow-y:hidden!important}.emptyStartPage .recentProjectButton{width:100%!important;max-width:100%!important;min-width:0!important}.emptyStartPage .recentProjectButton span{min-width:0!important;overflow:hidden}.emptyStartPage .recentProjectButton strong,.emptyStartPage .recentProjectButton small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.startSurfaceWorkspace{align-items:start}.startSetupPanel{min-width:0}.surfaceSetupBlock .primary{margin-top:4px}.maskOnlyWorkspace .toolPanel{align-self:start}@media(max-width:960px){.glowcastApp{max-width:100vw!important;overflow-x:hidden!important}.emptyStartPage,.startSurfaceWorkspace,.maskOnlyWorkspace{grid-template-columns:minmax(0,1fr)!important}.startSurfaceWorkspace .stage,.maskOnlyWorkspace .stage{min-width:0!important;width:100%!important;max-width:100%!important;overflow:hidden!important}.startSetupPanel{width:100%!important;max-width:100%!important}.toolPanel{min-width:0!important}.stepNav{position:static!important}.glowcastApp header{position:static!important}}
 `;
 }
 writeFileSync("styles.css", css);
