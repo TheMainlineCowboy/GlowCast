@@ -55,9 +55,8 @@ const replacement = String.raw`export function generateAutoMasks(
 
 source = `${source.slice(0, start)}${replacement}${source.slice(end)}`;
 writeFileSync(path, source);
-console.log("edge candidates restored to closed edge hull masks");
+console.log("edge candidates restored to stable closed edge hull masks");
 
 await import("./patch-edge-visible-closure.mjs");
-await import("./patch-edge-cluster-fallback.mjs");
 await import("./patch-final-edge-flow.mjs");
 await import("./patch-fix-app-syntax-line1538.mjs");
