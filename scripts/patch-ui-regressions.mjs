@@ -26,8 +26,11 @@ if (app.includes('  const projectionArea = surfaceZone;')) {
   ].join('\n'));
 }
 
-app = app.split('{surfacePolygonClosed ? renderPolygonProjectionLayer() : null}').join('{surfacePolygonClosed && projectionOnly ? renderPolygonProjectionLayer() : null}');
-app = app.split('{surfacePolygonClosed && !edgeOnlyMode ? renderPolygonProjectionLayer() : null}').join('{surfacePolygonClosed && projectionOnly ? renderPolygonProjectionLayer() : null}');
+app = app.split('{surfacePolygonClosed ? renderPolygonProjectionLayer() : null}').join('{step !== "start" && surfacePolygonClosed && projectionOnly ? renderPolygonProjectionLayer() : null}');
+app = app.split('{surfacePolygonClosed && !edgeOnlyMode ? renderPolygonProjectionLayer() : null}').join('{step !== "start" && surfacePolygonClosed && projectionOnly ? renderPolygonProjectionLayer() : null}');
+app = app.split('{invertMode && projectionArea && !surfacePolygonClosed && (').join('{step !== "start" && invertMode && projectionArea && !surfacePolygonClosed && (');
+app = app.split('{invertMode && includedZones.map((zone) => (').join('{step !== "start" && invertMode && includedZones.map((zone) => (');
+app = app.split('{!invertMode && includedZones.map((zone) => (').join('{step !== "start" && !invertMode && includedZones.map((zone) => (');
 app = app.split('          {showEdges && edgeOverlayUrl && !projectionOnly ? (').join('          {showEdges && edgeOverlayUrl && !projectionOnly && !edgeOnlyMode ? (');
 app = app.split('!projectionOnly && !cornerMode && !surfacePolygonMode && zones.map').join('!projectionOnly && !edgeOnlyMode && !cornerMode && !surfacePolygonMode && zones.map');
 app = app.split('projectionArea && showSurfaceHandles && !projectionOnly').join('projectionArea && showSurfaceHandles && !projectionOnly && !edgeOnlyMode');
@@ -47,7 +50,7 @@ writeFileSync("src/App.tsx", app);
 
 let css = readFileSync("styles.css", "utf8");
 if (!css.includes('edgeDebugPanel')) {
-  css += '\n.edgeDebugPanel{display:grid;gap:3px;margin:8px 0 12px;padding:10px 12px;border:1px solid rgba(103,232,249,.35);background:rgba(2,6,23,.55);border-radius:14px;color:#cbd5e1;font-size:12px}.edgeDebugPanel strong{color:#67e8f9;text-transform:uppercase;letter-spacing:.08em}.edgeOnlyStage{opacity:1!important;background:#020617!important}@media(max-width:960px){html,body,#root,.glowcastApp{max-width:100vw!important;overflow-x:hidden!important}.startPage{grid-template-columns:1fr!important;width:100%!important;max-width:100vw!important;overflow:hidden!important}.startCard{width:100%!important;max-width:100%!important;min-width:0!important;padding:14px!important;overflow:hidden!important}.recentPhotoRow{max-width:100%!important;overflow-x:auto!important}.recentPhotoButton{flex:0 0 86px!important;min-width:86px!important;max-width:86px!important}.workspace{grid-template-columns:1fr!important}}\n';
+  css += '\n.edgeDebugPanel{display:grid;gap:3px;margin:8px 0 12px;padding:10px 12px;border:1px solid rgba(103,232,249,.35);background:rgba(2,6,23,.55);border-radius:14px;color:#cbd5e1;font-size:12px}.edgeDebugPanel strong{color:#67e8f9;text-transform:uppercase;letter-spacing:.08em}.edgeOnlyStage{opacity:1!important;background:#020617!important}@media(max-width:960px){html,body,#root,.glowcastApp{max-width:100vw!important;overflow-x:hidden!important}.startPage{grid-template-columns:1fr!important;width:100%!important;max-width:100vw!important;overflow:hidden!important}.startCard{width:100%!important;max-width:100%!important;min-width:0!important;padding:14px!important;overflow:hidden!important}.recentPhotoRow{max-width:100%!important;overflow-x:auto!important}.recentPhotoButton{flex:0 0 86px!important;min-width:86px!important;max-width:86px!important}.workspace{grid-template-columns:1fr!important}.stage,.surfaceLayer{width:100%!important;max-width:100%!important;overflow:hidden!important}}\n';
 }
 writeFileSync("styles.css", css);
 
