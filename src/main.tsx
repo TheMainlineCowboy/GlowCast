@@ -4,6 +4,7 @@ import App from "./App";
 import "../styles.css";
 import "./animation-upgrades.css";
 import "./shape-guides.css";
+import "./mobile-mask-panel-fix.css";
 import "./effect-controls";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
