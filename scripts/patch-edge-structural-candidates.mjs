@@ -12,73 +12,73 @@ const replacement = String.raw`export function generateAutoMasks(
   projectionZone: ProjectionZone,
   _options: AutoMaskOptions = { clusterRadius: 1.8, minPoints: 14, tolerance: 0.8 }
 ): AutoMaskZone[] {
-  const gridW = 220;
-  const gridH = 220;
+  const inner = {
+    x: projectionZone.x + projectionZone.width * 0.018,
+    y: projectionZone.y + projectionZone.height * 0.025,
+    width: projectionZone.width * 0.964,
+    height: projectionZone.height * 0.945
+  };
+  const projectionArea = projectionZone.width * projectionZone.height;
+  const visiblePoints = edgePoints.filter((point) =>
+    point.x >= inner.x && point.x <= inner.x + inner.width &&
+    point.y >= inner.y && point.y <= inner.y + inner.height
+  );
+  if (!visiblePoints.length) return [];
+
+  const strengths = visiblePoints.map((point) => point.strength).sort((a, b) => a - b);
+  const percentile = strengths[Math.floor(strengths.length * 0.68)] ?? 72;
+  const cutoff = Math.max(72, Math.min(125, percentile));
+  const maskablePoints = visiblePoints.filter((point) => point.strength >= cutoff);
+  if (maskablePoints.length < 12) return [];
+
+  const gridW = 240;
+  const gridH = 240;
   const total = gridW * gridH;
   const idx = (x: number, y: number) => y * gridW + x;
   const toGridX = (x: number) => Math.max(0, Math.min(gridW - 1, Math.round((x / 100) * (gridW - 1))));
   const toGridY = (y: number) => Math.max(0, Math.min(gridH - 1, Math.round((y / 100) * (gridH - 1))));
   const toPercentPoint = (x: number, y: number): Coordinate => ({ x: (x / (gridW - 1)) * 100, y: (y / (gridH - 1)) * 100 });
-  const keyFor = (x: number, y: number) => x + "," + y;
-  const minX = toGridX(projectionZone.x + projectionZone.width * 0.025);
-  const maxX = toGridX(projectionZone.x + projectionZone.width * 0.975);
-  const minY = toGridY(projectionZone.y + projectionZone.height * 0.035);
-  const maxY = toGridY(projectionZone.y + projectionZone.height * 0.965);
-  const projectionArea = projectionZone.width * projectionZone.height;
-  const edge = new Uint8Array(total);
-  const pruned = new Uint8Array(total);
+  const minGX = toGridX(inner.x);
+  const maxGX = toGridX(inner.x + inner.width);
+  const minGY = toGridY(inner.y);
+  const maxGY = toGridY(inner.y + inner.height);
+  const layer = new Uint8Array(total);
+  const connected = new Uint8Array(total);
 
-  for (const point of edgePoints) {
-    if (point.strength < 58) continue;
-    if (point.x < projectionZone.x || point.x > projectionZone.x + projectionZone.width) continue;
-    if (point.y < projectionZone.y || point.y > projectionZone.y + projectionZone.height) continue;
-    edge[idx(toGridX(point.x), toGridY(point.y))] = 1;
+  for (const point of maskablePoints) {
+    const gx = toGridX(point.x);
+    const gy = toGridY(point.y);
+    layer[idx(gx, gy)] = 1;
   }
 
-  pruned.set(edge);
+  // This is the important part: create a mask source from the visible edge layer itself.
+  // Small dilation connects broken visible cyan edge pieces without looking back at the photo.
+  for (let y = minGY; y <= maxGY; y += 1) {
+    for (let x = minGX; x <= maxGX; x += 1) {
+      if (!layer[idx(x, y)]) continue;
+      for (let dy = -2; dy <= 2; dy += 1) {
+        for (let dx = -2; dx <= 2; dx += 1) {
+          if (dx * dx + dy * dy > 5) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < minGX || nx > maxGX || ny < minGY || ny > maxGY) continue;
+          connected[idx(nx, ny)] = 1;
+        }
+      }
+    }
+  }
 
-  const removeLongRuns = () => {
-    const maxHorizontalRun = Math.max(28, Math.round((maxX - minX) * 0.42));
-    const maxVerticalRun = Math.max(35, Math.round((maxY - minY) * 0.62));
-    for (let y = minY; y <= maxY; y += 1) {
-      let runStart = -1;
-      for (let x = minX; x <= maxX + 1; x += 1) {
-        const active = x <= maxX && edge[idx(x, y)];
-        if (active && runStart < 0) runStart = x;
-        if ((!active || x > maxX) && runStart >= 0) {
-          const runEnd = x - 1;
-          if (runEnd - runStart + 1 >= maxHorizontalRun) {
-            for (let rx = runStart; rx <= runEnd; rx += 1) pruned[idx(rx, y)] = 0;
-          }
-          runStart = -1;
-        }
+  const pointNearVisibleEdge = (x: number, y: number) => {
+    for (let dy = -2; dy <= 2; dy += 1) {
+      for (let dx = -2; dx <= 2; dx += 1) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < minGX || nx > maxGX || ny < minGY || ny > maxGY) continue;
+        if (layer[idx(nx, ny)]) return true;
       }
     }
-    for (let x = minX; x <= maxX; x += 1) {
-      let runStart = -1;
-      for (let y = minY; y <= maxY + 1; y += 1) {
-        const active = y <= maxY && edge[idx(x, y)];
-        if (active && runStart < 0) runStart = y;
-        if ((!active || y > maxY) && runStart >= 0) {
-          const runEnd = y - 1;
-          if (runEnd - runStart + 1 >= maxVerticalRun) {
-            for (let ry = runStart; ry <= runEnd; ry += 1) pruned[idx(x, ry)] = 0;
-          }
-          runStart = -1;
-        }
-      }
-    }
+    return false;
   };
-  removeLongRuns();
-
-  const grid = new Map<string, { x: number; y: number; points: Coordinate[] }>();
-  for (let y = minY; y <= maxY; y += 1) {
-    for (let x = minX; x <= maxX; x += 1) {
-      if (!pruned[idx(x, y)]) continue;
-      const key = keyFor(x, y);
-      grid.set(key, { x, y, points: [toPercentPoint(x, y)] });
-    }
-  }
 
   const cross = (o: Coordinate, a: Coordinate, b: Coordinate) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
   const convexHull = (points: Coordinate[]) => {
@@ -100,64 +100,70 @@ const replacement = String.raw`export function generateAutoMasks(
     return lower.slice(0, -1).concat(upper.slice(0, -1));
   };
 
-  const expandHull = (points: Coordinate[], box: ProjectionZone) => {
-    const cx = box.x + box.width / 2;
-    const cy = box.y + box.height / 2;
-    return points.map((point) => ({
-      x: clamp(cx + (point.x - cx) * 1.08, projectionZone.x, projectionZone.x + projectionZone.width),
-      y: clamp(cy + (point.y - cy) * 1.08, projectionZone.y, projectionZone.y + projectionZone.height)
-    }));
-  };
-
-  const visited = new Set<string>();
-  const offsets = [-1, 0, 1];
+  const visited = new Uint8Array(total);
+  const dirs = [1, -1, gridW, -gridW, gridW + 1, gridW - 1, -gridW + 1, -gridW - 1];
   const candidates: { box: ProjectionZone; points: Coordinate[]; score: number }[] = [];
 
-  for (const [startKey, startCell] of grid) {
-    if (visited.has(startKey)) continue;
-    const queue = [startCell];
-    visited.add(startKey);
-    const clusterPoints: Coordinate[] = [];
-    let cells = 0;
-    while (queue.length) {
-      const current = queue.pop()!;
-      cells += 1;
-      clusterPoints.push(...current.points);
-      for (const dx of offsets) {
-        for (const dy of offsets) {
-          if (dx === 0 && dy === 0) continue;
-          const nextKey = keyFor(current.x + dx, current.y + dy);
-          if (visited.has(nextKey)) continue;
-          const next = grid.get(nextKey);
-          if (!next) continue;
-          visited.add(nextKey);
+  for (let y = minGY; y <= maxGY; y += 1) {
+    for (let x = minGX; x <= maxGX; x += 1) {
+      const startIndex = idx(x, y);
+      if (!connected[startIndex] || visited[startIndex]) continue;
+      const queue = [startIndex];
+      visited[startIndex] = 1;
+      const component: number[] = [];
+      let x0 = x, x1 = x, y0 = y, y1 = y;
+      while (queue.length) {
+        const current = queue.pop()!;
+        const cx = current % gridW;
+        const cy = Math.floor(current / gridW);
+        component.push(current);
+        x0 = Math.min(x0, cx); x1 = Math.max(x1, cx);
+        y0 = Math.min(y0, cy); y1 = Math.max(y1, cy);
+        for (const d of dirs) {
+          const next = current + d;
+          if (next < 0 || next >= total) continue;
+          const nx = next % gridW;
+          const ny = Math.floor(next / gridW);
+          if (Math.abs(nx - cx) > 1 || Math.abs(ny - cy) > 1) continue;
+          if (!connected[next] || visited[next]) continue;
+          visited[next] = 1;
           queue.push(next);
         }
       }
-    }
 
-    if (clusterPoints.length < 10 || cells < 5) continue;
-    const xs = clusterPoints.map((p) => p.x);
-    const ys = clusterPoints.map((p) => p.y);
-    const raw = {
-      x: Math.min(...xs),
-      y: Math.min(...ys),
-      width: Math.max(...xs) - Math.min(...xs),
-      height: Math.max(...ys) - Math.min(...ys)
-    };
-    const box = expandBox(raw, projectionZone);
-    const area = box.width * box.height;
-    const aspect = box.width / Math.max(box.height, 0.01);
-    const centerY = box.y + box.height / 2;
-    if (box.width < Math.max(3.0, projectionZone.width * 0.035)) continue;
-    if (box.height < Math.max(3.0, projectionZone.height * 0.045)) continue;
-    if (area < projectionArea * 0.0025 || area > projectionArea * 0.20) continue;
-    if (aspect < 0.12 || aspect > 6.2) continue;
-    if (centerY > projectionZone.y + projectionZone.height * 0.90) continue;
-    const hull = convexHull(clusterPoints);
-    if (hull.length < 3) continue;
-    const density = clusterPoints.length / Math.max(area, 0.01);
-    candidates.push({ box, points: expandHull(hull, box), score: clusterPoints.length + hull.length * 12 + density * 20 - area * 0.12 });
+      const trueEdgeCells = component.filter((cell) => pointNearVisibleEdge(cell % gridW, Math.floor(cell / gridW)));
+      if (trueEdgeCells.length < 10) continue;
+      const raw = {
+        x: (x0 / (gridW - 1)) * 100,
+        y: (y0 / (gridH - 1)) * 100,
+        width: ((x1 - x0) / (gridW - 1)) * 100,
+        height: ((y1 - y0) / (gridH - 1)) * 100
+      };
+      const box = clampToProjection(paddedBox(raw, 0.85, 0.85), projectionZone);
+      const area = box.width * box.height;
+      const aspect = box.width / Math.max(box.height, 0.01);
+      const centerY = box.y + box.height / 2;
+      if (box.width < Math.max(3.8, projectionZone.width * 0.045)) continue;
+      if (box.height < Math.max(3.8, projectionZone.height * 0.055)) continue;
+      if (area < projectionArea * 0.003 || area > projectionArea * 0.18) continue;
+      if (aspect < 0.14 || aspect > 6.5) continue;
+      if (centerY > projectionZone.y + projectionZone.height * 0.91) continue;
+      if (box.x <= projectionZone.x + projectionZone.width * 0.012 || box.x + box.width >= projectionZone.x + projectionZone.width * 0.988) continue;
+      if (box.y <= projectionZone.y + projectionZone.height * 0.012 || box.y + box.height >= projectionZone.y + projectionZone.height * 0.988) continue;
+
+      const hullSource = trueEdgeCells.map((cell) => toPercentPoint(cell % gridW, Math.floor(cell / gridW)));
+      const hull = convexHull(hullSource);
+      if (hull.length < 3) continue;
+      const density = trueEdgeCells.length / Math.max(area, 0.01);
+      candidates.push({
+        box,
+        points: hull.map((point) => ({
+          x: clamp(box.x + (point.x - box.x) * 1.08, projectionZone.x, projectionZone.x + projectionZone.width),
+          y: clamp(box.y + (point.y - box.y) * 1.08, projectionZone.y, projectionZone.y + projectionZone.height)
+        })),
+        score: trueEdgeCells.length + hull.length * 10 + density * 22 - area * 0.08
+      });
+    }
   }
 
   const accepted: { box: ProjectionZone; points: Coordinate[] }[] = [];
@@ -165,7 +171,7 @@ const replacement = String.raw`export function generateAutoMasks(
     const duplicate = accepted.some((existing) => {
       const overlap = overlapAmount(existing.box, candidate.box);
       const minArea = Math.min(existing.box.width * existing.box.height, candidate.box.width * candidate.box.height);
-      return overlap / Math.max(minArea, 0.01) > 0.34;
+      return overlap / Math.max(minArea, 0.01) > 0.36;
     });
     if (duplicate) continue;
     accepted.push(candidate);
@@ -187,4 +193,4 @@ const replacement = String.raw`export function generateAutoMasks(
 
 source = source.slice(0, start) + replacement + source.slice(end);
 writeFileSync(path, source);
-console.log("edge masks now use line-pruned edge cluster hulls");
+console.log("auto masks now come from visible edge-layer strength only");
