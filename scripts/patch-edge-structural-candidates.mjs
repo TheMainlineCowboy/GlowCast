@@ -189,7 +189,7 @@ const replacement = String.raw`export function generateAutoMasks(
   }
 
   return accepted
-    .sort((a, b) => a.box.y === b.box.y ? a.box.x - b.box.x : a.y - b.y)
+    .sort((a, b) => a.box.y === b.box.y ? a.box.x - b.box.x : a.box.y - b.box.y)
     .map(({ box, points }, index) => ({
       id: "auto_mask_" + Date.now() + "_" + index,
       type: "auto-generated",
