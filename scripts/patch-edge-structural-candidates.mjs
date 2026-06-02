@@ -19,6 +19,14 @@ const replacement = String.raw`export function generateAutoMasks(
     height: projectionZone.height * 0.945
   };
   const projectionArea = projectionZone.width * projectionZone.height;
+  const clampPercent = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+  const paddedClampedBox = (box: ProjectionZone, padX: number, padY: number): ProjectionZone => {
+    const x = Math.max(projectionZone.x, box.x - padX);
+    const y = Math.max(projectionZone.y, box.y - padY);
+    const maxX = Math.min(projectionZone.x + projectionZone.width, box.x + box.width + padX);
+    const maxY = Math.min(projectionZone.y + projectionZone.height, box.y + box.height + padY);
+    return { x, y, width: Math.max(0, maxX - x), height: Math.max(0, maxY - y) };
+  };
   const visiblePoints = edgePoints.filter((point) =>
     point.x >= inner.x && point.x <= inner.x + inner.width &&
     point.y >= inner.y && point.y <= inner.y + inner.height
@@ -139,7 +147,7 @@ const replacement = String.raw`export function generateAutoMasks(
         width: ((x1 - x0) / (gridW - 1)) * 100,
         height: ((y1 - y0) / (gridH - 1)) * 100
       };
-      const box = clampToProjection(paddedBox(raw, 0.85, 0.85), projectionZone);
+      const box = paddedClampedBox(raw, 0.85, 0.85);
       const area = box.width * box.height;
       const aspect = box.width / Math.max(box.height, 0.01);
       const centerY = box.y + box.height / 2;
@@ -158,8 +166,8 @@ const replacement = String.raw`export function generateAutoMasks(
       candidates.push({
         box,
         points: hull.map((point) => ({
-          x: clamp(box.x + (point.x - box.x) * 1.08, projectionZone.x, projectionZone.x + projectionZone.width),
-          y: clamp(box.y + (point.y - box.y) * 1.08, projectionZone.y, projectionZone.y + projectionZone.height)
+          x: clampPercent(box.x + (point.x - box.x) * 1.08, projectionZone.x, projectionZone.x + projectionZone.width),
+          y: clampPercent(box.y + (point.y - box.y) * 1.08, projectionZone.y, projectionZone.y + projectionZone.height)
         })),
         score: trueEdgeCells.length + hull.length * 10 + density * 22 - area * 0.08
       });
