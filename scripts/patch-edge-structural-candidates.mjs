@@ -18,6 +18,7 @@ const replacement = String.raw`export function generateAutoMasks(
   const idx = (x: number, y: number) => y * gridW + x;
   const toGridX = (x: number) => Math.max(0, Math.min(gridW - 1, Math.round((x / 100) * (gridW - 1))));
   const toGridY = (y: number) => Math.max(0, Math.min(gridH - 1, Math.round((y / 100) * (gridH - 1))));
+  const toPercentPoint = (x: number, y: number): Coordinate => ({ x: (x / (gridW - 1)) * 100, y: (y / (gridH - 1)) * 100 });
 
   const minX = toGridX(projectionZone.x);
   const maxX = toGridX(projectionZone.x + projectionZone.width);
@@ -75,16 +76,65 @@ const replacement = String.raw`export function generateAutoMasks(
     }
   }
 
+  const makeBoundaryPolygon = (cells: number[], x0: number, y0: number, x1: number, y1: number): Coordinate[] => {
+    const cellSet = new Set(cells);
+    const boundary: Coordinate[] = [];
+    for (const cell of cells) {
+      const cx = cell % gridW;
+      const cy = Math.floor(cell / gridW);
+      if (!dirs.some((d) => !cellSet.has(cell + d))) continue;
+      boundary.push(toPercentPoint(cx, cy));
+    }
+    if (boundary.length < 10) return pointsForBox(toPercentBox({ x0, y0, x1, y1 }, gridW, gridH));
+    const center = boundary.reduce((sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }), { x: 0, y: 0 });
+    center.x /= boundary.length;
+    center.y /= boundary.length;
+    const bins = new Map<number, Coordinate>();
+    for (const point of boundary) {
+      const angle = Math.atan2(point.y - center.y, point.x - center.x) + Math.PI;
+      const bin = Math.floor((angle / (Math.PI * 2)) * 40);
+      const previous = bins.get(bin);
+      if (!previous || Math.hypot(point.x - center.x, point.y - center.y) > Math.hypot(previous.x - center.x, previous.y - center.y)) bins.set(bin, point);
+    }
+    const points = [...bins.entries()].sort((a, b) => a[0] - b[0]).map((entry) => entry[1]);
+    return points.length >= 6 ? points : pointsForBox(toPercentBox({ x0, y0, x1, y1 }, gridW, gridH));
+  };
+
+  const boundaryEdgeContact = (cells: number[]) => {
+    let contact = 0;
+    let boundary = 0;
+    const cellSet = new Set(cells);
+    for (const cell of cells) {
+      const cx = cell % gridW;
+      const cy = Math.floor(cell / gridW);
+      if (!dirs.some((d) => !cellSet.has(cell + d))) continue;
+      boundary += 1;
+      let nearEdge = false;
+      for (let dy = -3; dy <= 3; dy += 1) {
+        for (let dx = -3; dx <= 3; dx += 1) {
+          const nx = cx + dx;
+          const ny = cy + dy;
+          if (nx < minX || nx > maxX || ny < minY || ny > maxY) continue;
+          if (edge[idx(nx, ny)]) nearEdge = true;
+        }
+      }
+      if (nearEdge) contact += 1;
+    }
+    return boundary ? contact / boundary : 0;
+  };
+
   const candidates: { box: ProjectionZone; points: Coordinate[]; score: number }[] = [];
   for (let y = minY + 1; y < maxY; y += 1) {
     for (let x = minX + 1; x < maxX; x += 1) {
       const startIndex = idx(x, y);
       if (closed[startIndex] || outside[startIndex] || seen[startIndex]) continue;
       const stack = [startIndex];
+      const cells: number[] = [];
       seen[startIndex] = 1;
       let x0 = x, x1 = x, y0 = y, y1 = y, count = 0;
       while (stack.length) {
         const current = stack.pop()!;
+        cells.push(current);
         count += 1;
         const cx = current % gridW;
         const cy = Math.floor(current / gridW);
@@ -111,9 +161,11 @@ const replacement = String.raw`export function generateAutoMasks(
       if (centerY > projectionZone.y + projectionZone.height * 0.86) continue;
       if (area < projectionArea * 0.004 || area > projectionArea * 0.18) continue;
       if (aspect < 0.12 || aspect > 6.0) continue;
+      const contact = boundaryEdgeContact(cells);
+      if (contact < 0.22) continue;
       const perimeter = edgePoints.filter((p) => p.strength >= 68 && p.x >= box.x - 1.2 && p.x <= box.x + box.width + 1.2 && p.y >= box.y - 1.2 && p.y <= box.y + box.height + 1.2).length;
       if (perimeter < 12) continue;
-      candidates.push({ box, points: pointsForBox(box), score: perimeter + count * 0.45 - area * 0.25 });
+      candidates.push({ box, points: makeBoundaryPolygon(cells, x0, y0, x1, y1), score: perimeter + contact * 80 + count * 0.35 - area * 0.25 });
     }
   }
 
@@ -144,4 +196,4 @@ const replacement = String.raw`export function generateAutoMasks(
 
 source = source.slice(0, start) + replacement + source.slice(end);
 writeFileSync(path, source);
-console.log("edge masks now use gap-closed flood fill from the visible edge layer");
+console.log("edge masks now use boundary polygons and reject weak edge contact");
