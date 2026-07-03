@@ -16,11 +16,54 @@ export interface CandidateZone {
   label: string;
 }
 
+export interface Bounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface DetectorOptions {
   gridResolution?: number; // Size of the rasterized grid (e.g. 100x100)
   minDensityThreshold?: number; // Minimum edge points per grid cell to consider active
   minSizePercent?: number; // Minimum candidate size as percentage of space
   maxSizePercent?: number; // Maximum candidate size as percentage of space
+  bounds?: Bounds | null; // Optional projection surface bounds in 0-100 coordinates
+  polygon?: Point[] | null; // Optional closed projection surface polygon in 0-100 coordinates
+}
+
+function pointInPolygon(point: Point, polygon: Point[]): boolean {
+  let inside = false;
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const xi = polygon[i].x;
+    const yi = polygon[i].y;
+    const xj = polygon[j].x;
+    const yj = polygon[j].y;
+
+    const intersects =
+      yi > point.y !== yj > point.y &&
+      point.x < ((xj - xi) * (point.y - yi)) / ((yj - yi) || 0.0001) + xi;
+
+    if (intersects) inside = !inside;
+  }
+
+  return inside;
+}
+
+function isInsideDetectorScope(point: EdgePoint, options: DetectorOptions): boolean {
+  const bounds = options.bounds ?? { x: 0, y: 0, width: 100, height: 100 };
+  if (
+    point.x < bounds.x ||
+    point.x > bounds.x + bounds.width ||
+    point.y < bounds.y ||
+    point.y > bounds.y + bounds.height
+  ) {
+    return false;
+  }
+
+  const polygon = options.polygon && options.polygon.length >= 3 ? options.polygon : null;
+  return polygon ? pointInPolygon(point, polygon) : true;
 }
 
 /**
@@ -41,6 +84,7 @@ export function detectArchitecturalCandidates(
   const minDensity = options.minDensityThreshold || 1;
   const minSize = options.minSizePercent || 1.5;
   const maxSize = options.maxSizePercent || 75.0;
+  const detectorBounds = options.bounds ?? { x: 0, y: 0, width: 100, height: 100 };
 
   // 2. Initialize spatial grid metrics.
   // Edge points are already normalized in 0-100 bounds.
@@ -52,6 +96,8 @@ export function detectArchitecturalCandidates(
   // Map normalized scatter points directly into spatial grid accumulation bins: O(N).
   for (let i = 0; i < edgePoints.length; i += 1) {
     const pt = edgePoints[i];
+    if (!isInsideDetectorScope(pt, options)) continue;
+
     const gx = Math.min(resolution - 1, Math.max(0, Math.floor((pt.x / 100) * resolution)));
     const gy = Math.min(resolution - 1, Math.max(0, Math.floor((pt.y / 100) * resolution)));
     grid[gy][gx] += pt.strength ?? 1.0;
@@ -216,8 +262,13 @@ export function detectArchitecturalCandidates(
       score += 10;
     }
 
-    // Signal C: boundary proximity penalty.
-    if (xPct <= 1.5 || yPct <= 1.5 || xPct + wPct >= 98.5 || yPct + hPct >= 98.5) {
+    // Signal C: boundary proximity penalty inside the selected projection surface.
+    if (
+      xPct <= detectorBounds.x + detectorBounds.width * 0.018 ||
+      yPct <= detectorBounds.y + detectorBounds.height * 0.018 ||
+      xPct + wPct >= detectorBounds.x + detectorBounds.width * 0.982 ||
+      yPct + hPct >= detectorBounds.y + detectorBounds.height * 0.982
+    ) {
       score -= 25;
     }
 
