@@ -27,6 +27,27 @@ const transpiled = ts.transpileModule(composedSource, {
 const tempPath = path.join(os.tmpdir(), `glowcast-mask-adapter-${Date.now()}.mjs`);
 await fs.writeFile(tempPath, transpiled);
 
+function addFrame(edgePoints, x1, y1, x2, y2, strength = 180) {
+  for (let x = x1; x <= x2; x += 1) {
+    edgePoints.push({ x, y: y1, strength });
+    edgePoints.push({ x, y: y2, strength });
+  }
+  for (let y = y1; y <= y2; y += 1) {
+    edgePoints.push({ x: x1, y, strength });
+    edgePoints.push({ x: x2, y, strength });
+  }
+}
+
+function hasBoxCovering(masks, expected) {
+  return masks.some(
+    (mask) =>
+      mask.box.x <= expected.x + expected.tolerance &&
+      mask.box.y <= expected.y + expected.tolerance &&
+      mask.box.x + mask.box.width >= expected.x + expected.width - expected.tolerance &&
+      mask.box.y + mask.box.height >= expected.y + expected.height - expected.tolerance
+  );
+}
+
 try {
   const { buildMaskCandidatesFromEdges } = await import(pathToFileURL(tempPath).href);
 
@@ -35,23 +56,8 @@ try {
   const add = (x, y, strength = 180) => edgePoints.push({ x, y, strength });
 
   // Two plausible architectural frames.
-  for (let x = 18; x <= 42; x += 1) {
-    add(x, 20);
-    add(x, 42);
-  }
-  for (let y = 20; y <= 42; y += 1) {
-    add(18, y);
-    add(42, y);
-  }
-
-  for (let x = 58; x <= 82; x += 1) {
-    add(x, 22);
-    add(x, 48);
-  }
-  for (let y = 22; y <= 48; y += 1) {
-    add(58, y);
-    add(82, y);
-  }
+  addFrame(edgePoints, 18, 20, 42, 42);
+  addFrame(edgePoints, 58, 22, 82, 48);
 
   // A tiny trim/noise fragment that should not become a user-facing mask.
   for (let x = 7; x <= 9; x += 1) add(x, 72, 220);
@@ -92,7 +98,25 @@ try {
     process.exit(1);
   }
 
-  console.log(`Mask adapter smoke test passed: ${masks.length} masks, no tiny fragments or duplicates.`);
+  const groupedEdges = [];
+  // Central window frame plus two close side shutters/trim strips. These should
+  // become one user-facing mask instead of three separate projection holes.
+  addFrame(groupedEdges, 42, 24, 62, 52);
+  addFrame(groupedEdges, 34, 25, 38, 51, 190);
+  addFrame(groupedEdges, 66, 25, 70, 51, 190);
+
+  const groupedMasks = buildMaskCandidatesFromEdges(groupedEdges, bounds);
+  const groupedMaskCount = groupedMasks.filter((mask) => mask.box.y < 58 && mask.box.y + mask.box.height > 20).length;
+
+  if (groupedMaskCount > 1 || !hasBoxCovering(groupedMasks, { x: 34, y: 24, width: 36, height: 28, tolerance: 2 })) {
+    console.error("Mask adapter smoke test failed. Nearby shutters/trim were not grouped into the parent mask.");
+    console.error(JSON.stringify(groupedMasks, null, 2));
+    process.exit(1);
+  }
+
+  console.log(
+    `Mask adapter smoke test passed: ${masks.length} masks, no tiny fragments or duplicates, satellite grouping ok.`
+  );
 } finally {
   await fs.rm(tempPath, { force: true });
 }
