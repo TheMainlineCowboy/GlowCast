@@ -4,6 +4,7 @@ await import("./patch-final-edge-flow.mjs");
 await import("./patch-ui-regressions.mjs");
 await import("./patch-start-surface-flow.mjs");
 await import("./patch-detector-diagonal-connectivity-v1.mjs");
+await import("./patch-detector-thin-gap-closing-v1.mjs");
 
 const edgePath = "src/edgeDetect.ts";
 let edge = await fs.readFile(edgePath, "utf8");
