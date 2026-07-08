@@ -531,7 +531,7 @@ export function detectArchitecturalCandidates(
   const rankedProposals = [...proposals].sort((a, b) => {
     const confidenceDelta = b.confidence - a.confidence;
     if (confidenceDelta !== 0) return confidenceDelta;
-    return b.width * b.height - a.width * b.height;
+    return b.width * b.height - a.width * a.height;
   });
 
   const selected: CandidateZone[] = [];
