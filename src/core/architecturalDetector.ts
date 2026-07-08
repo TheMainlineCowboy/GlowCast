@@ -14,6 +14,7 @@ export interface CandidateZone {
   shape: "rectangle" | "circle" | "oval" | "triangle" | "freehand";
   confidence: number; // 0-100 score
   label: string;
+  points?: Point[]; // Optional simplified outline points for custom/freehand masks.
 }
 
 export interface Bounds {
@@ -49,6 +50,96 @@ function pointInPolygon(point: Point, polygon: Point[]): boolean {
   }
 
   return inside;
+}
+
+function cross(origin: Point, a: Point, b: Point): number {
+  return (a.x - origin.x) * (b.y - origin.y) - (a.y - origin.y) * (b.x - origin.x);
+}
+
+function distanceToSegment(point: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lengthSquared = dx * dx + dy * dy;
+
+  if (lengthSquared === 0) {
+    return Math.hypot(point.x - a.x, point.y - a.y);
+  }
+
+  const t = Math.max(
+    0,
+    Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared)
+  );
+  const projectedX = a.x + t * dx;
+  const projectedY = a.y + t * dy;
+  return Math.hypot(point.x - projectedX, point.y - projectedY);
+}
+
+function buildConvexHull(points: Point[]): Point[] {
+  if (points.length <= 3) return points;
+
+  const sorted = [...points]
+    .sort((a, b) => (a.x === b.x ? a.y - b.y : a.x - b.x))
+    .filter((point, index, source) => {
+      const previous = source[index - 1];
+      return !previous || point.x !== previous.x || point.y !== previous.y;
+    });
+
+  if (sorted.length <= 3) return sorted;
+
+  const lower: Point[] = [];
+  for (const point of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) {
+      lower.pop();
+    }
+    lower.push(point);
+  }
+
+  const upper: Point[] = [];
+  for (let i = sorted.length - 1; i >= 0; i -= 1) {
+    const point = sorted[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) {
+      upper.pop();
+    }
+    upper.push(point);
+  }
+
+  lower.pop();
+  upper.pop();
+  return [...lower, ...upper];
+}
+
+function simplifyClosedPolygon(points: Point[], maxPoints = 12): Point[] {
+  if (points.length <= maxPoints) return points;
+
+  const simplified = [...points];
+  while (simplified.length > maxPoints) {
+    let weakestIndex = 0;
+    let weakestDistance = Number.POSITIVE_INFINITY;
+
+    for (let i = 0; i < simplified.length; i += 1) {
+      const previous = simplified[(i - 1 + simplified.length) % simplified.length];
+      const current = simplified[i];
+      const next = simplified[(i + 1) % simplified.length];
+      const distance = distanceToSegment(current, previous, next);
+
+      if (distance < weakestDistance) {
+        weakestDistance = distance;
+        weakestIndex = i;
+      }
+    }
+
+    simplified.splice(weakestIndex, 1);
+  }
+
+  return simplified;
+}
+
+function buildOutlinePoints(componentPoints: Point[]): Point[] {
+  const hull = buildConvexHull(componentPoints);
+  return simplifyClosedPolygon(hull, 12).map((point) => ({
+    x: Number(point.x.toFixed(2)),
+    y: Number(point.y.toFixed(2))
+  }));
 }
 
 function isInsideDetectorScope(point: EdgePoint, options: DetectorOptions): boolean {
@@ -182,6 +273,7 @@ export function detectArchitecturalCandidates(
     count: number;
     horizontalStrength: number;
     verticalStrength: number;
+    points: Point[];
   }
 
   const componentsMap = new Map<number, RawComponent>();
@@ -202,7 +294,8 @@ export function detectArchitecturalCandidates(
           maxY: y,
           count: 0,
           horizontalStrength: 0,
-          verticalStrength: 0
+          verticalStrength: 0,
+          points: []
         });
       }
 
@@ -212,6 +305,10 @@ export function detectArchitecturalCandidates(
       component.minY = Math.min(component.minY, y);
       component.maxY = Math.max(component.maxY, y);
       component.count += 1;
+      component.points.push({
+        x: ((x + 0.5) / resolution) * 100,
+        y: ((y + 0.5) / resolution) * 100
+      });
 
       // Local spatial alignment matrices.
       const leftStrength = x > 0 ? grid[y][x - 1] : 0;
@@ -276,15 +373,16 @@ export function detectArchitecturalCandidates(
     if (score < 45) return;
 
     let shapeLabel = "Obstacle";
-    const calculatedShape: CandidateZone["shape"] = "rectangle";
+    const outlinePoints = buildOutlinePoints(component.points);
+    const calculatedShape: CandidateZone["shape"] = outlinePoints.length >= 5 ? "freehand" : "rectangle";
 
     if (score >= 70) {
       if (aspect >= 0.35 && aspect <= 0.6) {
-        shapeLabel = "Door Candidate";
+        shapeLabel = calculatedShape === "freehand" ? "Door Outline" : "Door Candidate";
       } else if (aspect >= 0.85 && aspect <= 1.15) {
-        shapeLabel = "Window/Fixture";
+        shapeLabel = calculatedShape === "freehand" ? "Window Outline" : "Window/Fixture";
       } else {
-        shapeLabel = "Structure Candidate";
+        shapeLabel = calculatedShape === "freehand" ? "Structure Outline" : "Structure Candidate";
       }
     }
 
@@ -296,7 +394,8 @@ export function detectArchitecturalCandidates(
       height: Number(hPct.toFixed(2)),
       shape: calculatedShape,
       confidence: score,
-      label: `${shapeLabel} (${score}%)`
+      label: `${shapeLabel} (${score}%)`,
+      points: outlinePoints.length >= 3 ? outlinePoints : undefined
     });
   });
 
