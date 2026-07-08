@@ -180,6 +180,27 @@ function getOverlapRatio(a: CandidateZone, b: CandidateZone): number {
   return interArea / Math.min(areaA, areaB);
 }
 
+function bridgeSmallBinaryGaps(binaryGrid: Uint8Array[], resolution: number): void {
+  const bridgeTargets: Point[] = [];
+
+  for (let y = 1; y < resolution - 1; y += 1) {
+    for (let x = 1; x < resolution - 1; x += 1) {
+      if (binaryGrid[y][x] === 1) continue;
+
+      const horizontalBridge = binaryGrid[y][x - 1] === 1 && binaryGrid[y][x + 1] === 1;
+      const verticalBridge = binaryGrid[y - 1][x] === 1 && binaryGrid[y + 1][x] === 1;
+
+      if (horizontalBridge || verticalBridge) {
+        bridgeTargets.push({ x, y });
+      }
+    }
+  }
+
+  for (const target of bridgeTargets) {
+    binaryGrid[target.y][target.x] = 1;
+  }
+}
+
 function getFrameCoverage(points: Point[], x: number, y: number, width: number, height: number): FrameCoverage {
   const tolerance = Math.max(1.0, Math.min(width, height) * 0.08);
   const minimumHits = Math.max(2, Math.ceil(points.length * 0.04));
@@ -253,6 +274,8 @@ export function detectArchitecturalCandidates(
       }
     }
   }
+
+  bridgeSmallBinaryGaps(binaryGrid, resolution);
 
   const labelGrid: Int32Array[] = Array.from(
     { length: resolution },
