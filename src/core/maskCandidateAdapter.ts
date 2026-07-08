@@ -10,6 +10,8 @@ export type MaskCandidateOutput = {
   points: SimplePoint[];
 };
 
+type FallbackComponent = SimpleBox & { cells: number; edgeCount: number; score: number };
+
 function boxPoints(box: SimpleBox): SimplePoint[] {
   return [
     { x: box.x, y: box.y },
@@ -52,6 +54,14 @@ function mergeBoxes(a: SimpleBox, b: SimpleBox): SimpleBox {
   const maxX = Math.max(a.x + a.width, b.x + b.width);
   const maxY = Math.max(a.y + a.height, b.y + b.height);
   return { x, y, width: maxX - x, height: maxY - y };
+}
+
+function clampBox(box: SimpleBox, bounds: SimpleBox): SimpleBox {
+  const x = Math.max(bounds.x, box.x);
+  const y = Math.max(bounds.y, box.y);
+  const maxX = Math.min(bounds.x + bounds.width, box.x + box.width);
+  const maxY = Math.min(bounds.y + bounds.height, box.y + box.height);
+  return { x, y, width: Math.max(0, maxX - x), height: Math.max(0, maxY - y) };
 }
 
 function gapBetween(a: SimpleBox, b: SimpleBox): { x: number; y: number } {
@@ -133,6 +143,116 @@ function groupNearbySatellites(candidates: MaskCandidateOutput[], bounds: Simple
   return grouped;
 }
 
+function buildFallbackComponents(edgePoints: EdgePoint[], bounds: SimpleBox): FallbackComponent[] {
+  const strongPoints = edgePoints.filter(
+    (point) =>
+      point.strength >= 86 &&
+      point.x >= bounds.x &&
+      point.x <= bounds.x + bounds.width &&
+      point.y >= bounds.y &&
+      point.y <= bounds.y + bounds.height
+  );
+  if (!strongPoints.length) return [];
+
+  const cellSize = Math.max(0.45, Math.min(bounds.width, bounds.height) / 90);
+  const grid = new Map<string, { x: number; y: number; edgeCount: number }>();
+
+  for (const point of strongPoints) {
+    const x = Math.floor((point.x - bounds.x) / cellSize);
+    const y = Math.floor((point.y - bounds.y) / cellSize);
+    const key = `${x},${y}`;
+    const cell = grid.get(key);
+    if (cell) {
+      cell.edgeCount += 1;
+    } else {
+      grid.set(key, { x, y, edgeCount: 1 });
+    }
+  }
+
+  const visited = new Set<string>();
+  const components: FallbackComponent[] = [];
+  const offsets = [-1, 0, 1];
+
+  for (const [key, first] of grid) {
+    if (visited.has(key)) continue;
+
+    const queue = [first];
+    visited.add(key);
+    let minX = first.x;
+    let maxX = first.x;
+    let minY = first.y;
+    let maxY = first.y;
+    let cells = 0;
+    let edgeCount = 0;
+
+    while (queue.length) {
+      const cell = queue.pop()!;
+      minX = Math.min(minX, cell.x);
+      maxX = Math.max(maxX, cell.x);
+      minY = Math.min(minY, cell.y);
+      maxY = Math.max(maxY, cell.y);
+      cells += 1;
+      edgeCount += cell.edgeCount;
+
+      for (const dx of offsets) {
+        for (const dy of offsets) {
+          if (dx === 0 && dy === 0) continue;
+          const nextKey = `${cell.x + dx},${cell.y + dy}`;
+          if (visited.has(nextKey)) continue;
+          const next = grid.get(nextKey);
+          if (!next) continue;
+          visited.add(nextKey);
+          queue.push(next);
+        }
+      }
+    }
+
+    const box = clampBox(
+      {
+        x: bounds.x + minX * cellSize,
+        y: bounds.y + minY * cellSize,
+        width: (maxX - minX + 1) * cellSize,
+        height: (maxY - minY + 1) * cellSize
+      },
+      bounds
+    );
+    const area = box.width * box.height;
+    const boundsArea = bounds.width * bounds.height;
+    const aspect = box.width / Math.max(box.height, 0.01);
+
+    if (cells < 14 || edgeCount < 24) continue;
+    if (box.width < Math.max(6, bounds.width * 0.075) || box.height < Math.max(6, bounds.height * 0.075)) continue;
+    if (area < boundsArea * 0.01 || area > boundsArea * 0.34) continue;
+    if (aspect < 0.18 || aspect > 5.4) continue;
+
+    components.push({ ...box, cells, edgeCount, score: edgeCount / Math.max(area, 1) + cells * 0.02 });
+  }
+
+  return components.sort((a, b) => b.score - a.score).slice(0, 8);
+}
+
+function addFallbackCandidates(
+  accepted: MaskCandidateOutput[],
+  edgePoints: EdgePoint[],
+  bounds: SimpleBox
+): MaskCandidateOutput[] {
+  const next = [...accepted];
+
+  for (const fallback of buildFallbackComponents(edgePoints, bounds)) {
+    const box = { x: fallback.x, y: fallback.y, width: fallback.width, height: fallback.height };
+    const duplicate = next.some((existing) => overlapRatio(existing.box, box) > 0.58);
+    if (duplicate) continue;
+
+    next.push({
+      id: "mask_fallback_" + Date.now() + "_" + next.length,
+      box,
+      points: boxPoints(box)
+    });
+  }
+
+  return next;
+}
+
 export function buildMaskCandidatesFromEdges(edgePoints: EdgePoint[], bounds: SimpleBox): MaskCandidateOutput[] {
   const limits = getAdapterDetectorLimits(bounds);
   const found = detectArchitecturalCandidates(edgePoints, { bounds, ...limits });
@@ -157,5 +277,5 @@ export function buildMaskCandidatesFromEdges(edgePoints: EdgePoint[], bounds: Si
     });
   }
 
-  return groupNearbySatellites(accepted, bounds).slice(0, 10);
+  return groupNearbySatellites(addFallbackCandidates(accepted, edgePoints, bounds), bounds).slice(0, 10);
 }
