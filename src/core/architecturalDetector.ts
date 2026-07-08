@@ -214,6 +214,50 @@ function bridgeSmallBinaryGaps(binaryGrid: Uint8Array[], resolution: number): vo
   }
 }
 
+function closeThinArchitecturalGaps(binaryGrid: Uint8Array[], resolution: number, maxGap = 3): void {
+  const bridgeTargets: Point[] = [];
+
+  for (let y = 0; y < resolution; y += 1) {
+    for (let x = 0; x < resolution; x += 1) {
+      if (binaryGrid[y][x] !== 1) continue;
+
+      for (let gap = 1; gap <= maxGap; gap += 1) {
+        const rightX = x + gap + 1;
+        if (rightX < resolution && binaryGrid[y][rightX] === 1) {
+          let clear = true;
+          for (let fillX = x + 1; fillX < rightX; fillX += 1) {
+            if (binaryGrid[y][fillX] !== 0) {
+              clear = false;
+              break;
+            }
+          }
+          if (clear) {
+            for (let fillX = x + 1; fillX < rightX; fillX += 1) bridgeTargets.push({ x: fillX, y });
+          }
+        }
+
+        const downY = y + gap + 1;
+        if (downY < resolution && binaryGrid[downY][x] === 1) {
+          let clear = true;
+          for (let fillY = y + 1; fillY < downY; fillY += 1) {
+            if (binaryGrid[fillY][x] !== 0) {
+              clear = false;
+              break;
+            }
+          }
+          if (clear) {
+            for (let fillY = y + 1; fillY < downY; fillY += 1) bridgeTargets.push({ x, y: fillY });
+          }
+        }
+      }
+    }
+  }
+
+  for (const target of bridgeTargets) {
+    binaryGrid[target.y][target.x] = 1;
+  }
+}
+
 function getFrameCoverage(points: Point[], x: number, y: number, width: number, height: number): FrameCoverage {
   const tolerance = Math.max(1.0, Math.min(width, height) * 0.08);
   const minimumHits = Math.max(2, Math.ceil(points.length * 0.04));
@@ -396,6 +440,7 @@ export function detectArchitecturalCandidates(
   }
 
   bridgeSmallBinaryGaps(binaryGrid, resolution);
+  closeThinArchitecturalGaps(binaryGrid, resolution);
   const componentsMap = collectComponents(binaryGrid, grid, resolution);
 
   const proposals: CandidateZone[] = [];
@@ -486,7 +531,7 @@ export function detectArchitecturalCandidates(
   const rankedProposals = [...proposals].sort((a, b) => {
     const confidenceDelta = b.confidence - a.confidence;
     if (confidenceDelta !== 0) return confidenceDelta;
-    return b.width * b.height - a.width * a.height;
+    return b.width * b.height - a.width * b.height;
   });
 
   const selected: CandidateZone[] = [];
