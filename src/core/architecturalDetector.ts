@@ -33,6 +33,15 @@ export interface DetectorOptions {
   polygon?: Point[] | null;
 }
 
+interface FrameCoverage {
+  top: boolean;
+  right: boolean;
+  bottom: boolean;
+  left: boolean;
+  sidesPresent: number;
+  scoreBoost: number;
+}
+
 function pointInPolygon(point: Point, polygon: Point[]): boolean {
   let inside = false;
 
@@ -169,6 +178,41 @@ function getOverlapRatio(a: CandidateZone, b: CandidateZone): number {
   const areaA = a.width * a.height;
   const areaB = b.width * b.height;
   return interArea / Math.min(areaA, areaB);
+}
+
+function getFrameCoverage(points: Point[], x: number, y: number, width: number, height: number): FrameCoverage {
+  const tolerance = Math.max(1.0, Math.min(width, height) * 0.08);
+  const minimumHits = Math.max(2, Math.ceil(points.length * 0.04));
+
+  let topHits = 0;
+  let rightHits = 0;
+  let bottomHits = 0;
+  let leftHits = 0;
+
+  for (const point of points) {
+    const insideHorizontalSpan = point.x >= x - tolerance && point.x <= x + width + tolerance;
+    const insideVerticalSpan = point.y >= y - tolerance && point.y <= y + height + tolerance;
+
+    if (insideHorizontalSpan && Math.abs(point.y - y) <= tolerance) topHits += 1;
+    if (insideHorizontalSpan && Math.abs(point.y - (y + height)) <= tolerance) bottomHits += 1;
+    if (insideVerticalSpan && Math.abs(point.x - x) <= tolerance) leftHits += 1;
+    if (insideVerticalSpan && Math.abs(point.x - (x + width)) <= tolerance) rightHits += 1;
+  }
+
+  const top = topHits >= minimumHits;
+  const right = rightHits >= minimumHits;
+  const bottom = bottomHits >= minimumHits;
+  const left = leftHits >= minimumHits;
+  const sidesPresent = [top, right, bottom, left].filter(Boolean).length;
+
+  return {
+    top,
+    right,
+    bottom,
+    left,
+    sidesPresent,
+    scoreBoost: Math.round((sidesPresent / 4) * 24)
+  };
 }
 
 export function detectArchitecturalCandidates(
@@ -349,6 +393,14 @@ export function detectArchitecturalCandidates(
       score += 10;
     }
 
+    const frameCoverage = getFrameCoverage(component.points, xPct, yPct, wPct, hPct);
+    score += frameCoverage.scoreBoost;
+    if (frameCoverage.sidesPresent <= 1) {
+      score -= 18;
+    } else if (frameCoverage.sidesPresent === 2) {
+      score -= 6;
+    }
+
     if (
       xPct <= detectorBounds.x + detectorBounds.width * 0.018 ||
       yPct <= detectorBounds.y + detectorBounds.height * 0.018 ||
@@ -364,14 +416,21 @@ export function detectArchitecturalCandidates(
     let shapeLabel = "Obstacle";
     const outlinePoints = buildOutlinePoints(component.points);
     const calculatedShape: CandidateZone["shape"] = outlinePoints.length >= 5 ? "freehand" : "rectangle";
+    const completeFramePrefix = frameCoverage.sidesPresent >= 3 ? "Complete " : "";
 
     if (score >= 70) {
       if (aspect >= 0.35 && aspect <= 0.6) {
-        shapeLabel = calculatedShape === "freehand" ? "Door Outline" : "Door Candidate";
+        shapeLabel = calculatedShape === "freehand"
+          ? `${completeFramePrefix}Door Outline`
+          : `${completeFramePrefix}Door Candidate`;
       } else if (aspect >= 0.85 && aspect <= 1.15) {
-        shapeLabel = calculatedShape === "freehand" ? "Window Outline" : "Window/Fixture";
+        shapeLabel = calculatedShape === "freehand"
+          ? `${completeFramePrefix}Window Outline`
+          : `${completeFramePrefix}Window/Fixture`;
       } else {
-        shapeLabel = calculatedShape === "freehand" ? "Structure Outline" : "Structure Candidate";
+        shapeLabel = calculatedShape === "freehand"
+          ? `${completeFramePrefix}Structure Outline`
+          : `${completeFramePrefix}Structure Candidate`;
       }
     }
 
