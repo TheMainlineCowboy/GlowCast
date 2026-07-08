@@ -42,6 +42,17 @@ interface FrameCoverage {
   scoreBoost: number;
 }
 
+interface RawComponent {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  count: number;
+  horizontalStrength: number;
+  verticalStrength: number;
+  points: Point[];
+}
+
 function pointInPolygon(point: Point, polygon: Point[]): boolean {
   let inside = false;
 
@@ -189,8 +200,10 @@ function bridgeSmallBinaryGaps(binaryGrid: Uint8Array[], resolution: number): vo
 
       const horizontalBridge = binaryGrid[y][x - 1] === 1 && binaryGrid[y][x + 1] === 1;
       const verticalBridge = binaryGrid[y - 1][x] === 1 && binaryGrid[y + 1][x] === 1;
+      const downDiagonalBridge = binaryGrid[y - 1][x - 1] === 1 && binaryGrid[y + 1][x + 1] === 1;
+      const upDiagonalBridge = binaryGrid[y + 1][x - 1] === 1 && binaryGrid[y - 1][x + 1] === 1;
 
-      if (horizontalBridge || verticalBridge) {
+      if (horizontalBridge || verticalBridge || downDiagonalBridge || upDiagonalBridge) {
         bridgeTargets.push({ x, y });
       }
     }
@@ -236,47 +249,11 @@ function getFrameCoverage(points: Point[], x: number, y: number, width: number, 
   };
 }
 
-export function detectArchitecturalCandidates(
-  edgePoints: EdgePoint[],
-  options: DetectorOptions = {}
-): CandidateZone[] {
-  if (!edgePoints || edgePoints.length === 0) return [];
-
-  const resolution = options.gridResolution || 120;
-  const minDensity = options.minDensityThreshold || 1;
-  const minSize = options.minSizePercent || 1.5;
-  const maxSize = options.maxSizePercent || 75.0;
-  const detectorBounds = options.bounds ?? { x: 0, y: 0, width: 100, height: 100 };
-
-  const grid: Float32Array[] = Array.from(
-    { length: resolution },
-    () => new Float32Array(resolution)
-  );
-
-  for (let i = 0; i < edgePoints.length; i += 1) {
-    const pt = edgePoints[i];
-    if (!isInsideDetectorScope(pt, options)) continue;
-
-    const gx = Math.min(resolution - 1, Math.max(0, Math.floor((pt.x / 100) * resolution)));
-    const gy = Math.min(resolution - 1, Math.max(0, Math.floor((pt.y / 100) * resolution)));
-    grid[gy][gx] += pt.strength ?? 1.0;
-  }
-
-  const binaryGrid: Uint8Array[] = Array.from(
-    { length: resolution },
-    () => new Uint8Array(resolution)
-  );
-
-  for (let y = 0; y < resolution; y += 1) {
-    for (let x = 0; x < resolution; x += 1) {
-      if (grid[y][x] >= minDensity) {
-        binaryGrid[y][x] = 1;
-      }
-    }
-  }
-
-  bridgeSmallBinaryGaps(binaryGrid, resolution);
-
+function collectComponents(
+  binaryGrid: Uint8Array[],
+  grid: Float32Array[],
+  resolution: number
+): Map<number, RawComponent> {
   const labelGrid: Int32Array[] = Array.from(
     { length: resolution },
     () => new Int32Array(resolution)
@@ -301,7 +278,7 @@ export function detectArchitecturalCandidates(
     return root;
   }
 
-  function union(a: number, b: number) {
+  function union(a: number, b: number): void {
     const rootA = find(a);
     const rootB = find(b);
     if (rootA !== rootB) {
@@ -313,33 +290,24 @@ export function detectArchitecturalCandidates(
     for (let x = 0; x < resolution; x += 1) {
       if (binaryGrid[y][x] !== 1) continue;
 
-      const leftLabel = x > 0 ? labelGrid[y][x - 1] : 0;
-      const topLabel = y > 0 ? labelGrid[y - 1][x] : 0;
+      const neighborLabels = [
+        x > 0 && y > 0 ? labelGrid[y - 1][x - 1] : 0,
+        y > 0 ? labelGrid[y - 1][x] : 0,
+        x < resolution - 1 && y > 0 ? labelGrid[y - 1][x + 1] : 0,
+        x > 0 ? labelGrid[y][x - 1] : 0
+      ].filter((label) => label !== 0);
 
-      if (leftLabel === 0 && topLabel === 0) {
+      if (neighborLabels.length === 0) {
         parent.push(currentLabel);
         labelGrid[y][x] = currentLabel;
         currentLabel += 1;
-      } else if (leftLabel !== 0 && topLabel === 0) {
-        labelGrid[y][x] = leftLabel;
-      } else if (leftLabel === 0 && topLabel !== 0) {
-        labelGrid[y][x] = topLabel;
       } else {
-        labelGrid[y][x] = leftLabel;
-        union(leftLabel, topLabel);
+        labelGrid[y][x] = neighborLabels[0];
+        for (let i = 1; i < neighborLabels.length; i += 1) {
+          union(neighborLabels[0], neighborLabels[i]);
+        }
       }
     }
-  }
-
-  interface RawComponent {
-    minX: number;
-    maxX: number;
-    minY: number;
-    maxY: number;
-    count: number;
-    horizontalStrength: number;
-    verticalStrength: number;
-    points: Point[];
   }
 
   const componentsMap = new Map<number, RawComponent>();
@@ -384,6 +352,51 @@ export function detectArchitecturalCandidates(
       component.verticalStrength += Math.abs(topStrength - bottomStrength);
     }
   }
+
+  return componentsMap;
+}
+
+export function detectArchitecturalCandidates(
+  edgePoints: EdgePoint[],
+  options: DetectorOptions = {}
+): CandidateZone[] {
+  if (!edgePoints || edgePoints.length === 0) return [];
+
+  const resolution = options.gridResolution || 120;
+  const minDensity = options.minDensityThreshold || 1;
+  const minSize = options.minSizePercent || 1.5;
+  const maxSize = options.maxSizePercent || 75.0;
+  const detectorBounds = options.bounds ?? { x: 0, y: 0, width: 100, height: 100 };
+
+  const grid: Float32Array[] = Array.from(
+    { length: resolution },
+    () => new Float32Array(resolution)
+  );
+
+  for (let i = 0; i < edgePoints.length; i += 1) {
+    const pt = edgePoints[i];
+    if (!isInsideDetectorScope(pt, options)) continue;
+
+    const gx = Math.min(resolution - 1, Math.max(0, Math.floor((pt.x / 100) * resolution)));
+    const gy = Math.min(resolution - 1, Math.max(0, Math.floor((pt.y / 100) * resolution)));
+    grid[gy][gx] += pt.strength ?? 1.0;
+  }
+
+  const binaryGrid: Uint8Array[] = Array.from(
+    { length: resolution },
+    () => new Uint8Array(resolution)
+  );
+
+  for (let y = 0; y < resolution; y += 1) {
+    for (let x = 0; x < resolution; x += 1) {
+      if (grid[y][x] >= minDensity) {
+        binaryGrid[y][x] = 1;
+      }
+    }
+  }
+
+  bridgeSmallBinaryGaps(binaryGrid, resolution);
+  const componentsMap = collectComponents(binaryGrid, grid, resolution);
 
   const proposals: CandidateZone[] = [];
   let candidateIdCounter = 1;
