@@ -28,10 +28,12 @@ export function buildMaskCandidatesFromEdges(edgePoints: EdgePoint[], bounds: Si
       width: item.width,
       height: item.height
     };
+    const points = item.points && item.points.length >= 3 ? item.points : boxPoints(box);
+
     return {
       id: "mask_candidate_" + Date.now() + "_" + index,
       box,
-      points: boxPoints(box)
+      points
     };
   });
 }
