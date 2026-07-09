@@ -57,6 +57,28 @@ function addThreeSidedDoorway(edgePoints, x1, y1, x2, y2, strength = 190) {
   }
 }
 
+function addArch(edgePoints, centerX, topY, radiusX, radiusY, bottomY, strength = 195) {
+  for (let step = 0; step <= 32; step += 1) {
+    const theta = Math.PI - (Math.PI * step) / 32;
+    edgePoints.push({
+      x: Number((centerX + Math.cos(theta) * radiusX).toFixed(2)),
+      y: Number((topY + radiusY - Math.sin(theta) * radiusY).toFixed(2)),
+      strength
+    });
+  }
+
+  const leftX = centerX - radiusX;
+  const rightX = centerX + radiusX;
+  const springY = topY + radiusY;
+  for (let y = springY; y <= bottomY; y += 1) {
+    edgePoints.push({ x: leftX, y, strength });
+    edgePoints.push({ x: rightX, y, strength });
+  }
+  for (let x = leftX; x <= rightX; x += 1) {
+    edgePoints.push({ x, y: bottomY, strength });
+  }
+}
+
 try {
   const { runCandidateDetection } = await import(pathToFileURL(tempPath).href);
   const bounds = { x: 0, y: 0, width: 100, height: 100 };
@@ -88,6 +110,12 @@ try {
 
   if (!pointsAreLocal || !touchesLocalBounds) {
     console.error("Run candidate detection smoke test failed. Custom outline points were not normalized for zone-local clip paths.");
+    console.error(JSON.stringify(groupedMask, null, 2));
+    process.exit(1);
+  }
+
+  if (!/^Auto window mask /.test(groupedMask.label)) {
+    console.error("Run candidate detection smoke test failed. Grouped frame was not labeled as an auto window mask.");
     console.error(JSON.stringify(groupedMask, null, 2));
     process.exit(1);
   }
@@ -130,7 +158,23 @@ try {
     process.exit(1);
   }
 
-  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed with local outline points, corner fragments rejected, and three-sided doorway fallback preserved.`);
+  if (!/^Auto door mask /.test(doorwayMask.label)) {
+    console.error("Run candidate detection smoke test failed. Three-sided doorway was not labeled as an auto door mask.");
+    console.error(JSON.stringify(doorwayMask, null, 2));
+    process.exit(1);
+  }
+
+  const archEdges = [];
+  addArch(archEdges, 50, 18, 12, 10, 64);
+  const archMasks = runCandidateDetection(archEdges, bounds);
+  const archMask = archMasks.find((mask) => /^Auto arch mask /.test(mask.label));
+  if (!archMask || archMask.shape !== "freehand" || !Array.isArray(archMask.points) || archMask.points.length < 5) {
+    console.error("Run candidate detection smoke test failed. Arched opening was not exposed as a custom freehand arch mask.");
+    console.error(JSON.stringify(archMasks, null, 2));
+    process.exit(1);
+  }
+
+  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed with local outline points, labels, corner rejection, doorway fallback, and arch classification.`);
 } finally {
   await fs.rm(tempPath, { force: true });
 }
