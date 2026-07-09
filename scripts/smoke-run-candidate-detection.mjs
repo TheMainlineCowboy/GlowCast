@@ -8,6 +8,11 @@ const detectorSource = await fs.readFile("src/core/architecturalDetector.ts", "u
 let adapterSource = await fs.readFile("src/core/maskCandidateAdapter.ts", "utf8");
 let runnerSource = await fs.readFile("src/core/runCandidateDetection.ts", "utf8");
 
+if (!adapterSource.includes("sideCoverage.sides < 3")) {
+  console.error("Run candidate detection smoke test failed. Fallback gate is not enforcing three-sided architectural masks.");
+  process.exit(1);
+}
+
 adapterSource = adapterSource
   .replace(/import type \{ EdgePoint \} from "\.\.\/edgeDetect";\n/, "")
   .replace(/import \{ detectArchitecturalCandidates \} from "\.\/architecturalDetector";\n/, "");
@@ -174,7 +179,7 @@ try {
     process.exit(1);
   }
 
-  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed with local outline points, labels, corner rejection, doorway fallback, and arch classification.`);
+  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed with local outline points, labels, corner rejection, doorway fallback, arch classification, and three-side fallback gate wiring.`);
 } finally {
   await fs.rm(tempPath, { force: true });
 }
