@@ -51,6 +51,12 @@ function looksArchLike(points: Point[] | undefined, box: SimpleBox): boolean {
   return topCenter && leftSide && rightSide && bottomSpan;
 }
 
+function looksDoorLike(box: SimpleBox): boolean {
+  const aspect = box.width / Math.max(box.height, 0.01);
+  const tallEnoughForDoor = box.height >= 28;
+  return aspect >= 0.28 && aspect <= 0.68 && tallEnoughForDoor;
+}
+
 function classifyCandidate(mask: { box: SimpleBox; points: Point[] }, index: number): { shape: CandidateZone["shape"]; label: string; confidence: number } {
   const aspect = mask.box.width / Math.max(mask.box.height, 0.01);
   const hasCustomOutline = mask.points.length > 4;
@@ -64,7 +70,7 @@ function classifyCandidate(mask: { box: SimpleBox; points: Point[] }, index: num
     };
   }
 
-  if (aspect >= 0.28 && aspect <= 0.68) {
+  if (looksDoorLike(mask.box)) {
     return {
       shape: hasCustomOutline ? "freehand" : "rectangle",
       confidence: Math.max(72, 88 - index * 3),
@@ -72,7 +78,7 @@ function classifyCandidate(mask: { box: SimpleBox; points: Point[] }, index: num
     };
   }
 
-  if (aspect >= 0.68 && aspect <= 1.75) {
+  if (aspect >= 0.42 && aspect <= 1.75) {
     return {
       shape: hasCustomOutline ? "freehand" : "rectangle",
       confidence: Math.max(70, 86 - index * 3),
