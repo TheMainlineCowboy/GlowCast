@@ -6,7 +6,7 @@ const adapter = fs.readFileSync(adapterPath, "utf8");
 const requiredSnippets = [
   "const duplicateIndex = next.findIndex((existing) => overlapRatio(existing.box, box) > 0.58);",
   "const existingArea = existing.box.width * existing.box.height;",
-  "if (area > existingArea * 1.35)",
+  "if (fallbackArea > existingArea * 1.12 && fallback.score >= 1.2)",
   "id: existing.id"
 ];
 
