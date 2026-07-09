@@ -335,7 +335,10 @@ function buildFallbackComponents(edgePoints: EdgePoint[], bounds: SimpleBox): Fa
     if (box.width < Math.max(6, bounds.width * 0.075) || box.height < Math.max(6, bounds.height * 0.075)) continue;
     if (area < boundsArea * 0.01 || area > boundsArea * 0.34) continue;
     if (aspect < 0.18 || aspect > 5.4) continue;
-    if (sideCoverage.sides < 2 || !sideCoverage.hasHorizontal || !sideCoverage.hasVertical) continue;
+    // Fallback masks should represent a mostly closed architectural feature, not
+    // a random L-shaped edge fragment. Three sides preserves doorway/arch recovery
+    // while rejecting two-sided corner noise.
+    if (sideCoverage.sides < 3 || !sideCoverage.hasHorizontal || !sideCoverage.hasVertical) continue;
 
     components.push({
       ...box,
