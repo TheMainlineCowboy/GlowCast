@@ -9,6 +9,11 @@ const detectorPath = "src/core/architecturalDetector.ts";
 let adapterSource = await fs.readFile(adapterPath, "utf8");
 const detectorSource = await fs.readFile(detectorPath, "utf8");
 
+if (adapterSource.includes("points: boxPoints(mergedBox)")) {
+  console.error("Mask adapter smoke test failed. Grouped satellite masks still discard custom outline points.");
+  process.exit(1);
+}
+
 // The adapter imports the detector through TypeScript path resolution in the app.
 // This smoke test composes both files into one temporary module so Node can execute
 // the same exported adapter function without a bundler.
