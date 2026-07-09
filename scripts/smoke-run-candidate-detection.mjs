@@ -13,6 +13,11 @@ if (!adapterSource.includes("sideCoverage.sides < 3")) {
   process.exit(1);
 }
 
+if (!adapterSource.includes("closureBonus")) {
+  console.error("Run candidate detection smoke test failed. Fallback scoring is not rewarding closed architectural masks.");
+  process.exit(1);
+}
+
 adapterSource = adapterSource
   .replace(/import type \{ EdgePoint \} from "\.\.\/edgeDetect";\n/, "")
   .replace(/import \{ detectArchitecturalCandidates \} from "\.\/architecturalDetector";\n/, "");
@@ -60,6 +65,11 @@ function addThreeSidedDoorway(edgePoints, x1, y1, x2, y2, strength = 190) {
     edgePoints.push({ x: x1, y, strength });
     edgePoints.push({ x: x2, y, strength });
   }
+}
+
+function addDenseThreeSidedDoorway(edgePoints, x1, y1, x2, y2, strength = 210) {
+  addThreeSidedDoorway(edgePoints, x1, y1, x2, y2, strength);
+  addThreeSidedDoorway(edgePoints, x1 + 0.25, y1 + 0.25, x2 - 0.25, y2 - 0.25, strength);
 }
 
 function addArch(edgePoints, centerX, topY, radiusX, radiusY, bottomY, strength = 195) {
@@ -169,6 +179,25 @@ try {
     process.exit(1);
   }
 
+  const rankingEdges = [];
+  addFrame(rankingEdges, 12, 20, 31, 44, 190);
+  addDenseThreeSidedDoorway(rankingEdges, 56, 18, 72, 58);
+  const rankedMasks = runCandidateDetection(rankingEdges, bounds);
+  const closedFrameIndex = rankedMasks.findIndex((mask) => mask.x <= 13 && mask.x + mask.width >= 30 && mask.y <= 21 && mask.y + mask.height >= 43);
+  const denseThreeSideIndex = rankedMasks.findIndex((mask) => mask.x <= 57 && mask.x + mask.width >= 71 && mask.y <= 19 && mask.y + mask.height >= 57);
+
+  if (closedFrameIndex < 0) {
+    console.error("Run candidate detection smoke test failed. Closed frame was lost in mixed fallback ranking.");
+    console.error(JSON.stringify(rankedMasks, null, 2));
+    process.exit(1);
+  }
+
+  if (denseThreeSideIndex >= 0 && closedFrameIndex > denseThreeSideIndex) {
+    console.error("Run candidate detection smoke test failed. Dense three-sided fallback outranked a closed architectural frame.");
+    console.error(JSON.stringify(rankedMasks, null, 2));
+    process.exit(1);
+  }
+
   const archEdges = [];
   addArch(archEdges, 50, 18, 12, 10, 64);
   const archMasks = runCandidateDetection(archEdges, bounds);
@@ -179,7 +208,7 @@ try {
     process.exit(1);
   }
 
-  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed with local outline points, labels, corner rejection, doorway fallback, arch classification, and three-side fallback gate wiring.`);
+  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed with local outline points, labels, corner rejection, doorway fallback, arch classification, three-side fallback gate wiring, and closed-frame ranking.`);
 } finally {
   await fs.rm(tempPath, { force: true });
 }
