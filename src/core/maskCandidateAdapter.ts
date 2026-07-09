@@ -206,7 +206,7 @@ function groupNearbySatellites(candidates: MaskCandidateOutput[], bounds: Simple
         grouped[i] = {
           ...parent,
           box: mergedBox,
-          points: boxPoints(mergedBox)
+          points: buildOutlineFromPoints([...parent.points, ...satellite.points], mergedBox, 12)
         };
         grouped.splice(j, 1);
         changed = true;
