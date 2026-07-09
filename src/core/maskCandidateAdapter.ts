@@ -183,8 +183,18 @@ function shouldAttachSatellite(parent: SimpleBox, satellite: SimpleBox, bounds: 
   const combinedArea = combined.width * combined.height;
   const boundsArea = bounds.width * bounds.height;
   const aspect = combined.width / Math.max(combined.height, 0.01);
+  const parentFillRatio = parentArea / Math.max(combinedArea, 1);
+  const satelliteFillRatio = satelliteArea / Math.max(combinedArea, 1);
 
-  return combinedArea <= boundsArea * 0.42 && aspect >= 0.18 && aspect <= 5.2;
+  // Satellite grouping should pull shutters/trim into a real parent opening, not
+  // turn one strong mask plus a distant fragment into an inflated random box.
+  return (
+    combinedArea <= boundsArea * 0.42 &&
+    aspect >= 0.18 &&
+    aspect <= 5.2 &&
+    parentFillRatio >= 0.56 &&
+    satelliteFillRatio >= 0.08
+  );
 }
 
 function groupNearbySatellites(candidates: MaskCandidateOutput[], bounds: SimpleBox): MaskCandidateOutput[] {
