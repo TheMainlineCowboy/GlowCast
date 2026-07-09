@@ -12,6 +12,12 @@ export type MaskCandidateOutput = {
 
 type FallbackComponent = SimpleBox & { cells: number; edgeCount: number; score: number };
 
+type SideCoverage = {
+  sides: number;
+  hasHorizontal: boolean;
+  hasVertical: boolean;
+};
+
 function boxPoints(box: SimpleBox): SimplePoint[] {
   return [
     { x: box.x, y: box.y },
@@ -143,6 +149,36 @@ function groupNearbySatellites(candidates: MaskCandidateOutput[], bounds: Simple
   return grouped;
 }
 
+function getFallbackSideCoverage(points: EdgePoint[], box: SimpleBox): SideCoverage {
+  const tolerance = Math.max(1.2, Math.min(box.width, box.height) * 0.09);
+  const minHits = Math.max(3, Math.ceil(points.length * 0.055));
+  let top = 0;
+  let bottom = 0;
+  let left = 0;
+  let right = 0;
+
+  for (const point of points) {
+    if (point.x < box.x - tolerance || point.x > box.x + box.width + tolerance) continue;
+    if (point.y < box.y - tolerance || point.y > box.y + box.height + tolerance) continue;
+
+    if (Math.abs(point.y - box.y) <= tolerance) top += 1;
+    if (Math.abs(point.y - (box.y + box.height)) <= tolerance) bottom += 1;
+    if (Math.abs(point.x - box.x) <= tolerance) left += 1;
+    if (Math.abs(point.x - (box.x + box.width)) <= tolerance) right += 1;
+  }
+
+  const topPresent = top >= minHits;
+  const bottomPresent = bottom >= minHits;
+  const leftPresent = left >= minHits;
+  const rightPresent = right >= minHits;
+
+  return {
+    sides: [topPresent, bottomPresent, leftPresent, rightPresent].filter(Boolean).length,
+    hasHorizontal: topPresent || bottomPresent,
+    hasVertical: leftPresent || rightPresent
+  };
+}
+
 function buildFallbackComponents(edgePoints: EdgePoint[], bounds: SimpleBox): FallbackComponent[] {
   const strongPoints = edgePoints.filter(
     (point) =>
@@ -155,7 +191,7 @@ function buildFallbackComponents(edgePoints: EdgePoint[], bounds: SimpleBox): Fa
   if (!strongPoints.length) return [];
 
   const cellSize = Math.max(0.45, Math.min(bounds.width, bounds.height) / 90);
-  const grid = new Map<string, { x: number; y: number; edgeCount: number }>();
+  const grid = new Map<string, { x: number; y: number; edgeCount: number; points: EdgePoint[] }>();
 
   for (const point of strongPoints) {
     const x = Math.floor((point.x - bounds.x) / cellSize);
@@ -164,8 +200,9 @@ function buildFallbackComponents(edgePoints: EdgePoint[], bounds: SimpleBox): Fa
     const cell = grid.get(key);
     if (cell) {
       cell.edgeCount += 1;
+      cell.points.push(point);
     } else {
-      grid.set(key, { x, y, edgeCount: 1 });
+      grid.set(key, { x, y, edgeCount: 1, points: [point] });
     }
   }
 
@@ -177,6 +214,7 @@ function buildFallbackComponents(edgePoints: EdgePoint[], bounds: SimpleBox): Fa
     if (visited.has(key)) continue;
 
     const queue = [first];
+    const componentPoints: EdgePoint[] = [];
     visited.add(key);
     let minX = first.x;
     let maxX = first.x;
@@ -187,6 +225,7 @@ function buildFallbackComponents(edgePoints: EdgePoint[], bounds: SimpleBox): Fa
 
     while (queue.length) {
       const cell = queue.pop()!;
+      componentPoints.push(...cell.points);
       minX = Math.min(minX, cell.x);
       maxX = Math.max(maxX, cell.x);
       minY = Math.min(minY, cell.y);
@@ -219,13 +258,20 @@ function buildFallbackComponents(edgePoints: EdgePoint[], bounds: SimpleBox): Fa
     const area = box.width * box.height;
     const boundsArea = bounds.width * bounds.height;
     const aspect = box.width / Math.max(box.height, 0.01);
+    const sideCoverage = getFallbackSideCoverage(componentPoints, box);
 
     if (cells < 14 || edgeCount < 24) continue;
     if (box.width < Math.max(6, bounds.width * 0.075) || box.height < Math.max(6, bounds.height * 0.075)) continue;
     if (area < boundsArea * 0.01 || area > boundsArea * 0.34) continue;
     if (aspect < 0.18 || aspect > 5.4) continue;
+    if (sideCoverage.sides < 2 || !sideCoverage.hasHorizontal || !sideCoverage.hasVertical) continue;
 
-    components.push({ ...box, cells, edgeCount, score: edgeCount / Math.max(area, 1) + cells * 0.02 });
+    components.push({
+      ...box,
+      cells,
+      edgeCount,
+      score: edgeCount / Math.max(area, 1) + cells * 0.02 + sideCoverage.sides * 0.3
+    });
   }
 
   return components.sort((a, b) => b.score - a.score).slice(0, 8);
