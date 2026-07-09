@@ -26,17 +26,26 @@ function scopedEdgePoints(edgePoints: EdgePoint[], polygon?: Point[] | null): Ed
   return edgePoints.filter((point) => pointInPolygon(point, polygon));
 }
 
+function pointToLocalPercent(point: Point, box: SimpleBox): Point {
+  return {
+    x: Number((((point.x - box.x) / Math.max(box.width, 0.01)) * 100).toFixed(2)),
+    y: Number((((point.y - box.y) / Math.max(box.height, 0.01)) * 100).toFixed(2))
+  };
+}
+
 function candidateFromMask(mask: { id: string; box: SimpleBox; points: Point[] }, index: number): CandidateZone {
+  const points = mask.points.length >= 3 ? mask.points.map((point) => pointToLocalPercent(point, mask.box)) : undefined;
+
   return {
     id: mask.id,
     x: Number(mask.box.x.toFixed(2)),
     y: Number(mask.box.y.toFixed(2)),
     width: Number(mask.box.width.toFixed(2)),
     height: Number(mask.box.height.toFixed(2)),
-    shape: mask.points.length > 4 ? "freehand" : "rectangle",
+    shape: points && points.length > 4 ? "freehand" : "rectangle",
     confidence: Math.max(68, 86 - index * 3),
     label: `Auto architectural mask ${index + 1}`,
-    points: mask.points.length >= 3 ? mask.points : undefined
+    points
   };
 }
 
