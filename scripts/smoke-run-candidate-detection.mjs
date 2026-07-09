@@ -38,6 +38,15 @@ function addFrame(edgePoints, x1, y1, x2, y2, strength = 180) {
   }
 }
 
+function addCornerFragment(edgePoints, x1, y1, x2, y2, strength = 190) {
+  for (let x = x1; x <= x2; x += 1) {
+    edgePoints.push({ x, y: y1, strength });
+  }
+  for (let y = y1; y <= y2; y += 1) {
+    edgePoints.push({ x: x1, y, strength });
+  }
+}
+
 try {
   const { runCandidateDetection } = await import(pathToFileURL(tempPath).href);
   const bounds = { x: 0, y: 0, width: 100, height: 100 };
@@ -86,7 +95,16 @@ try {
     process.exit(1);
   }
 
-  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed with local outline points.`);
+  const cornerNoise = [];
+  addCornerFragment(cornerNoise, 12, 18, 34, 48);
+  const cornerMasks = runCandidateDetection(cornerNoise, bounds);
+  if (cornerMasks.length) {
+    console.error("Run candidate detection smoke test failed. Fallback accepted an open corner fragment as a mask.");
+    console.error(JSON.stringify(cornerMasks, null, 2));
+    process.exit(1);
+  }
+
+  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed with local outline points and corner fragments rejected.`);
 } finally {
   await fs.rm(tempPath, { force: true });
 }
