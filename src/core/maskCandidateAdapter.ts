@@ -330,6 +330,8 @@ function buildFallbackComponents(edgePoints: EdgePoint[], bounds: SimpleBox): Fa
     const boundsArea = bounds.width * bounds.height;
     const aspect = box.width / Math.max(box.height, 0.01);
     const sideCoverage = getFallbackSideCoverage(componentPoints, box);
+    const closureBonus = sideCoverage.sides === 4 ? 1.1 : 0.55;
+    const densityScore = edgeCount / Math.max(area, 1);
 
     if (cells < 14 || edgeCount < 24) continue;
     if (box.width < Math.max(6, bounds.width * 0.075) || box.height < Math.max(6, bounds.height * 0.075)) continue;
@@ -345,7 +347,7 @@ function buildFallbackComponents(edgePoints: EdgePoint[], bounds: SimpleBox): Fa
       cells,
       edgeCount,
       points: buildOutlineFromPoints(componentPoints, box),
-      score: edgeCount / Math.max(area, 1) + cells * 0.02 + sideCoverage.sides * 0.3
+      score: densityScore + cells * 0.015 + sideCoverage.sides * 0.22 + closureBonus
     });
   }
 
