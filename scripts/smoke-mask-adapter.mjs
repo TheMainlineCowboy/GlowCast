@@ -130,6 +130,15 @@ try {
     process.exit(1);
   }
 
+  const trimOnlyEdges = [];
+  for (let x = 20; x <= 72; x += 1) trimOnlyEdges.push({ x, y: 88, strength: 210 });
+  const trimOnlyMasks = buildMaskCandidatesFromEdges(trimOnlyEdges, bounds);
+  if (trimOnlyMasks.length > 0) {
+    console.error("Mask adapter smoke test failed. Single straight trim line became a fallback mask.");
+    console.error(JSON.stringify(trimOnlyMasks, null, 2));
+    process.exit(1);
+  }
+
   console.log(
     `Mask adapter smoke test passed: ${masks.length} masks, no tiny fragments or duplicates, satellite grouping and fallback ok.`
   );
