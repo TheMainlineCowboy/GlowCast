@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 const sourcePrep = await fs.readFile("scripts/source-prep.mjs", "utf8");
 const patch = await fs.readFile("scripts/patch-ui-auto-detect-masks-v1.mjs", "utf8");
 const app = await fs.readFile("src/App.tsx", "utf8");
+const viteConfig = await fs.readFile("vite.config.ts", "utf8");
 
 function requireText(name, source, text) {
   if (!source.includes(text)) {
@@ -12,6 +13,9 @@ function requireText(name, source, text) {
 }
 
 requireText("source-prep patch import", sourcePrep, "patch-ui-auto-detect-masks-v1.mjs");
+requireText("vite source-prep hook", viteConfig, "scripts/source-prep.mjs");
+requireText("vite buildStart hook", viteConfig, "buildStart()");
+requireText("vite dev server hook", viteConfig, "configureServer()");
 requireText("runner import insertion", patch, "runCandidateDetection");
 requireText("auto detect function", patch, "async function runLocalAutoMaskDetection()");
 requireText("auto detect button", patch, "Auto Detect Masks");
