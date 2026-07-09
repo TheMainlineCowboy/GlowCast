@@ -4,6 +4,21 @@ const p = 'src/App.tsx';
 let s = fs.readFileSync(p, 'utf8');
 let changed = false;
 
+function insertAfterEdgeScannerButton(source, insertion) {
+  const scannerText = 'Show Edge Scanner';
+  const textIndex = source.indexOf(scannerText);
+  if (textIndex < 0) return null;
+
+  const buttonStart = source.lastIndexOf('<button', textIndex);
+  if (buttonStart < 0) return null;
+
+  const buttonEnd = source.indexOf('\n              </button>', textIndex);
+  if (buttonEnd < 0) return null;
+
+  const insertAt = buttonEnd + '\n              </button>'.length;
+  return source.slice(0, insertAt) + insertion + source.slice(insertAt);
+}
+
 if (!s.includes('runCandidateDetection')) {
   s = s.replace(
     'import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";',
@@ -126,9 +141,9 @@ if (!s.includes('async function runLocalAutoMaskDetection()')) {
 const buttonBlock = '\n              <button type="button" className="primary" onClick={runLocalAutoMaskDetection} disabled={!imageUrl || detecting || edgeScanning || cornerMode || surfacePolygonMode}>\n                <ScanLine size={18} /> {detecting ? "Detecting Masks..." : "Auto Detect Masks"}\n              </button>';
 
 if (!s.includes('Auto Detect Masks')) {
-  const anchor = '              <button type="button" onClick={toggleEdgeScanner} disabled={!imageUrl || edgeScanning} className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg disabled:opacity-50" >\n                {edgeScanning ? "Scanning Edges..." : showEdges ? "Hide Edge Scanner" : "Show Edge Scanner"}\n              </button>';
-  if (!s.includes(anchor)) throw new Error('Could not find edge scanner button anchor.');
-  s = s.replace(anchor, anchor + buttonBlock);
+  const next = insertAfterEdgeScannerButton(s, buttonBlock);
+  if (!next) throw new Error('Could not find edge scanner button anchor.');
+  s = next;
   changed = true;
 }
 
