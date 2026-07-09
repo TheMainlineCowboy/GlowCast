@@ -19,6 +19,29 @@ function insertAfterEdgeScannerButton(source, insertion) {
   return source.slice(0, insertAt) + insertion + source.slice(insertAt);
 }
 
+function insertDebugHelper(source, insertion) {
+  const preferredStart = source.indexOf('              <p className="helperText">\n                {surfacePolygonMode ?');
+  if (preferredStart >= 0) {
+    const preferredEnd = source.indexOf('\n              </p>', preferredStart);
+    if (preferredEnd >= 0) {
+      const insertAt = preferredEnd + '\n              </p>'.length;
+      return source.slice(0, insertAt) + insertion + source.slice(insertAt);
+    }
+  }
+
+  const buttonText = 'Auto Detect Masks';
+  const buttonIndex = source.indexOf(buttonText);
+  if (buttonIndex >= 0) {
+    const buttonEnd = source.indexOf('\n              </button>', buttonIndex);
+    if (buttonEnd >= 0) {
+      const insertAt = buttonEnd + '\n              </button>'.length;
+      return source.slice(0, insertAt) + insertion + source.slice(insertAt);
+    }
+  }
+
+  return null;
+}
+
 if (!s.includes('runCandidateDetection')) {
   s = s.replace(
     'import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";',
@@ -150,13 +173,13 @@ if (!s.includes('Auto Detect Masks')) {
 const debugBlock = '\n              {detectionDebug && (\n                <p className="helperText">\n                  Debug: {detectionDebug.edgePoints.toLocaleString()} edges · {detectionDebug.candidateMasks} masks · {detectionDebug.polygonScoped ? "surface polygon scoped" : "full surface bounds"} · {detectionDebug.source}\n                </p>\n              )}';
 
 if (!s.includes('Debug: {detectionDebug.edgePoints.toLocaleString()} edges')) {
-  const helperStart = s.indexOf('              <p className="helperText">\n                {surfacePolygonMode ?');
-  if (helperStart < 0) throw new Error('Could not find mask helperText anchor start.');
-  const helperEnd = s.indexOf('\n              </p>', helperStart);
-  if (helperEnd < 0) throw new Error('Could not find mask helperText anchor end.');
-  const insertAfter = helperEnd + '\n              </p>'.length;
-  s = s.slice(0, insertAfter) + debugBlock + s.slice(insertAfter);
-  changed = true;
+  const next = insertDebugHelper(s, debugBlock);
+  if (next) {
+    s = next;
+    changed = true;
+  } else {
+    console.warn('Could not find mask helperText/debug anchor. Continuing without visible debug helper.');
+  }
 }
 
 if (!changed) {
