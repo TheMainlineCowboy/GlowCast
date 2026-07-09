@@ -117,15 +117,26 @@ try {
   const fallbackEdges = [];
   // Deliberately incomplete edges: only an L-shape and partial lower/right traces.
   // The main closed-frame detector may miss this, but the adapter fallback should
-  // still produce one conservative rectangular user-facing mask.
+  // still produce one conservative mask with persisted outline points.
   for (let x = 18; x <= 52; x += 1) fallbackEdges.push({ x, y: 62, strength: 190 });
   for (let y = 62; y <= 84; y += 1) fallbackEdges.push({ x: 18, y, strength: 190 });
   for (let x = 35; x <= 52; x += 1) fallbackEdges.push({ x, y: 84, strength: 185 });
   for (let y = 70; y <= 84; y += 1) fallbackEdges.push({ x: 52, y, strength: 185 });
 
   const fallbackMasks = buildMaskCandidatesFromEdges(fallbackEdges, bounds);
-  if (!hasBoxCovering(fallbackMasks, { x: 18, y: 62, width: 34, height: 22, tolerance: 3 })) {
+  const fallbackMask = fallbackMasks.find((mask) =>
+    mask.box.x <= 21 &&
+    mask.box.y <= 65 &&
+    mask.box.x + mask.box.width >= 49 &&
+    mask.box.y + mask.box.height >= 81
+  );
+  if (!fallbackMask) {
     console.error("Mask adapter smoke test failed. Broken-edge fallback did not produce a conservative mask.");
+    console.error(JSON.stringify(fallbackMasks, null, 2));
+    process.exit(1);
+  }
+  if (!Array.isArray(fallbackMask.points) || fallbackMask.points.length < 3) {
+    console.error("Mask adapter smoke test failed. Broken-edge fallback lost its outline points.");
     console.error(JSON.stringify(fallbackMasks, null, 2));
     process.exit(1);
   }
