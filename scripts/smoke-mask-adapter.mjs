@@ -19,7 +19,8 @@ if (adapterSource.includes("points: boxPoints(mergedBox)")) {
 // the same exported adapter function without a bundler.
 adapterSource = adapterSource
   .replace(/import type \{ EdgePoint \} from "\.\.\/edgeDetect";\n/, "")
-  .replace(/import \{ detectArchitecturalCandidates \} from "\.\/architecturalDetector";\n/, "");
+  .replace(/import \{ detectArchitecturalCandidates \} from "\.\/architecturalDetector";\n/, "")
+  .replace("function addFallbackCandidates", "export function addFallbackCandidates");
 
 const composedSource = `${detectorSource}\n${adapterSource}\n`;
 const transpiled = ts.transpileModule(composedSource, {
@@ -54,11 +55,40 @@ function hasBoxCovering(masks, expected) {
 }
 
 try {
-  const { buildMaskCandidatesFromEdges } = await import(pathToFileURL(tempPath).href);
+  const { buildMaskCandidatesFromEdges, addFallbackCandidates } = await import(pathToFileURL(tempPath).href);
 
   const bounds = { x: 0, y: 0, width: 100, height: 100 };
   const edgePoints = [];
   const add = (x, y, strength = 180) => edgePoints.push({ x, y, strength });
+
+  const replacementEdges = [];
+  addFrame(replacementEdges, 10, 10, 42, 42, 210);
+  const replacedFallbacks = addFallbackCandidates(
+    [
+      {
+        id: "seed_fragment",
+        box: { x: 17, y: 17, width: 14, height: 14 },
+        points: [
+          { x: 17, y: 17 },
+          { x: 31, y: 17 },
+          { x: 31, y: 31 },
+          { x: 17, y: 31 }
+        ]
+      }
+    ],
+    replacementEdges,
+    bounds
+  );
+  if (replacedFallbacks.length !== 1 || replacedFallbacks[0].id !== "seed_fragment") {
+    console.error("Mask adapter smoke test failed. Larger fallback created a duplicate instead of replacing the smaller fragment.");
+    console.error(JSON.stringify(replacedFallbacks, null, 2));
+    process.exit(1);
+  }
+  if (!hasBoxCovering(replacedFallbacks, { x: 10, y: 10, width: 32, height: 32, tolerance: 2 })) {
+    console.error("Mask adapter smoke test failed. Larger fallback did not replace the smaller overlapping fragment bounds.");
+    console.error(JSON.stringify(replacedFallbacks, null, 2));
+    process.exit(1);
+  }
 
   // Two plausible architectural frames.
   addFrame(edgePoints, 18, 20, 42, 42);
@@ -156,7 +186,7 @@ try {
   }
 
   console.log(
-    `Mask adapter smoke test passed: ${masks.length} masks, no tiny fragments or duplicates, satellite grouping and fallback ok.`
+    `Mask adapter smoke test passed: ${masks.length} masks, no tiny fragments or duplicates, satellite grouping, fallback replacement and fallback recovery ok.`
   );
 } finally {
   await fs.rm(tempPath, { force: true });
