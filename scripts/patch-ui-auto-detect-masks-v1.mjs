@@ -12,6 +12,33 @@ if (!s.includes('runCandidateDetection')) {
   changed = true;
 }
 
+if (!s.includes('const [detectionDebug, setDetectionDebug]')) {
+  const anchor = '  const [edgePoints, setEdgePoints] = useState<EdgePoint[]>([]);';
+  if (!s.includes(anchor)) throw new Error('Could not find edgePoints state anchor.');
+  s = s.replace(
+    anchor,
+    `${anchor}\n  const [detectionDebug, setDetectionDebug] = useState<{ edgePoints: number; candidateMasks: number; polygonScoped: boolean; source: string } | null>(null);`
+  );
+  changed = true;
+}
+
+if (!s.includes('setDetectionDebug(null);')) {
+  const anchor = '    setEdgePoints([]);';
+  if (!s.includes(anchor)) throw new Error('Could not find resetEdgeScanner edgePoints anchor.');
+  s = s.replace(anchor, `${anchor}\n    setDetectionDebug(null);`);
+  changed = true;
+}
+
+if (!s.includes('source: "edge-scan-only"')) {
+  const anchor = '      setEdgePoints(result.edgePoints);';
+  if (!s.includes(anchor)) throw new Error('Could not find edge scanner state anchor.');
+  s = s.replace(
+    anchor,
+    `${anchor}\n      setDetectionDebug({ edgePoints: result.edgePoints.length, candidateMasks: 0, polygonScoped: surfacePolygonClosed && surfacePolygonPoints.length >= 3, source: "edge-scan-only" });`
+  );
+  changed = true;
+}
+
 const functionBlock = `
   async function runLocalAutoMaskDetection() {
     if (!imageUrl) return;
@@ -27,6 +54,7 @@ const functionBlock = `
       setDetectMessage("Running local architectural mask detection...");
 
       let activeEdgePoints = edgePoints;
+      let detectionSource = activeEdgePoints.length ? "existing-edge-scan" : "fresh-edge-scan";
       if (!activeEdgePoints.length) {
         const scan = await scanImageEdges(imageUrl);
         activeEdgePoints = scan.edgePoints;
@@ -35,10 +63,11 @@ const functionBlock = `
         setShowEdges(true);
       }
 
-      const bounds = surfacePolygonClosed && surfacePolygonPoints.length >= 3
+      const polygonScoped = surfacePolygonClosed && surfacePolygonPoints.length >= 3;
+      const bounds = polygonScoped
         ? flattenedSurface()
         : projectionArea ?? flattenedSurface();
-      const polygon = surfacePolygonClosed && surfacePolygonPoints.length >= 3 ? surfacePolygonPoints : null;
+      const polygon = polygonScoped ? surfacePolygonPoints : null;
       const detected = runCandidateDetection(activeEdgePoints, bounds, polygon).map((candidate, index) => ({
         ...candidate,
         id: Date.now() + index,
@@ -46,6 +75,13 @@ const functionBlock = `
         shape: candidate.shape ?? "rectangle",
         label: candidate.label ?? `Auto architectural mask ${index + 1}`
       }));
+
+      setDetectionDebug({
+        edgePoints: activeEdgePoints.length,
+        candidateMasks: detected.length,
+        polygonScoped,
+        source: detectionSource
+      });
 
       setZones((current) => [
         ...current.filter((zone) => !(zone.label ?? "").startsWith("Auto architectural mask")),
@@ -76,6 +112,13 @@ if (!s.includes('async function runLocalAutoMaskDetection()')) {
   if (!s.includes(anchor)) throw new Error('Could not find resetForPhoto anchor.');
   s = s.replace(anchor, `${functionBlock}${anchor}`);
   changed = true;
+} else {
+  const start = s.indexOf('  async function runLocalAutoMaskDetection()');
+  const end = s.indexOf('\n  function resetForPhoto(src: string, thumbnail: string | null, size: ImageSize, message: string) {', start);
+  if (start >= 0 && end > start && !s.slice(start, end).includes('setDetectionDebug({')) {
+    s = s.slice(0, start) + functionBlock + s.slice(end);
+    changed = true;
+  }
 }
 
 const buttonBlock = `
@@ -89,6 +132,22 @@ if (!s.includes('Auto Detect Masks')) {
               </button>`;
   if (!s.includes(anchor)) throw new Error('Could not find edge scanner button anchor.');
   s = s.replace(anchor, `${anchor}${buttonBlock}`);
+  changed = true;
+}
+
+const debugBlock = `
+              {detectionDebug && (
+                <p className="helperText">
+                  Debug: {detectionDebug.edgePoints.toLocaleString()} edges · {detectionDebug.candidateMasks} masks · {detectionDebug.polygonScoped ? "surface polygon scoped" : "full surface bounds"} · {detectionDebug.source}
+                </p>
+              )}`;
+
+if (!s.includes('Debug: {detectionDebug.edgePoints.toLocaleString()} edges')) {
+  const anchor = `              <p className="helperText">
+                {surfacePolygonMode ? "Tap the photo to outline your projection surface. Close the shape by tapping your first point." : cornerMode ? ` + '`' + `Corner ${Math.min(cornerPoints.length + 1, 4)} of 4: ${cornerNames[cornerPoints.length] ?? "complete"}` + '`' + ` : drawMode ? ` + '`' + `Drag directly on the photo to draw a ${drawShape} avoid mask.` + '`' + ` : detectMessage}
+              </p>`;
+  if (!s.includes(anchor)) throw new Error('Could not find mask helperText anchor.');
+  s = s.replace(anchor, `${anchor}${debugBlock}`);
   changed = true;
 }
 
