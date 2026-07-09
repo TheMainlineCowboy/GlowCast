@@ -363,8 +363,20 @@ function addFallbackCandidates(
 
   for (const fallback of buildFallbackComponents(edgePoints, bounds)) {
     const box = { x: fallback.x, y: fallback.y, width: fallback.width, height: fallback.height };
-    const duplicate = next.some((existing) => overlapRatio(existing.box, box) > 0.58);
-    if (duplicate) continue;
+    const duplicateIndex = next.findIndex((existing) => overlapRatio(existing.box, box) > 0.58);
+    if (duplicateIndex >= 0) {
+      const existing = next[duplicateIndex];
+      const existingArea = existing.box.width * existing.box.height;
+      const fallbackArea = box.width * box.height;
+      if (fallbackArea > existingArea * 1.12 && fallback.score >= 1.2) {
+        next[duplicateIndex] = {
+          id: existing.id,
+          box,
+          points: fallback.points.length >= 3 ? fallback.points : boxPoints(box)
+        };
+      }
+      continue;
+    }
 
     next.push({
       id: "mask_fallback_" + Date.now() + "_" + next.length,
