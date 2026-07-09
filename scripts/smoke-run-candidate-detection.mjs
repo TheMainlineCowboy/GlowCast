@@ -47,6 +47,16 @@ function addCornerFragment(edgePoints, x1, y1, x2, y2, strength = 190) {
   }
 }
 
+function addThreeSidedDoorway(edgePoints, x1, y1, x2, y2, strength = 190) {
+  for (let x = x1; x <= x2; x += 1) {
+    edgePoints.push({ x, y: y1, strength });
+  }
+  for (let y = y1; y <= y2; y += 1) {
+    edgePoints.push({ x: x1, y, strength });
+    edgePoints.push({ x: x2, y, strength });
+  }
+}
+
 try {
   const { runCandidateDetection } = await import(pathToFileURL(tempPath).href);
   const bounds = { x: 0, y: 0, width: 100, height: 100 };
@@ -104,7 +114,23 @@ try {
     process.exit(1);
   }
 
-  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed with local outline points and corner fragments rejected.`);
+  const doorwayEdges = [];
+  addThreeSidedDoorway(doorwayEdges, 44, 18, 60, 58);
+  const doorwayMasks = runCandidateDetection(doorwayEdges, bounds);
+  const doorwayMask = doorwayMasks.find((mask) => mask.x <= 45 && mask.x + mask.width >= 59 && mask.y <= 19 && mask.y + mask.height >= 57);
+  if (!doorwayMask) {
+    console.error("Run candidate detection smoke test failed. Fallback over-filtered a three-sided doorway/arch-like outline.");
+    console.error(JSON.stringify(doorwayMasks, null, 2));
+    process.exit(1);
+  }
+
+  if (!Array.isArray(doorwayMask.points) || doorwayMask.points.length < 3) {
+    console.error("Run candidate detection smoke test failed. Three-sided fallback mask did not keep editable outline points.");
+    console.error(JSON.stringify(doorwayMask, null, 2));
+    process.exit(1);
+  }
+
+  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed with local outline points, corner fragments rejected, and three-sided doorway fallback preserved.`);
 } finally {
   await fs.rm(tempPath, { force: true });
 }
