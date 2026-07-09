@@ -10,7 +10,7 @@ export type MaskCandidateOutput = {
   points: SimplePoint[];
 };
 
-type FallbackComponent = SimpleBox & { cells: number; edgeCount: number; score: number };
+type FallbackComponent = SimpleBox & { cells: number; edgeCount: number; score: number; points: SimplePoint[] };
 
 type SideCoverage = {
   sides: number;
@@ -25,6 +25,77 @@ function boxPoints(box: SimpleBox): SimplePoint[] {
     { x: box.x + box.width, y: box.y + box.height },
     { x: box.x, y: box.y + box.height }
   ];
+}
+
+function pointKey(point: SimplePoint): string {
+  return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
+}
+
+function cross(origin: SimplePoint, a: SimplePoint, b: SimplePoint): number {
+  return (a.x - origin.x) * (b.y - origin.y) - (a.y - origin.y) * (b.x - origin.x);
+}
+
+function distanceToSegment(point: SimplePoint, a: SimplePoint, b: SimplePoint): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) return Math.hypot(point.x - a.x, point.y - a.y);
+
+  const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared));
+  const projectedX = a.x + t * dx;
+  const projectedY = a.y + t * dy;
+  return Math.hypot(point.x - projectedX, point.y - projectedY);
+}
+
+function buildOutlineFromPoints(points: SimplePoint[], box: SimpleBox, maxPoints = 10): SimplePoint[] {
+  const unique = [...new Map(points.map((point) => [pointKey(point), point])).values()].sort((a, b) =>
+    a.x === b.x ? a.y - b.y : a.x - b.x
+  );
+
+  if (unique.length < 4) return boxPoints(box);
+
+  const lower: SimplePoint[] = [];
+  for (const point of unique) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) {
+      lower.pop();
+    }
+    lower.push(point);
+  }
+
+  const upper: SimplePoint[] = [];
+  for (let i = unique.length - 1; i >= 0; i -= 1) {
+    const point = unique[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) {
+      upper.pop();
+    }
+    upper.push(point);
+  }
+
+  lower.pop();
+  upper.pop();
+  const outline = [...lower, ...upper];
+
+  while (outline.length > maxPoints) {
+    let weakestIndex = 0;
+    let weakestDistance = Number.POSITIVE_INFINITY;
+
+    for (let i = 0; i < outline.length; i += 1) {
+      const previous = outline[(i - 1 + outline.length) % outline.length];
+      const current = outline[i];
+      const next = outline[(i + 1) % outline.length];
+      const distance = distanceToSegment(current, previous, next);
+      if (distance < weakestDistance) {
+        weakestDistance = distance;
+        weakestIndex = i;
+      }
+    }
+
+    outline.splice(weakestIndex, 1);
+  }
+
+  return outline.length >= 3
+    ? outline.map((point) => ({ x: Number(point.x.toFixed(2)), y: Number(point.y.toFixed(2)) }))
+    : boxPoints(box);
 }
 
 function getAdapterDetectorLimits(bounds: SimpleBox) {
@@ -270,6 +341,7 @@ function buildFallbackComponents(edgePoints: EdgePoint[], bounds: SimpleBox): Fa
       ...box,
       cells,
       edgeCount,
+      points: buildOutlineFromPoints(componentPoints, box),
       score: edgeCount / Math.max(area, 1) + cells * 0.02 + sideCoverage.sides * 0.3
     });
   }
@@ -292,7 +364,7 @@ function addFallbackCandidates(
     next.push({
       id: "mask_fallback_" + Date.now() + "_" + next.length,
       box,
-      points: boxPoints(box)
+      points: fallback.points.length >= 3 ? fallback.points : boxPoints(box)
     });
   }
 
