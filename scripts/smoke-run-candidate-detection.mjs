@@ -62,6 +62,17 @@ try {
     process.exit(1);
   }
 
+  const pointsAreLocal = groupedMask.points.every(
+    (point) => point.x >= -0.01 && point.x <= 100.01 && point.y >= -0.01 && point.y <= 100.01
+  );
+  const touchesLocalBounds = groupedMask.points.some((point) => point.x <= 0.01 || point.y <= 0.01 || point.x >= 99.99 || point.y >= 99.99);
+
+  if (!pointsAreLocal || !touchesLocalBounds) {
+    console.error("Run candidate detection smoke test failed. Custom outline points were not normalized for zone-local clip paths.");
+    console.error(JSON.stringify(groupedMask, null, 2));
+    process.exit(1);
+  }
+
   const scopedMasks = runCandidateDetection(groupedEdges, bounds, [
     { x: 40, y: 18 },
     { x: 88, y: 18 },
@@ -75,7 +86,7 @@ try {
     process.exit(1);
   }
 
-  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed.`);
+  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed with local outline points.`);
 } finally {
   await fs.rm(tempPath, { force: true });
 }
