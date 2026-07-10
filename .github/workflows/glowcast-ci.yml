@@ -10,10 +10,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: glowcast-ci-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   verify:
     name: Clean install, smoke, typecheck, build
@@ -35,8 +31,29 @@ jobs:
       - name: Prepare source
         run: npm run prep
 
-      - name: Detector smoke tests
-        run: npm run verify:all
+      - name: Detector connectivity smoke
+        run: node scripts/smoke-detector-connectivity.mjs
+
+      - name: Synthetic frame smoke
+        run: node scripts/smoke-detector-synthetic-frame.mjs
+
+      - name: Mask adapter smoke
+        run: node scripts/smoke-mask-adapter.mjs
+
+      - name: Satellite merge smoke
+        run: node scripts/smoke-satellite-merge-behavior.mjs
+
+      - name: Candidate detection smoke
+        run: node scripts/smoke-run-candidate-detection.mjs
+
+      - name: UI wiring smoke
+        run: node scripts/smoke-ui-auto-detect-wiring.mjs
+
+      - name: Fallback duplicate smoke
+        run: node scripts/smoke-fallback-duplicate-source.mjs
+
+      - name: Satellite merge source smoke
+        run: node scripts/smoke-satellite-merge-gate-source.mjs
 
       - name: TypeScript check
         run: npx tsc
