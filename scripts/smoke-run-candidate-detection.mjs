@@ -20,10 +20,10 @@ if (!adapterSource.includes("closureBonus")) {
 
 adapterSource = adapterSource
   .replace(/import type \{ EdgePoint \} from "\.\.\/edgeDetect";\n/, "")
-  .replace(/import \\{ detectArchitecturalCandidates, type DetectorDiagnostics \\} from "\\.\\/architecturalDetector";\\n/, "");
+  .replace(/import \{ detectArchitecturalCandidates, type DetectorDiagnostics \} from "\.\/architecturalDetector";\n/, "");
 runnerSource = runnerSource
   .replace(/import type \{ EdgePoint \} from "\.\.\/edgeDetect";\n/, "")
-  .replace(/import type \\{ Bounds, CandidateZone, DetectorDiagnostics, Point \\} from "\\.\\/architecturalDetector";\\n/, "")
+  .replace(/import type \{ Bounds, CandidateZone, DetectorDiagnostics, Point \} from "\.\/architecturalDetector";\n/, "")
   .replace(/import \{ buildMaskCandidatesFromEdges, type SimpleBox \} from "\.\/maskCandidateAdapter";\n/, "");
 
 const composedSource = `${detectorSource}\n${adapterSource}\n${runnerSource}\n`;
@@ -103,8 +103,17 @@ try {
   addFrame(groupedEdges, 34, 25, 38, 51, 190);
   addFrame(groupedEdges, 66, 25, 70, 51, 190);
 
-  const masks = runCandidateDetection(groupedEdges, bounds);
+  let groupedDiagnostics;
+  const masks = runCandidateDetection(groupedEdges, bounds, null, (diagnostics) => {
+    groupedDiagnostics = diagnostics;
+  });
   const groupedMask = masks.find((mask) => mask.x <= 36 && mask.x + mask.width >= 68 && mask.y <= 26 && mask.y + mask.height >= 50);
+
+  if (!groupedDiagnostics || groupedDiagnostics.components < 1 || groupedDiagnostics.selected < 1) {
+    console.error("Run candidate detection smoke test failed. Detector diagnostics did not survive the exported runner path.");
+    console.error(JSON.stringify(groupedDiagnostics, null, 2));
+    process.exit(1);
+  }
 
   if (!groupedMask) {
     console.error("Run candidate detection smoke test failed. Adapter grouping was not exposed by the exported runner.");
@@ -150,20 +159,38 @@ try {
 
   const cornerNoise = [];
   addCornerFragment(cornerNoise, 12, 18, 34, 48);
-  const cornerMasks = runCandidateDetection(cornerNoise, bounds);
+  let cornerDiagnostics;
+  const cornerMasks = runCandidateDetection(cornerNoise, bounds, null, (diagnostics) => {
+    cornerDiagnostics = diagnostics;
+  });
   if (cornerMasks.length) {
     console.error("Run candidate detection smoke test failed. Fallback accepted an open corner fragment as a mask.");
     console.error(JSON.stringify(cornerMasks, null, 2));
     process.exit(1);
   }
 
+  if (!cornerDiagnostics || cornerDiagnostics.rejectedClosure < 1 || cornerDiagnostics.selected !== 0) {
+    console.error("Run candidate detection smoke test failed. Rejected corner fragments were not reported through runner diagnostics.");
+    console.error(JSON.stringify(cornerDiagnostics, null, 2));
+    process.exit(1);
+  }
+
   const doorwayEdges = [];
   addThreeSidedDoorway(doorwayEdges, 44, 18, 60, 58);
-  const doorwayMasks = runCandidateDetection(doorwayEdges, bounds);
+  let doorwayDiagnostics;
+  const doorwayMasks = runCandidateDetection(doorwayEdges, bounds, null, (diagnostics) => {
+    doorwayDiagnostics = diagnostics;
+  });
   const doorwayMask = doorwayMasks.find((mask) => mask.x <= 45 && mask.x + mask.width >= 59 && mask.y <= 19 && mask.y + mask.height >= 57);
   if (!doorwayMask) {
     console.error("Run candidate detection smoke test failed. Fallback over-filtered a three-sided doorway/arch-like outline.");
     console.error(JSON.stringify(doorwayMasks, null, 2));
+    process.exit(1);
+  }
+
+  if (!doorwayDiagnostics || doorwayDiagnostics.components < 1 || doorwayDiagnostics.selected > doorwayMasks.length) {
+    console.error("Run candidate detection smoke test failed. Doorway diagnostics do not distinguish detector selections from adapter output.");
+    console.error(JSON.stringify({ doorwayDiagnostics, doorwayMasks }, null, 2));
     process.exit(1);
   }
 
@@ -208,7 +235,7 @@ try {
     process.exit(1);
   }
 
-  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed with local outline points, labels, corner rejection, doorway fallback, arch classification, three-side fallback gate wiring, and closed-frame ranking.`);
+  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed with runner diagnostics, local outline points, labels, corner rejection, doorway fallback, arch classification, three-side fallback gate wiring, and closed-frame ranking.`);
 } finally {
   await fs.rm(tempPath, { force: true });
 }
