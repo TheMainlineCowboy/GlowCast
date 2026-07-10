@@ -40,8 +40,11 @@ try {
     });
   }
 
-  function assertCompleteFrame(name, edgePoints, expected) {
-    const candidates = getCandidates(edgePoints);
+  async function assertCompleteFrame(name, edgePoints, expected) {
+    let diagnostics = null;
+    const candidates = getCandidates(edgePoints, (value) => {
+      diagnostics = value;
+    });
     const completeCandidate = candidates.find(
       (candidate) =>
         candidate.confidence >= 70 &&
@@ -50,8 +53,17 @@ try {
     );
 
     if (!completeCandidate) {
-      console.error(`${name} synthetic frame smoke test failed. Expected one high-confidence architectural frame covering the fixture bounds.`);
-      console.error(JSON.stringify(candidates));
+      const failure = {
+        requestedCase,
+        name,
+        expected,
+        edgePointCount: edgePoints.length,
+        diagnostics,
+        candidates
+      };
+      await fs.writeFile("synthetic-frame-diagnostic.json", `${JSON.stringify(failure, null, 2)}\n`);
+      console.error(`${name} synthetic frame smoke test failed. Diagnostic artifact written.`);
+      console.error(JSON.stringify(failure));
       process.exit(1);
     }
 
@@ -65,7 +77,7 @@ try {
     for (let y = 21; y <= 50; y += 1) addCorner(50, y);
     for (let x = 21; x <= 50; x += 1) addCorner(x, 50);
     for (let y = 20; y <= 49; y += 1) addCorner(20, y);
-    assertCompleteFrame("Broken-corner", cornerBreakFrame, { minWidth: 28, minHeight: 28 });
+    await assertCompleteFrame("Broken-corner", cornerBreakFrame, { minWidth: 28, minHeight: 28 });
   }
 
   if (requestedCase === "all" || requestedCase === "thin-gap") {
@@ -75,7 +87,7 @@ try {
     for (let y = 18; y <= 58; y += 1) if (y < 37 || y > 39) addThinGap(65, y);
     for (let x = 15; x <= 65; x += 1) if (x < 42 || x > 44) addThinGap(x, 58);
     for (let y = 18; y <= 58; y += 1) if (y < 27 || y > 29) addThinGap(15, y);
-    assertCompleteFrame("Thin-gap", thinGapFrame, { minWidth: 48, minHeight: 38 });
+    await assertCompleteFrame("Thin-gap", thinGapFrame, { minWidth: 48, minHeight: 38 });
   }
 
   if (requestedCase === "all" || requestedCase === "l-fragment") {
