@@ -7,10 +7,18 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: glowcast-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
-    name: Smoke and build
+    name: Clean install, smoke, typecheck, build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -23,10 +31,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --progress=false
 
-      - name: Run detector smoke tests
-        run: npm run smoke:detector
-
-      - name: Build app
-        run: npm run build
+      - name: Run full CI gate
+        run: npm run ci
