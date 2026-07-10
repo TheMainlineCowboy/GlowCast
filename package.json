@@ -11,7 +11,8 @@
     "prep": "node scripts/source-prep.mjs",
     "smoke:detector": "npm run prep && node scripts/smoke-detector-connectivity.mjs && node scripts/smoke-detector-synthetic-frame.mjs && node scripts/smoke-mask-adapter.mjs && node scripts/smoke-satellite-merge-behavior.mjs && node scripts/smoke-run-candidate-detection.mjs && node scripts/smoke-ui-auto-detect-wiring.mjs && node scripts/smoke-fallback-duplicate-source.mjs && node scripts/smoke-satellite-merge-gate-source.mjs",
     "smoke:prep": "npm run prep && node scripts/smoke-run-candidate-detection.mjs && node scripts/smoke-ui-auto-detect-wiring.mjs && node scripts/smoke-fallback-duplicate-source.mjs && node scripts/smoke-satellite-merge-gate-source.mjs",
-    "build": "npm run prep && tsc && vite build",
+    "verify:prepared": "node scripts/smoke-run-candidate-detection.mjs && node scripts/smoke-ui-auto-detect-wiring.mjs",
+    "build": "npm run prep && npm run verify:prepared && tsc && vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
