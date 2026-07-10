@@ -1,5 +1,5 @@
 import type { EdgePoint } from "../edgeDetect";
-import { detectArchitecturalCandidates } from "./architecturalDetector";
+import { detectArchitecturalCandidates, type DetectorDiagnostics } from "./architecturalDetector";
 
 export type SimplePoint = { x: number; y: number };
 export type SimpleBox = { x: number; y: number; width: number; height: number };
@@ -398,9 +398,13 @@ function addFallbackCandidates(
   return next;
 }
 
-export function buildMaskCandidatesFromEdges(edgePoints: EdgePoint[], bounds: SimpleBox): MaskCandidateOutput[] {
+export function buildMaskCandidatesFromEdges(
+  edgePoints: EdgePoint[],
+  bounds: SimpleBox,
+  onDiagnostics?: (diagnostics: DetectorDiagnostics) => void
+): MaskCandidateOutput[] {
   const limits = getAdapterDetectorLimits(bounds);
-  const found = detectArchitecturalCandidates(edgePoints, { bounds, ...limits });
+  const found = detectArchitecturalCandidates(edgePoints, { bounds, ...limits, onDiagnostics });
   const accepted: MaskCandidateOutput[] = [];
 
   for (const item of found) {
