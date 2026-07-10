@@ -1,10 +1,11 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
-import typescriptImport from "typescript";
 
-const ts = typescriptImport.default ?? typescriptImport;
+const require = createRequire(import.meta.url);
+const ts = require("typescript");
 
 const detectorPath = "src/core/architecturalDetector.ts";
 const source = await fs.readFile(detectorPath, "utf8");
@@ -55,9 +56,6 @@ try {
   const cornerBreakFrame = [];
   const addCorner = (x, y) => cornerBreakFrame.push({ x, y, strength: 1 });
 
-  // A rectangular architectural frame with one-cell corner breaks.
-  // The expected behavior is that diagonal bridging + 8-connected labeling
-  // keeps this as one full window/door candidate instead of separate fragments.
   for (let x = 20; x <= 49; x += 1) addCorner(x, 20);
   for (let y = 21; y <= 50; y += 1) addCorner(50, y);
   for (let x = 21; x <= 50; x += 1) addCorner(x, 50);
@@ -67,9 +65,6 @@ try {
   const thinGapFrame = [];
   const addThinGap = (x, y) => thinGapFrame.push({ x, y, strength: 1 });
 
-  // A larger window/door frame with repeated 3-cell breaks along straight trim.
-  // Real photos often have broken painted edges, glare, shadows, or mullions that
-  // interrupt the edge trace. The detector should still close these into one mask.
   for (let x = 15; x <= 65; x += 1) if (x < 33 || x > 36) addThinGap(x, 18);
   for (let y = 18; y <= 58; y += 1) if (y < 37 || y > 40) addThinGap(65, y);
   for (let x = 15; x <= 65; x += 1) if (x < 42 || x > 45) addThinGap(x, 58);
