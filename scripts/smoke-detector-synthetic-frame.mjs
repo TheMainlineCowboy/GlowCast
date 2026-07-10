@@ -20,13 +20,17 @@ await fs.writeFile(tempPath, transpiled);
 try {
   const { detectArchitecturalCandidates } = await import(pathToFileURL(tempPath).href);
 
-  function assertCompleteFrame(name, edgePoints, expected) {
-    const candidates = detectArchitecturalCandidates(edgePoints, {
+  function getCandidates(edgePoints) {
+    return detectArchitecturalCandidates(edgePoints, {
       gridResolution: 100,
       minDensityThreshold: 1,
       minSizePercent: 5,
       maxSizePercent: 50
     });
+  }
+
+  function assertCompleteFrame(name, edgePoints, expected) {
+    const candidates = getCandidates(edgePoints);
 
     const completeCandidate = candidates.find(
       (candidate) =>
@@ -68,6 +72,17 @@ try {
   for (let x = 15; x <= 65; x += 1) if (x < 42 || x > 45) addThinGap(x, 58);
   for (let y = 18; y <= 58; y += 1) if (y < 27 || y > 30) addThinGap(15, y);
   assertCompleteFrame("Thin-gap", thinGapFrame, { minWidth: 48, minHeight: 38 });
+
+  const lFragment = [];
+  for (let x = 20; x <= 50; x += 1) lFragment.push({ x, y: 20, strength: 1 });
+  for (let y = 20; y <= 50; y += 1) lFragment.push({ x: 20, y, strength: 1 });
+  const lFragmentCandidates = getCandidates(lFragment);
+  if (lFragmentCandidates.length > 0) {
+    console.error("Two-sided L-fragment smoke test failed. Open corner fragment became an architectural candidate.");
+    console.error(JSON.stringify(lFragmentCandidates, null, 2));
+    process.exit(1);
+  }
+  console.log("Two-sided L-fragment smoke test passed: open corner fragment rejected.");
 } finally {
   await fs.rm(tempPath, { force: true });
 }
