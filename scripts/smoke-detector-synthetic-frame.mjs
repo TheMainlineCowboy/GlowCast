@@ -1,15 +1,8 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createRequire } from "node:module";
+import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-
-const require = createRequire(import.meta.url);
-const ts = require("typescript");
-
-if (typeof ts?.transpileModule !== "function") {
-  throw new TypeError("Unable to load the TypeScript compiler API");
-}
 
 const requestedCase = process.argv[2] ?? "all";
 const validCases = new Set(["all", "broken-corner", "thin-gap", "l-fragment"]);
@@ -20,17 +13,26 @@ if (!validCases.has(requestedCase)) {
 }
 
 const detectorPath = "src/core/architecturalDetector.ts";
-const source = await fs.readFile(detectorPath, "utf8");
+const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-detector-"));
+const tempPath = path.join(tempDir, "architecturalDetector.js");
 
-const transpiled = ts.transpileModule(source, {
-  compilerOptions: {
-    module: ts.ModuleKind.ES2020,
-    target: ts.ScriptTarget.ES2020
-  }
-}).outputText;
-
-const tempPath = path.join(os.tmpdir(), `glowcast-detector-${Date.now()}.mjs`);
-await fs.writeFile(tempPath, transpiled);
+execFileSync(
+  process.execPath,
+  [
+    "node_modules/typescript/bin/tsc",
+    detectorPath,
+    "--outDir",
+    tempDir,
+    "--module",
+    "ES2020",
+    "--target",
+    "ES2020",
+    "--moduleResolution",
+    "Bundler",
+    "--skipLibCheck"
+  ],
+  { stdio: "inherit" }
+);
 
 try {
   const { detectArchitecturalCandidates } = await import(pathToFileURL(tempPath).href);
@@ -116,5 +118,5 @@ try {
     console.log("Two-sided L-fragment smoke test passed: open corner fragment rejected and counted.");
   }
 } finally {
-  await fs.rm(tempPath, { force: true });
+  await fs.rm(tempDir, { force: true, recursive: true });
 }
