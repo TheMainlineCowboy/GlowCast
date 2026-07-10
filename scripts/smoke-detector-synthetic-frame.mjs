@@ -43,7 +43,7 @@ try {
       gridResolution: 100,
       minDensityThreshold: 1,
       minSizePercent: 5,
-      maxSizePercent: 50,
+      maxSizePercent: 60,
       onDiagnostics
     });
   }
