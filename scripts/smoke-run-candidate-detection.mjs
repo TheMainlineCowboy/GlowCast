@@ -20,10 +20,10 @@ if (!adapterSource.includes("closureBonus")) {
 
 adapterSource = adapterSource
   .replace(/import type \{ EdgePoint \} from "\.\.\/edgeDetect";\n/, "")
-  .replace(/import \{ detectArchitecturalCandidates \} from "\.\/architecturalDetector";\n/, "");
+  .replace(/import \\{ detectArchitecturalCandidates, type DetectorDiagnostics \\} from "\\.\\/architecturalDetector";\\n/, "");
 runnerSource = runnerSource
   .replace(/import type \{ EdgePoint \} from "\.\.\/edgeDetect";\n/, "")
-  .replace(/import type \{ Bounds, CandidateZone, Point \} from "\.\/architecturalDetector";\n/, "")
+  .replace(/import type \\{ Bounds, CandidateZone, DetectorDiagnostics, Point \\} from "\\.\\/architecturalDetector";\\n/, "")
   .replace(/import \{ buildMaskCandidatesFromEdges, type SimpleBox \} from "\.\/maskCandidateAdapter";\n/, "");
 
 const composedSource = `${detectorSource}\n${adapterSource}\n${runnerSource}\n`;
