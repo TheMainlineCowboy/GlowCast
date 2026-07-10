@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 
 const require = createRequire(import.meta.url);
-const ts = require("typescript/lib/typescript.js");
+const ts = require("typescript");
 
 if (typeof ts?.transpileModule !== "function") {
   throw new TypeError("Unable to load the TypeScript compiler API");
