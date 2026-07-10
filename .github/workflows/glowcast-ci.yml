@@ -35,7 +35,10 @@ jobs:
         run: node scripts/smoke-detector-connectivity.mjs
 
       - name: Synthetic broken-corner frame smoke
-        run: node scripts/smoke-detector-synthetic-frame.mjs broken-corner
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/smoke-detector-synthetic-frame.mjs broken-corner 2>&1 | tee synthetic-broken-corner.log
 
       - name: Synthetic thin-gap frame smoke
         run: node scripts/smoke-detector-synthetic-frame.mjs thin-gap
@@ -72,6 +75,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: synthetic-frame-diagnostic
-          path: synthetic-frame-diagnostic.json
-          if-no-files-found: warn
+          path: |
+            synthetic-frame-diagnostic.json
+            synthetic-broken-corner.log
+          if-no-files-found: error
           retention-days: 3
