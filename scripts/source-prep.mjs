@@ -1,14 +1,26 @@
 import fs from "node:fs/promises";
 
-await import("./patch-final-edge-flow.mjs");
-await import("./patch-ui-regressions.mjs");
-await import("./patch-start-surface-flow.mjs");
-await import("./patch-detector-diagonal-connectivity-v1.mjs");
-await import("./patch-detector-thin-gap-closing-v1.mjs");
-await import("./patch-ui-auto-detect-masks-v1.mjs");
-await import("./patch-fallback-closed-shape-gate-v1.mjs");
-await import("./patch-fallback-three-side-gate-v1.mjs");
-await import("./patch-adapter-diagnostics-v1.mjs");
+async function runPatch(path, { required = false } = {}) {
+  try {
+    await import(path);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (required) {
+      throw new Error(`Required source prep patch failed: ${path}: ${message}`, { cause: error });
+    }
+    console.warn(`[source-prep] Optional patch skipped: ${path}: ${message}`);
+  }
+}
+
+await runPatch("./patch-final-edge-flow.mjs", { required: true });
+await runPatch("./patch-ui-regressions.mjs", { required: true });
+await runPatch("./patch-start-surface-flow.mjs", { required: true });
+await runPatch("./patch-detector-diagonal-connectivity-v1.mjs");
+await runPatch("./patch-detector-thin-gap-closing-v1.mjs");
+await runPatch("./patch-ui-auto-detect-masks-v1.mjs", { required: true });
+await runPatch("./patch-fallback-closed-shape-gate-v1.mjs");
+await runPatch("./patch-fallback-three-side-gate-v1.mjs");
+await runPatch("./patch-adapter-diagnostics-v1.mjs");
 
 const edgePath = "src/edgeDetect.ts";
 let edge = await fs.readFile(edgePath, "utf8");
