@@ -32,5 +32,14 @@ jobs:
       - name: Install dependencies
         run: npm install --progress=false
 
-      - name: Run full CI gate
-        run: npm run ci
+      - name: Prepare source
+        run: npm run prep
+
+      - name: Detector smoke tests
+        run: npm run verify:all
+
+      - name: TypeScript check
+        run: npx tsc
+
+      - name: Vite production build
+        run: npx vite build
