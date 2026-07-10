@@ -24,6 +24,17 @@ export interface Bounds {
   height: number;
 }
 
+export interface DetectorDiagnostics {
+  components: number;
+  rejectedSize: number;
+  rejectedAspect: number;
+  rejectedClosure: number;
+  boundaryPenalized: number;
+  rejectedConfidence: number;
+  accepted: number;
+  selected: number;
+}
+
 export interface DetectorOptions {
   gridResolution?: number;
   minDensityThreshold?: number;
@@ -31,6 +42,7 @@ export interface DetectorOptions {
   maxSizePercent?: number;
   bounds?: Bounds | null;
   polygon?: Point[] | null;
+  onDiagnostics?: (diagnostics: DetectorDiagnostics) => void;
 }
 
 interface FrameCoverage {
@@ -404,7 +416,19 @@ export function detectArchitecturalCandidates(
   edgePoints: EdgePoint[],
   options: DetectorOptions = {}
 ): CandidateZone[] {
-  if (!edgePoints || edgePoints.length === 0) return [];
+  if (!edgePoints || edgePoints.length === 0) {
+    options.onDiagnostics?.({
+      components: 0,
+      rejectedSize: 0,
+      rejectedAspect: 0,
+      rejectedClosure: 0,
+      boundaryPenalized: 0,
+      rejectedConfidence: 0,
+      accepted: 0,
+      selected: 0
+    });
+    return [];
+  }
 
   const resolution = options.gridResolution || 120;
   const minDensity = options.minDensityThreshold || 1;
@@ -444,6 +468,16 @@ export function detectArchitecturalCandidates(
   const componentsMap = collectComponents(binaryGrid, grid, resolution);
 
   const proposals: CandidateZone[] = [];
+  const diagnostics: DetectorDiagnostics = {
+    components: componentsMap.size,
+    rejectedSize: 0,
+    rejectedAspect: 0,
+    rejectedClosure: 0,
+    boundaryPenalized: 0,
+    rejectedConfidence: 0,
+    accepted: 0,
+    selected: 0
+  };
   let candidateIdCounter = 1;
   const timestamp = Date.now();
 
@@ -453,11 +487,16 @@ export function detectArchitecturalCandidates(
     const wPct = ((component.maxX - component.minX + 1) / resolution) * 100;
     const hPct = ((component.maxY - component.minY + 1) / resolution) * 100;
 
-    if (wPct < minSize || hPct < minSize) return;
-    if (wPct > maxSize || hPct > maxSize) return;
+    if (wPct < minSize || hPct < minSize || wPct > maxSize || hPct > maxSize) {
+      diagnostics.rejectedSize += 1;
+      return;
+    }
 
     const aspect = wPct / Math.max(hPct, 0.001);
-    if (aspect > 6.0 || aspect < 0.15) return;
+    if (aspect > 6.0 || aspect < 0.15) {
+      diagnostics.rejectedAspect += 1;
+      return;
+    }
 
     let score = 50;
     const totalStructural = component.horizontalStrength + component.verticalStrength;
@@ -477,7 +516,10 @@ export function detectArchitecturalCandidates(
     const frameCoverage = getFrameCoverage(component.points, xPct, yPct, wPct, hPct);
     // Detector candidates should be mostly closed architectural outlines.
     // Keep three-sided doorway/arch recovery while rejecting L/corner fragments.
-    if (frameCoverage.sidesPresent < 3) return;
+    if (frameCoverage.sidesPresent < 3) {
+      diagnostics.rejectedClosure += 1;
+      return;
+    }
     score += frameCoverage.scoreBoost;
     if (
       xPct <= detectorBounds.x + detectorBounds.width * 0.018 ||
@@ -485,11 +527,16 @@ export function detectArchitecturalCandidates(
       xPct + wPct >= detectorBounds.x + detectorBounds.width * 0.982 ||
       yPct + hPct >= detectorBounds.y + detectorBounds.height * 0.982
     ) {
+      diagnostics.boundaryPenalized += 1;
       score -= 25;
     }
 
     score = Math.min(100, Math.max(0, score));
-    if (score < 45) return;
+    if (score < 45) {
+      diagnostics.rejectedConfidence += 1;
+      return;
+    }
+    diagnostics.accepted += 1;
 
     let shapeLabel = "Obstacle";
     const outlinePoints = buildOutlinePoints(component.points);
@@ -539,5 +586,7 @@ export function detectArchitecturalCandidates(
     }
   }
 
+  diagnostics.selected = selected.length;
+  options.onDiagnostics?.({ ...diagnostics });
   return selected.sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y));
 }
