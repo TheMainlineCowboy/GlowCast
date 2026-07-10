@@ -21,6 +21,7 @@ execFileSync(
   [
     "node_modules/typescript/bin/tsc",
     detectorPath,
+    "--ignoreConfig",
     "--outDir",
     tempDir,
     "--module",
