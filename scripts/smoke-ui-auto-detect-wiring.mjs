@@ -20,13 +20,19 @@ requireText("runner import insertion", patch, "runCandidateDetection");
 requireText("auto detect function", patch, "async function runLocalAutoMaskDetection()");
 requireText("auto detect button", patch, "Auto Detect Masks");
 requireText("edge scan before detection", patch, "scanImageEdges(imageUrl)");
-requireText("candidate runner call", patch, "runCandidateDetection(activeEdgePoints, bounds, polygon)");
+requireText("candidate runner diagnostics call", patch, "runCandidateDetection(activeEdgePoints, bounds, polygon, (diagnostics)");
 requireText("auto mask label replacement", patch, "Auto architectural mask");
 requireText("debug counter state", patch, "const [detectionDebug, setDetectionDebug]");
 requireText("edge count debug value", patch, "edgePoints: activeEdgePoints.length");
 requireText("mask count debug value", patch, "candidateMasks: detected.length");
 requireText("surface scope debug value", patch, "polygonScoped");
 requireText("visible debug helper", patch, "Debug: {detectionDebug.edgePoints.toLocaleString()} edges");
+requireText("detector diagnostics type", patch, "DetectorDiagnostics");
+requireText("closure rejection debug value", patch, "rejectedClosure");
+requireText("size rejection debug value", patch, "rejectedSize");
+requireText("aspect rejection debug value", patch, "rejectedAspect");
+requireText("confidence rejection debug value", patch, "rejectedConfidence");
+requireText("boundary penalty debug value", patch, "boundaryPenalized");
 
 if (app.includes("Auto Detect Masks") && !app.includes("runCandidateDetection")) {
   console.error("UI auto-detect wiring smoke failed: App has button text without runner import/call.");
