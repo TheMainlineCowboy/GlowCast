@@ -68,10 +68,10 @@ jobs:
         run: npx vite build
 
       - name: Upload synthetic detector diagnostics
-        if: failure() && hashFiles('synthetic-frame-diagnostic.json') != ''
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: synthetic-frame-diagnostic
           path: synthetic-frame-diagnostic.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 3
