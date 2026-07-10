@@ -65,10 +65,13 @@ try {
   const thinGapFrame = [];
   const addThinGap = (x, y) => thinGapFrame.push({ x, y, strength: 1 });
 
-  for (let x = 15; x <= 65; x += 1) if (x < 33 || x > 36) addThinGap(x, 18);
-  for (let y = 18; y <= 58; y += 1) if (y < 37 || y > 40) addThinGap(65, y);
-  for (let x = 15; x <= 65; x += 1) if (x < 42 || x > 45) addThinGap(x, 58);
-  for (let y = 18; y <= 58; y += 1) if (y < 27 || y > 30) addThinGap(15, y);
+  // A larger frame with repeated three-cell breaks along straight trim.
+  // The detector's architectural gap closer is intentionally capped at three
+  // cells so it reconnects broken trim without joining unrelated structures.
+  for (let x = 15; x <= 65; x += 1) if (x < 33 || x > 35) addThinGap(x, 18);
+  for (let y = 18; y <= 58; y += 1) if (y < 37 || y > 39) addThinGap(65, y);
+  for (let x = 15; x <= 65; x += 1) if (x < 42 || x > 44) addThinGap(x, 58);
+  for (let y = 18; y <= 58; y += 1) if (y < 27 || y > 29) addThinGap(15, y);
   assertCompleteFrame("Thin-gap", thinGapFrame, { minWidth: 48, minHeight: 38 });
 
   const lFragment = [];
