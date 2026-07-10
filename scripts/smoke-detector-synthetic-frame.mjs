@@ -20,12 +20,13 @@ await fs.writeFile(tempPath, transpiled);
 try {
   const { detectArchitecturalCandidates } = await import(pathToFileURL(tempPath).href);
 
-  function getCandidates(edgePoints) {
+  function getCandidates(edgePoints, onDiagnostics) {
     return detectArchitecturalCandidates(edgePoints, {
       gridResolution: 100,
       minDensityThreshold: 1,
       minSizePercent: 5,
-      maxSizePercent: 50
+      maxSizePercent: 50,
+      onDiagnostics
     });
   }
 
@@ -76,13 +77,21 @@ try {
   const lFragment = [];
   for (let x = 20; x <= 50; x += 1) lFragment.push({ x, y: 20, strength: 1 });
   for (let y = 20; y <= 50; y += 1) lFragment.push({ x: 20, y, strength: 1 });
-  const lFragmentCandidates = getCandidates(lFragment);
+  let lFragmentDiagnostics = null;
+  const lFragmentCandidates = getCandidates(lFragment, (diagnostics) => {
+    lFragmentDiagnostics = diagnostics;
+  });
   if (lFragmentCandidates.length > 0) {
     console.error("Two-sided L-fragment smoke test failed. Open corner fragment became an architectural candidate.");
     console.error(JSON.stringify(lFragmentCandidates, null, 2));
     process.exit(1);
   }
-  console.log("Two-sided L-fragment smoke test passed: open corner fragment rejected.");
+  if (!lFragmentDiagnostics || lFragmentDiagnostics.rejectedClosure < 1 || lFragmentDiagnostics.selected !== 0) {
+    console.error("Detector diagnostics smoke test failed. Closure rejection was not counted.");
+    console.error(JSON.stringify(lFragmentDiagnostics, null, 2));
+    process.exit(1);
+  }
+  console.log("Two-sided L-fragment smoke test passed: open corner fragment rejected and counted.");
 } finally {
   await fs.rm(tempPath, { force: true });
 }
