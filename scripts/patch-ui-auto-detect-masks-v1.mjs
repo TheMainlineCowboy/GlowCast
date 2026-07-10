@@ -45,7 +45,7 @@ function insertDebugHelper(source, insertion) {
 if (!s.includes('runCandidateDetection')) {
   s = s.replace(
     'import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";',
-    'import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";\nimport { runCandidateDetection } from "./core/runCandidateDetection";'
+    'import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";\nimport { runCandidateDetection } from "./core/runCandidateDetection";\nimport type { DetectorDiagnostics } from "./core/architecturalDetector";'
   );
   changed = true;
 }
@@ -55,7 +55,7 @@ if (!s.includes('const [detectionDebug, setDetectionDebug]')) {
   if (!s.includes(anchor)) throw new Error('Could not find edgePoints state anchor.');
   s = s.replace(
     anchor,
-    anchor + '\n  const [detectionDebug, setDetectionDebug] = useState<{ edgePoints: number; candidateMasks: number; polygonScoped: boolean; source: string } | null>(null);'
+    anchor + '\n  const [detectionDebug, setDetectionDebug] = useState<{ edgePoints: number; candidateMasks: number; polygonScoped: boolean; source: string; detectorDiagnostics: DetectorDiagnostics | null } | null>(null);'
   );
   changed = true;
 }
@@ -72,7 +72,7 @@ if (!s.includes('source: "edge-scan-only"')) {
   if (!s.includes(anchor)) throw new Error('Could not find edge scanner state anchor.');
   s = s.replace(
     anchor,
-    anchor + '\n      setDetectionDebug({ edgePoints: result.edgePoints.length, candidateMasks: 0, polygonScoped: surfacePolygonClosed && surfacePolygonPoints.length >= 3, source: "edge-scan-only" });'
+    anchor + '\n      setDetectionDebug({ edgePoints: result.edgePoints.length, candidateMasks: 0, polygonScoped: surfacePolygonClosed && surfacePolygonPoints.length >= 3, source: "edge-scan-only", detectorDiagnostics: null });'
   );
   changed = true;
 }
@@ -107,7 +107,8 @@ const functionBlock = [
   '        ? flattenedSurface()',
   '        : projectionArea ?? flattenedSurface();',
   '      const polygon = polygonScoped ? surfacePolygonPoints : null;',
-  '      const detected = runCandidateDetection(activeEdgePoints, bounds, polygon).map((candidate, index) => ({',
+  '      let detectorDiagnostics: DetectorDiagnostics | null = null;',
+  '      const detected = runCandidateDetection(activeEdgePoints, bounds, polygon, (diagnostics) => { detectorDiagnostics = diagnostics; }).map((candidate, index) => ({',
   '        ...candidate,',
   '        id: Date.now() + index,',
   '        included: true,',
@@ -119,7 +120,8 @@ const functionBlock = [
   '        edgePoints: activeEdgePoints.length,',
   '        candidateMasks: detected.length,',
   '        polygonScoped,',
-  '        source: detectionSource',
+  '        source: detectionSource,',
+  '        detectorDiagnostics',
   '      });',
   '',
   '      setZones((current) => [',
@@ -170,7 +172,7 @@ if (!s.includes('Auto Detect Masks')) {
   changed = true;
 }
 
-const debugBlock = '\n              {detectionDebug && (\n                <p className="helperText">\n                  Debug: {detectionDebug.edgePoints.toLocaleString()} edges · {detectionDebug.candidateMasks} masks · {detectionDebug.polygonScoped ? "surface polygon scoped" : "full surface bounds"} · {detectionDebug.source}\n                </p>\n              )}';
+const debugBlock = '\n              {detectionDebug && (\n                <p className="helperText">\n                  Debug: {detectionDebug.edgePoints.toLocaleString()} edges · {detectionDebug.candidateMasks} masks · {detectionDebug.polygonScoped ? "surface polygon scoped" : "full surface bounds"} · {detectionDebug.source}{detectionDebug.detectorDiagnostics ? ` · components ${detectionDebug.detectorDiagnostics.components} · rejected: closure ${detectionDebug.detectorDiagnostics.rejectedClosure}, size ${detectionDebug.detectorDiagnostics.rejectedSize}, aspect ${detectionDebug.detectorDiagnostics.rejectedAspect}, confidence ${detectionDebug.detectorDiagnostics.rejectedConfidence} · boundary penalties ${detectionDebug.detectorDiagnostics.boundaryPenalized}` : ""}\n                </p>\n              )}';
 
 if (!s.includes('Debug: {detectionDebug.edgePoints.toLocaleString()} edges')) {
   const next = insertDebugHelper(s, debugBlock);
