@@ -1,5 +1,5 @@
 import type { EdgePoint } from "../edgeDetect";
-import type { Bounds, CandidateZone, Point } from "./architecturalDetector";
+import type { Bounds, CandidateZone, DetectorDiagnostics, Point } from "./architecturalDetector";
 import { buildMaskCandidatesFromEdges, type SimpleBox } from "./maskCandidateAdapter";
 
 function pointInPolygon(point: Point, polygon: Point[]): boolean {
@@ -110,7 +110,12 @@ function candidateFromMask(mask: { id: string; box: SimpleBox; points: Point[] }
   };
 }
 
-export function runCandidateDetection(edgePoints: EdgePoint[], bounds: Bounds, polygon?: Point[] | null): CandidateZone[] {
+export function runCandidateDetection(
+  edgePoints: EdgePoint[],
+  bounds: Bounds,
+  polygon?: Point[] | null,
+  onDiagnostics?: (diagnostics: DetectorDiagnostics) => void
+): CandidateZone[] {
   const scopedPoints = scopedEdgePoints(edgePoints, polygon);
-  return buildMaskCandidatesFromEdges(scopedPoints, bounds).map(candidateFromMask);
+  return buildMaskCandidatesFromEdges(scopedPoints, bounds, onDiagnostics).map(candidateFromMask);
 }
