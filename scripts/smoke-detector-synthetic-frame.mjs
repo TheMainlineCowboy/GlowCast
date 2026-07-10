@@ -46,7 +46,7 @@ try {
 
     if (!completeCandidate) {
       console.error(`${name} synthetic frame smoke test failed. Expected one complete architectural frame candidate.`);
-      console.error(JSON.stringify(candidates, null, 2));
+      console.error(JSON.stringify(candidates));
       process.exit(1);
     }
 
@@ -80,12 +80,12 @@ try {
   });
   if (lFragmentCandidates.length > 0) {
     console.error("Two-sided L-fragment smoke test failed. Open corner fragment became an architectural candidate.");
-    console.error(JSON.stringify(lFragmentCandidates, null, 2));
+    console.error(JSON.stringify(lFragmentCandidates));
     process.exit(1);
   }
   if (!lFragmentDiagnostics || lFragmentDiagnostics.rejectedClosure < 1 || lFragmentDiagnostics.selected !== 0) {
     console.error("Detector diagnostics smoke test failed. Closure rejection was not counted.");
-    console.error(JSON.stringify(lFragmentDiagnostics, null, 2));
+    console.error(JSON.stringify(lFragmentDiagnostics));
     process.exit(1);
   }
   console.log("Two-sided L-fragment smoke test passed: open corner fragment rejected and counted.");
