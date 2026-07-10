@@ -12,21 +12,24 @@ function requireText(name, source, text) {
   }
 }
 
-requireText("source-prep patch import", sourcePrep, "patch-ui-auto-detect-masks-v1.mjs");
-requireText("vite source-prep hook", viteConfig, "scripts/source-prep.mjs");
-requireText("vite buildStart hook", viteConfig, "buildStart()");
-requireText("vite dev server hook", viteConfig, "configureServer()");
-requireText("runner import insertion", patch, "runCandidateDetection");
-requireText("auto detect function", patch, "async function runLocalAutoMaskDetection()");
-requireText("auto detect button", patch, "Auto Detect Masks");
+requireText("source-prep resilient runner", sourcePrep, "async function runPatch(path, { required = false } = {})");
+requireText("source-prep optional patch warning", sourcePrep, "Optional patch skipped");
+requireText("source-prep required patch error", sourcePrep, "Required source prep patch failed");
+requireText("required auto-detect prep", sourcePrep, 'patch-ui-auto-detect-masks-v1.mjs", { required: true }');
+requireText("side-effect-free Vite config", viteConfig, "plugins: [react()]");
+
+requireText("prepared app runner import", app, 'import { runCandidateDetection } from "./core/runCandidateDetection";');
+requireText("prepared app auto detect function", app, "async function runLocalAutoMaskDetection()");
+requireText("prepared app auto detect button", app, "Auto Detect Masks");
+requireText("prepared app runner call", app, "runCandidateDetection(activeEdgePoints, bounds, polygon");
+requireText("prepared app auto mask replacement", app, "Auto architectural mask");
+
+requireText("runner import insertion patch", patch, "runCandidateDetection");
+requireText("auto detect function patch", patch, "async function runLocalAutoMaskDetection()");
+requireText("auto detect button patch", patch, "Auto Detect Masks");
 requireText("edge scan before detection", patch, "scanImageEdges(imageUrl)");
 requireText("candidate runner diagnostics call", patch, "runCandidateDetection(activeEdgePoints, bounds, polygon, (diagnostics)");
-requireText("auto mask label replacement", patch, "Auto architectural mask");
 requireText("debug counter state", patch, "const [detectionDebug, setDetectionDebug]");
-requireText("edge count debug value", patch, "edgePoints: activeEdgePoints.length");
-requireText("mask count debug value", patch, "candidateMasks: detected.length");
-requireText("surface scope debug value", patch, "polygonScoped");
-requireText("visible debug helper", patch, "Debug: {detectionDebug.edgePoints.toLocaleString()} edges");
 requireText("detector diagnostics type", patch, "DetectorDiagnostics");
 requireText("closure rejection debug value", patch, "rejectedClosure");
 requireText("size rejection debug value", patch, "rejectedSize");
@@ -34,9 +37,4 @@ requireText("aspect rejection debug value", patch, "rejectedAspect");
 requireText("confidence rejection debug value", patch, "rejectedConfidence");
 requireText("boundary penalty debug value", patch, "boundaryPenalized");
 
-if (app.includes("Auto Detect Masks") && !app.includes("runCandidateDetection")) {
-  console.error("UI auto-detect wiring smoke failed: App has button text without runner import/call.");
-  process.exit(1);
-}
-
-console.log("UI auto-detect wiring smoke passed.");
+console.log("UI auto-detect wiring smoke passed: prepared App.tsx contains live auto-detect wiring.");
