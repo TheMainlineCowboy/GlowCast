@@ -64,7 +64,7 @@ try {
       await fs.writeFile("synthetic-frame-diagnostic.json", `${JSON.stringify(failure, null, 2)}\n`);
       console.error(`${name} synthetic frame smoke test failed. Diagnostic artifact written.`);
       console.error(JSON.stringify(failure));
-      process.exit(1);
+      throw new Error(`${name} synthetic frame smoke test failed`);
     }
 
     console.log(`${name} synthetic frame smoke test passed:`, completeCandidate.label);
