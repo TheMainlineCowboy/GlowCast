@@ -5,7 +5,6 @@ await import("./patch-ui-regressions.mjs");
 await import("./patch-start-surface-flow.mjs");
 await import("./patch-detector-diagonal-connectivity-v1.mjs");
 await import("./patch-detector-thin-gap-closing-v1.mjs");
-await import("./patch-detector-three-side-candidate-gate-v1.mjs");
 await import("./patch-ui-auto-detect-masks-v1.mjs");
 await import("./patch-fallback-closed-shape-gate-v1.mjs");
 await import("./patch-fallback-three-side-gate-v1.mjs");
