@@ -2,7 +2,9 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import * as ts from "typescript";
+import typescriptImport from "typescript";
+
+const ts = typescriptImport.default ?? typescriptImport;
 
 const detectorPath = "src/core/architecturalDetector.ts";
 const source = await fs.readFile(detectorPath, "utf8");
