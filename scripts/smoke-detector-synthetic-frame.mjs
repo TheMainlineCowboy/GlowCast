@@ -14,7 +14,7 @@ if (!validCases.has(requestedCase)) {
 
 const detectorPath = "src/core/architecturalDetector.ts";
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-detector-"));
-const tempPath = path.join(tempDir, "architecturalDetector.js");
+const tempPath = path.join(tempDir, "core", "architecturalDetector.js");
 
 execFileSync(
   process.execPath,
