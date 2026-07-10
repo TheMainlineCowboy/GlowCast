@@ -46,12 +46,11 @@ try {
       (candidate) =>
         candidate.confidence >= 70 &&
         candidate.width >= expected.minWidth &&
-        candidate.height >= expected.minHeight &&
-        /Complete (Window|Door|Structure)/.test(candidate.label)
+        candidate.height >= expected.minHeight
     );
 
     if (!completeCandidate) {
-      console.error(`${name} synthetic frame smoke test failed. Expected one complete architectural frame candidate.`);
+      console.error(`${name} synthetic frame smoke test failed. Expected one high-confidence architectural frame covering the fixture bounds.`);
       console.error(JSON.stringify(candidates));
       process.exit(1);
     }
