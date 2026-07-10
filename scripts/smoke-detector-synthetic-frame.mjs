@@ -5,7 +5,8 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 
 const require = createRequire(import.meta.url);
-const ts = require("typescript");
+const typescriptModule = require("typescript");
+const ts = typescriptModule.default ?? typescriptModule;
 const requestedCase = process.argv[2] ?? "all";
 const validCases = new Set(["all", "broken-corner", "thin-gap", "l-fragment"]);
 
