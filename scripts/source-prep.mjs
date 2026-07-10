@@ -8,6 +8,7 @@ await import("./patch-detector-thin-gap-closing-v1.mjs");
 await import("./patch-ui-auto-detect-masks-v1.mjs");
 await import("./patch-fallback-closed-shape-gate-v1.mjs");
 await import("./patch-fallback-three-side-gate-v1.mjs");
+await import("./patch-adapter-diagnostics-v1.mjs");
 
 const edgePath = "src/edgeDetect.ts";
 let edge = await fs.readFile(edgePath, "utf8");
