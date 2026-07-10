@@ -34,8 +34,14 @@ jobs:
       - name: Detector connectivity smoke
         run: node scripts/smoke-detector-connectivity.mjs
 
-      - name: Synthetic frame smoke
-        run: node scripts/smoke-detector-synthetic-frame.mjs
+      - name: Synthetic broken-corner frame smoke
+        run: node scripts/smoke-detector-synthetic-frame.mjs broken-corner
+
+      - name: Synthetic thin-gap frame smoke
+        run: node scripts/smoke-detector-synthetic-frame.mjs thin-gap
+
+      - name: Synthetic open-fragment rejection smoke
+        run: node scripts/smoke-detector-synthetic-frame.mjs l-fragment
 
       - name: Mask adapter smoke
         run: node scripts/smoke-mask-adapter.mjs
