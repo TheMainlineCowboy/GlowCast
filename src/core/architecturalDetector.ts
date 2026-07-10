@@ -479,12 +479,6 @@ export function detectArchitecturalCandidates(
     // Keep three-sided doorway/arch recovery while rejecting L/corner fragments.
     if (frameCoverage.sidesPresent < 3) return;
     score += frameCoverage.scoreBoost;
-    if (frameCoverage.sidesPresent <= 1) {
-      score -= 18;
-    } else if (frameCoverage.sidesPresent === 2) {
-      score -= 6;
-    }
-
     if (
       xPct <= detectorBounds.x + detectorBounds.width * 0.018 ||
       yPct <= detectorBounds.y + detectorBounds.height * 0.018 ||
