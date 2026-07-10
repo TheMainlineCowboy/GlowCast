@@ -475,6 +475,9 @@ export function detectArchitecturalCandidates(
     }
 
     const frameCoverage = getFrameCoverage(component.points, xPct, yPct, wPct, hPct);
+    // Detector candidates should be mostly closed architectural outlines.
+    // Keep three-sided doorway/arch recovery while rejecting L/corner fragments.
+    if (frameCoverage.sidesPresent < 3) return;
     score += frameCoverage.scoreBoost;
     if (frameCoverage.sidesPresent <= 1) {
       score -= 18;
