@@ -139,11 +139,13 @@ try {
 
   const groupedEdges = [];
   addFrame(groupedEdges, 42, 24, 62, 52);
-  addFrame(groupedEdges, 34, 25, 38, 51, 190);
-  addFrame(groupedEdges, 66, 25, 70, 51, 190);
+  // Satellites must clear the adapter's deliberate minimum architectural size;
+  // otherwise this fixture tests noise rejection instead of grouping behavior.
+  addFrame(groupedEdges, 32, 25, 40, 51, 190);
+  addFrame(groupedEdges, 64, 25, 72, 51, 190);
   const groupedMasks = buildMaskCandidatesFromEdges(groupedEdges, bounds);
   const groupedMaskCount = groupedMasks.filter((mask) => mask.box.y < 58 && mask.box.y + mask.box.height > 20).length;
-  if (groupedMaskCount > 1 || !hasBoxCovering(groupedMasks, { x: 34, y: 24, width: 36, height: 28, tolerance: 2 })) {
+  if (groupedMaskCount > 1 || !hasBoxCovering(groupedMasks, { x: 32, y: 24, width: 40, height: 28, tolerance: 2 })) {
     throw new Error(`Nearby shutters/trim were not grouped: ${JSON.stringify(groupedMasks)}`);
   }
 
