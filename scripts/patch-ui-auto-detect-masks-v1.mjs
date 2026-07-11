@@ -42,10 +42,13 @@ function insertDebugHelper(source, insertion) {
   return null;
 }
 
-if (!s.includes('runCandidateDetection')) {
+const runnerImport = 'import { runCandidateDetection } from "./core/runCandidateDetection";';
+if (!s.includes(runnerImport)) {
+  const edgeImport = 'import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";';
+  if (!s.includes(edgeImport)) throw new Error('Could not find edge detector import anchor.');
   s = s.replace(
-    'import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";',
-    'import { scanImageEdges, snapPointToEdge, type EdgePoint } from "./edgeDetect";\nimport { runCandidateDetection } from "./core/runCandidateDetection";\nimport type { DetectorDiagnostics } from "./core/architecturalDetector";'
+    edgeImport,
+    edgeImport + '\n' + runnerImport + '\nimport type { DetectorDiagnostics } from "./core/architecturalDetector";'
   );
   changed = true;
 }

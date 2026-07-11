@@ -9,9 +9,11 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "prep": "node scripts/source-prep.mjs",
-    "smoke:detector": "npm run prep && node scripts/smoke-detector-connectivity.mjs && node scripts/smoke-detector-synthetic-frame.mjs && node scripts/smoke-mask-adapter.mjs && node scripts/smoke-satellite-merge-behavior.mjs && node scripts/smoke-run-candidate-detection.mjs && node scripts/smoke-ui-auto-detect-wiring.mjs && node scripts/smoke-fallback-duplicate-source.mjs && node scripts/smoke-satellite-merge-gate-source.mjs",
-    "smoke:prep": "npm run prep && node scripts/smoke-run-candidate-detection.mjs && node scripts/smoke-ui-auto-detect-wiring.mjs && node scripts/smoke-fallback-duplicate-source.mjs && node scripts/smoke-satellite-merge-gate-source.mjs",
+    "verify:all": "echo '[smoke] detector connectivity' && node scripts/smoke-detector-connectivity.mjs && echo '[smoke] detector synthetic frame' && node scripts/smoke-detector-synthetic-frame.mjs && echo '[smoke] mask adapter' && node scripts/smoke-mask-adapter.mjs && echo '[smoke] satellite merge behavior' && node scripts/smoke-satellite-merge-behavior.mjs && echo '[smoke] candidate detection' && node scripts/smoke-run-candidate-detection.mjs && echo '[smoke] UI auto-detect wiring' && node scripts/smoke-ui-auto-detect-wiring.mjs && echo '[smoke] fallback duplicate source' && node scripts/smoke-fallback-duplicate-source.mjs && echo '[smoke] satellite merge gate source' && node scripts/smoke-satellite-merge-gate-source.mjs",
     "verify:prepared": "node scripts/smoke-run-candidate-detection.mjs && node scripts/smoke-ui-auto-detect-wiring.mjs",
+    "smoke:detector": "npm run prep && npm run verify:all",
+    "smoke:prep": "npm run prep && npm run verify:prepared && node scripts/smoke-fallback-duplicate-source.mjs && node scripts/smoke-satellite-merge-gate-source.mjs",
+    "ci": "npm run prep && npm run verify:all && tsc && vite build",
     "build": "npm run prep && npm run verify:prepared && tsc && vite build",
     "preview": "vite preview --host 0.0.0.0"
   },

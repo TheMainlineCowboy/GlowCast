@@ -7,10 +7,14 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   verify:
-    name: Smoke and build
+    name: Clean install, smoke, typecheck, build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -20,13 +24,63 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --progress=false
 
-      - name: Run detector smoke tests
-        run: npm run smoke:detector
+      - name: Prepare source
+        run: npm run prep
 
-      - name: Build app
-        run: npm run build
+      - name: Detector connectivity smoke
+        run: node scripts/smoke-detector-connectivity.mjs
+
+      - name: Synthetic broken-corner frame smoke
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/smoke-detector-synthetic-frame.mjs broken-corner 2>&1 | tee synthetic-broken-corner.log
+
+      - name: Synthetic thin-gap frame smoke
+        run: node scripts/smoke-detector-synthetic-frame.mjs thin-gap
+
+      - name: Synthetic open-fragment rejection smoke
+        run: node scripts/smoke-detector-synthetic-frame.mjs l-fragment
+
+      - name: Mask adapter smoke
+        run: node scripts/smoke-mask-adapter.mjs
+
+      - name: Satellite merge smoke
+        run: node scripts/smoke-satellite-merge-behavior.mjs
+
+      - name: Candidate detection smoke
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/smoke-run-candidate-detection.mjs 2>&1 | tee candidate-detection.log
+
+      - name: UI wiring smoke
+        run: node scripts/smoke-ui-auto-detect-wiring.mjs
+
+      - name: Fallback duplicate smoke
+        run: node scripts/smoke-fallback-duplicate-source.mjs
+
+      - name: Satellite merge source smoke
+        run: node scripts/smoke-satellite-merge-gate-source.mjs
+
+      - name: TypeScript check
+        run: npx tsc
+
+      - name: Vite production build
+        run: npx vite build
+
+      - name: Upload detector diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: detector-diagnostic
+          path: |
+            synthetic-frame-diagnostic.json
+            synthetic-broken-corner.log
+            candidate-detection.log
+          if-no-files-found: error
+          retention-days: 3

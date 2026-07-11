@@ -1,29 +1,63 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import ts from "typescript";
 
 const adapterPath = "src/core/maskCandidateAdapter.ts";
 const detectorPath = "src/core/architecturalDetector.ts";
-let adapterSource = await fs.readFile(adapterPath, "utf8");
-const detectorSource = await fs.readFile(detectorPath, "utf8");
+const edgeDetectPath = "src/edgeDetect.ts";
+const adapterSource = await fs.readFile(adapterPath, "utf8");
 
-adapterSource = adapterSource
-  .replace(/import type \{ EdgePoint \} from "\.\.\/edgeDetect";\n/, "")
-  .replace(/import \{ detectArchitecturalCandidates \} from "\.\/architecturalDetector";\n/, "")
-  .replace("function groupNearbySatellites", "export function groupNearbySatellites");
+const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-satellite-behavior-"));
+const sourceRoot = path.join(tempDir, "src");
+const coreDir = path.join(sourceRoot, "core");
+const outDir = path.join(tempDir, "out");
+const sourcePath = path.join(coreDir, "maskCandidateAdapter.ts");
+const tempPath = path.join(outDir, "core", "maskCandidateAdapter.js");
 
-const composedSource = `${detectorSource}\n${adapterSource}\n`;
-const transpiled = ts.transpileModule(composedSource, {
-  compilerOptions: {
-    module: ts.ModuleKind.ES2020,
-    target: ts.ScriptTarget.ES2020
-  }
-}).outputText;
+await fs.mkdir(coreDir, { recursive: true });
+await fs.writeFile(path.join(tempDir, "package.json"), '{"type":"module"}\n');
+await fs.writeFile(
+  sourcePath,
+  adapterSource.replace("function groupNearbySatellites", "export function groupNearbySatellites")
+);
+await fs.copyFile(detectorPath, path.join(coreDir, "architecturalDetector.ts"));
+await fs.copyFile(edgeDetectPath, path.join(sourceRoot, "edgeDetect.ts"));
 
-const tempPath = path.join(os.tmpdir(), `glowcast-satellite-behavior-${Date.now()}.mjs`);
-await fs.writeFile(tempPath, transpiled);
+execFileSync(
+  process.execPath,
+  [
+    "node_modules/typescript/bin/tsc",
+    sourcePath,
+    "--ignoreConfig",
+    "--rootDir",
+    sourceRoot,
+    "--outDir",
+    outDir,
+    "--module",
+    "ES2020",
+    "--target",
+    "ES2020",
+    "--moduleResolution",
+    "Bundler",
+    "--skipLibCheck"
+  ],
+  { stdio: "inherit" }
+);
+
+const emittedAdapterPath = path.join(outDir, "core", "maskCandidateAdapter.js");
+const emittedDetectorPath = path.join(outDir, "core", "architecturalDetector.js");
+const emittedAdapter = await fs.readFile(emittedAdapterPath, "utf8");
+const emittedDetector = await fs.readFile(emittedDetectorPath, "utf8");
+await fs.writeFile(
+  emittedAdapterPath,
+  emittedAdapter.replace(/from\s+["']\.\/architecturalDetector["']/g, 'from "./architecturalDetector.js"')
+);
+await fs.writeFile(
+  emittedDetectorPath,
+  emittedDetector.replace(/from\s+["']\.\.\/edgeDetect["']/g, 'from "../edgeDetect.js"')
+);
 
 function candidate(id, box) {
   return {
@@ -83,5 +117,5 @@ try {
 
   console.log("Satellite behavior smoke passed: useful trim merges, thin inflated fragments are rejected.");
 } finally {
-  await fs.rm(tempPath, { force: true });
+  await fs.rm(tempDir, { recursive: true, force: true });
 }
