@@ -67,6 +67,9 @@ jobs:
       - name: Satellite merge source smoke
         run: node scripts/smoke-satellite-merge-gate-source.mjs
 
+      - name: Outer-frame preference source smoke
+        run: node scripts/smoke-outer-frame-preference-source.mjs
+
       - name: TypeScript check
         run: npx tsc
 
