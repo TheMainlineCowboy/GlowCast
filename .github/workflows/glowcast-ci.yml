@@ -79,6 +79,9 @@ jobs:
       - name: Bounded satellite span source smoke
         run: node scripts/smoke-bounded-satellite-span-source.mjs
 
+      - name: Bounded satellite growth source smoke
+        run: node scripts/smoke-bounded-satellite-growth-source.mjs
+
       - name: TypeScript check
         run: npx tsc
 
