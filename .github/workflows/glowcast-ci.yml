@@ -73,6 +73,9 @@ jobs:
       - name: Nested-detail selection source smoke
         run: node scripts/smoke-nested-detail-selection-source.mjs
 
+      - name: Aligned satellite grouping source smoke
+        run: node scripts/smoke-aligned-satellite-grouping-source.mjs
+
       - name: TypeScript check
         run: npx tsc
 
