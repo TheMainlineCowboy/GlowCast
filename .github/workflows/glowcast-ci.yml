@@ -76,6 +76,9 @@ jobs:
       - name: Aligned satellite grouping source smoke
         run: node scripts/smoke-aligned-satellite-grouping-source.mjs
 
+      - name: Bounded satellite span source smoke
+        run: node scripts/smoke-bounded-satellite-span-source.mjs
+
       - name: TypeScript check
         run: npx tsc
 
