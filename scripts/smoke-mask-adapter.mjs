@@ -51,6 +51,22 @@ execFileSync(
   { stdio: "inherit" }
 );
 
+// TypeScript preserves extensionless source imports in ES module output. The
+// temporary smoke modules run directly in Node, so make those emitted imports
+// explicit without changing production source or bundler behavior.
+const emittedAdapterPath = path.join(outDir, "core", "maskCandidateAdapter.js");
+const emittedDetectorPath = path.join(outDir, "core", "architecturalDetector.js");
+const emittedAdapter = await fs.readFile(emittedAdapterPath, "utf8");
+const emittedDetector = await fs.readFile(emittedDetectorPath, "utf8");
+await fs.writeFile(
+  emittedAdapterPath,
+  emittedAdapter.replace(/from\s+["']\.\/architecturalDetector["']/g, 'from "./architecturalDetector.js"')
+);
+await fs.writeFile(
+  emittedDetectorPath,
+  emittedDetector.replace(/from\s+["']\.\.\/edgeDetect["']/g, 'from "../edgeDetect.js"')
+);
+
 function addFrame(edgePoints, x1, y1, x2, y2, strength = 180) {
   for (let x = x1; x <= x2; x += 1) {
     edgePoints.push({ x, y: y1, strength });
