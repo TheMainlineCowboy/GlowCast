@@ -152,7 +152,7 @@ try {
   const fallbackEdges = [];
   for (let x = 18; x <= 52; x += 1) fallbackEdges.push({ x, y: 62, strength: 190 });
   for (let y = 62; y <= 84; y += 1) fallbackEdges.push({ x: 18, y, strength: 190 });
-  for (let x = 35; x <= 52; x += 1) fallbackEdges.push({ x, y: 84, strength: 185 });
+  for (let x = 18; x <= 52; x += 1) fallbackEdges.push({ x, y: 84, strength: 185 });
   for (let y = 70; y <= 84; y += 1) fallbackEdges.push({ x: 52, y, strength: 185 });
   const fallbackMasks = buildMaskCandidatesFromEdges(fallbackEdges, bounds);
   const fallbackMask = fallbackMasks.find((mask) =>
