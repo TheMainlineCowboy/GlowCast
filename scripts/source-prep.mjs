@@ -17,6 +17,7 @@ await runPatch("./patch-ui-regressions.mjs", { required: true });
 await runPatch("./patch-start-surface-flow.mjs", { required: true });
 await runPatch("./patch-detector-diagonal-connectivity-v1.mjs");
 await runPatch("./patch-detector-thin-gap-closing-v1.mjs");
+await runPatch("./patch-detector-closed-frame-ranking-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-detect-imports-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-detect-masks-v1.mjs", { required: true });
 await runPatch("./patch-fallback-closed-shape-gate-v1.mjs");
