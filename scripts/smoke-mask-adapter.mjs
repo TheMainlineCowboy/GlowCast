@@ -6,28 +6,29 @@ import { pathToFileURL } from "node:url";
 
 const adapterPath = "src/core/maskCandidateAdapter.ts";
 const detectorPath = "src/core/architecturalDetector.ts";
-let adapterSource = await fs.readFile(adapterPath, "utf8");
-let detectorSource = await fs.readFile(detectorPath, "utf8");
+const edgeDetectPath = "src/edgeDetect.ts";
+const adapterSource = await fs.readFile(adapterPath, "utf8");
 
 if (adapterSource.includes("points: boxPoints(mergedBox)")) {
   console.error("Mask adapter smoke test failed. Grouped satellite masks still discard custom outline points.");
   process.exit(1);
 }
 
-// The adapter imports the detector through TypeScript path resolution in the app.
-// This smoke test composes both files into one temporary module so Node can execute
-// the same exported adapter function without a bundler.
-detectorSource = detectorSource.replace(/import type \{ EdgePoint \} from "\.\.\/edgeDetect";\n/, "");
-adapterSource = adapterSource
-  .replace(/import type \{ EdgePoint \} from "\.\.\/edgeDetect";\n/, "")
-  .replace(/import \{ detectArchitecturalCandidates \} from "\.\/architecturalDetector";\n/, "")
-  .replace("function addFallbackCandidates", "export function addFallbackCandidates");
-
-const composedSource = `${detectorSource}\n${adapterSource}\n`;
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-mask-adapter-"));
-const sourcePath = path.join(tempDir, "mask-adapter.ts");
-const tempPath = path.join(tempDir, "mask-adapter.js");
-await fs.writeFile(sourcePath, composedSource);
+const sourceRoot = path.join(tempDir, "src");
+const coreDir = path.join(sourceRoot, "core");
+const outDir = path.join(tempDir, "out");
+const sourcePath = path.join(coreDir, "maskCandidateAdapter.ts");
+const tempPath = path.join(outDir, "core", "maskCandidateAdapter.js");
+
+await fs.mkdir(coreDir, { recursive: true });
+await fs.writeFile(path.join(tempDir, "package.json"), '{"type":"module"}\n');
+await fs.writeFile(
+  sourcePath,
+  adapterSource.replace("function addFallbackCandidates", "export function addFallbackCandidates")
+);
+await fs.copyFile(detectorPath, path.join(coreDir, "architecturalDetector.ts"));
+await fs.copyFile(edgeDetectPath, path.join(sourceRoot, "edgeDetect.ts"));
 
 execFileSync(
   process.execPath,
@@ -35,8 +36,10 @@ execFileSync(
     "node_modules/typescript/bin/tsc",
     sourcePath,
     "--ignoreConfig",
+    "--rootDir",
+    sourceRoot,
     "--outDir",
-    tempDir,
+    outDir,
     "--module",
     "ES2020",
     "--target",
@@ -71,61 +74,36 @@ function hasBoxCovering(masks, expected) {
 
 try {
   const { buildMaskCandidatesFromEdges, addFallbackCandidates } = await import(pathToFileURL(tempPath).href);
-
   const bounds = { x: 0, y: 0, width: 100, height: 100 };
-  const edgePoints = [];
-  const add = (x, y, strength = 180) => edgePoints.push({ x, y, strength });
 
   const replacementEdges = [];
   addFrame(replacementEdges, 10, 10, 42, 42, 210);
   const replacedFallbacks = addFallbackCandidates(
-    [
-      {
-        id: "seed_fragment",
-        box: { x: 17, y: 17, width: 14, height: 14 },
-        points: [
-          { x: 17, y: 17 },
-          { x: 31, y: 17 },
-          { x: 31, y: 31 },
-          { x: 17, y: 31 }
-        ]
-      }
-    ],
+    [{
+      id: "seed_fragment",
+      box: { x: 17, y: 17, width: 14, height: 14 },
+      points: [{ x: 17, y: 17 }, { x: 31, y: 17 }, { x: 31, y: 31 }, { x: 17, y: 31 }]
+    }],
     replacementEdges,
     bounds
   );
   if (replacedFallbacks.length !== 1 || replacedFallbacks[0].id !== "seed_fragment") {
-    console.error("Mask adapter smoke test failed. Larger fallback created a duplicate instead of replacing the smaller fragment.");
-    console.error(JSON.stringify(replacedFallbacks, null, 2));
-    process.exit(1);
+    throw new Error(`Larger fallback created a duplicate: ${JSON.stringify(replacedFallbacks)}`);
   }
   if (!hasBoxCovering(replacedFallbacks, { x: 10, y: 10, width: 32, height: 32, tolerance: 2 })) {
-    console.error("Mask adapter smoke test failed. Larger fallback did not replace the smaller overlapping fragment bounds.");
-    console.error(JSON.stringify(replacedFallbacks, null, 2));
-    process.exit(1);
+    throw new Error(`Larger fallback did not replace fragment bounds: ${JSON.stringify(replacedFallbacks)}`);
   }
 
-  // Two plausible architectural frames.
+  const edgePoints = [];
   addFrame(edgePoints, 18, 20, 42, 42);
   addFrame(edgePoints, 58, 22, 82, 48);
-
-  // A tiny trim/noise fragment that should not become a user-facing mask.
-  for (let x = 7; x <= 9; x += 1) add(x, 72, 220);
-  for (let y = 72; y <= 74; y += 1) add(7, y, 220);
+  for (let x = 7; x <= 9; x += 1) edgePoints.push({ x, y: 72, strength: 220 });
+  for (let y = 72; y <= 74; y += 1) edgePoints.push({ x: 7, y, strength: 220 });
 
   const masks = buildMaskCandidatesFromEdges(edgePoints, bounds);
-
-  if (masks.length < 2) {
-    console.error("Mask adapter smoke test failed. Expected at least two architectural masks.");
-    console.error(JSON.stringify(masks, null, 2));
-    process.exit(1);
-  }
-
-  const tinyMask = masks.find((mask) => mask.box.width < 6 || mask.box.height < 6);
-  if (tinyMask) {
-    console.error("Mask adapter smoke test failed. Tiny fragment survived adapter filtering.");
-    console.error(JSON.stringify(masks, null, 2));
-    process.exit(1);
+  if (masks.length < 2) throw new Error(`Expected at least two architectural masks: ${JSON.stringify(masks)}`);
+  if (masks.some((mask) => mask.box.width < 6 || mask.box.height < 6)) {
+    throw new Error(`Tiny fragment survived adapter filtering: ${JSON.stringify(masks)}`);
   }
 
   const duplicate = masks.some((mask, index) => {
@@ -141,64 +119,37 @@ try {
       return overlap / Math.max(Math.min(area, otherArea), 1) > 0.74;
     });
   });
-
-  if (duplicate) {
-    console.error("Mask adapter smoke test failed. Duplicate overlapping masks survived adapter dedupe.");
-    console.error(JSON.stringify(masks, null, 2));
-    process.exit(1);
-  }
+  if (duplicate) throw new Error(`Duplicate overlapping masks survived dedupe: ${JSON.stringify(masks)}`);
 
   const groupedEdges = [];
-  // Central window frame plus two close side shutters/trim strips. These should
-  // become one user-facing mask instead of three separate projection holes.
   addFrame(groupedEdges, 42, 24, 62, 52);
   addFrame(groupedEdges, 34, 25, 38, 51, 190);
   addFrame(groupedEdges, 66, 25, 70, 51, 190);
-
   const groupedMasks = buildMaskCandidatesFromEdges(groupedEdges, bounds);
   const groupedMaskCount = groupedMasks.filter((mask) => mask.box.y < 58 && mask.box.y + mask.box.height > 20).length;
-
   if (groupedMaskCount > 1 || !hasBoxCovering(groupedMasks, { x: 34, y: 24, width: 36, height: 28, tolerance: 2 })) {
-    console.error("Mask adapter smoke test failed. Nearby shutters/trim were not grouped into the parent mask.");
-    console.error(JSON.stringify(groupedMasks, null, 2));
-    process.exit(1);
+    throw new Error(`Nearby shutters/trim were not grouped: ${JSON.stringify(groupedMasks)}`);
   }
 
   const fallbackEdges = [];
-  // Deliberately incomplete edges: only an L-shape and partial lower/right traces.
-  // The main closed-frame detector may miss this, but the adapter fallback should
-  // still produce one conservative mask with persisted outline points.
   for (let x = 18; x <= 52; x += 1) fallbackEdges.push({ x, y: 62, strength: 190 });
   for (let y = 62; y <= 84; y += 1) fallbackEdges.push({ x: 18, y, strength: 190 });
   for (let x = 35; x <= 52; x += 1) fallbackEdges.push({ x, y: 84, strength: 185 });
   for (let y = 70; y <= 84; y += 1) fallbackEdges.push({ x: 52, y, strength: 185 });
-
   const fallbackMasks = buildMaskCandidatesFromEdges(fallbackEdges, bounds);
   const fallbackMask = fallbackMasks.find((mask) =>
-    mask.box.x <= 21 &&
-    mask.box.y <= 65 &&
-    mask.box.x + mask.box.width >= 49 &&
-    mask.box.y + mask.box.height >= 81
+    mask.box.x <= 21 && mask.box.y <= 65 &&
+    mask.box.x + mask.box.width >= 49 && mask.box.y + mask.box.height >= 81
   );
-  if (!fallbackMask) {
-    console.error("Mask adapter smoke test failed. Broken-edge fallback did not produce a conservative mask.");
-    console.error(JSON.stringify(fallbackMasks, null, 2));
-    process.exit(1);
-  }
+  if (!fallbackMask) throw new Error(`Broken-edge fallback produced no conservative mask: ${JSON.stringify(fallbackMasks)}`);
   if (!Array.isArray(fallbackMask.points) || fallbackMask.points.length < 3) {
-    console.error("Mask adapter smoke test failed. Broken-edge fallback lost its outline points.");
-    console.error(JSON.stringify(fallbackMasks, null, 2));
-    process.exit(1);
+    throw new Error(`Broken-edge fallback lost outline points: ${JSON.stringify(fallbackMasks)}`);
   }
 
   const trimOnlyEdges = [];
   for (let x = 20; x <= 72; x += 1) trimOnlyEdges.push({ x, y: 88, strength: 210 });
   const trimOnlyMasks = buildMaskCandidatesFromEdges(trimOnlyEdges, bounds);
-  if (trimOnlyMasks.length > 0) {
-    console.error("Mask adapter smoke test failed. Single straight trim line became a fallback mask.");
-    console.error(JSON.stringify(trimOnlyMasks, null, 2));
-    process.exit(1);
-  }
+  if (trimOnlyMasks.length > 0) throw new Error(`Single trim line became a fallback mask: ${JSON.stringify(trimOnlyMasks)}`);
 
   console.log(
     `Mask adapter smoke test passed: ${masks.length} masks, no tiny fragments or duplicates, satellite grouping, fallback replacement and fallback recovery ok.`
