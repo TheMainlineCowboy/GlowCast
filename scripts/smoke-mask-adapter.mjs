@@ -1,13 +1,13 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import ts from "typescript";
 
 const adapterPath = "src/core/maskCandidateAdapter.ts";
 const detectorPath = "src/core/architecturalDetector.ts";
 let adapterSource = await fs.readFile(adapterPath, "utf8");
-const detectorSource = await fs.readFile(detectorPath, "utf8");
+let detectorSource = await fs.readFile(detectorPath, "utf8");
 
 if (adapterSource.includes("points: boxPoints(mergedBox)")) {
   console.error("Mask adapter smoke test failed. Grouped satellite masks still discard custom outline points.");
@@ -17,21 +17,36 @@ if (adapterSource.includes("points: boxPoints(mergedBox)")) {
 // The adapter imports the detector through TypeScript path resolution in the app.
 // This smoke test composes both files into one temporary module so Node can execute
 // the same exported adapter function without a bundler.
+detectorSource = detectorSource.replace(/import type \{ EdgePoint \} from "\.\.\/edgeDetect";\n/, "");
 adapterSource = adapterSource
   .replace(/import type \{ EdgePoint \} from "\.\.\/edgeDetect";\n/, "")
   .replace(/import \{ detectArchitecturalCandidates \} from "\.\/architecturalDetector";\n/, "")
   .replace("function addFallbackCandidates", "export function addFallbackCandidates");
 
 const composedSource = `${detectorSource}\n${adapterSource}\n`;
-const transpiled = ts.transpileModule(composedSource, {
-  compilerOptions: {
-    module: ts.ModuleKind.ES2020,
-    target: ts.ScriptTarget.ES2020
-  }
-}).outputText;
+const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-mask-adapter-"));
+const sourcePath = path.join(tempDir, "mask-adapter.ts");
+const tempPath = path.join(tempDir, "mask-adapter.js");
+await fs.writeFile(sourcePath, composedSource);
 
-const tempPath = path.join(os.tmpdir(), `glowcast-mask-adapter-${Date.now()}.mjs`);
-await fs.writeFile(tempPath, transpiled);
+execFileSync(
+  process.execPath,
+  [
+    "node_modules/typescript/bin/tsc",
+    sourcePath,
+    "--ignoreConfig",
+    "--outDir",
+    tempDir,
+    "--module",
+    "ES2020",
+    "--target",
+    "ES2020",
+    "--moduleResolution",
+    "Bundler",
+    "--skipLibCheck"
+  ],
+  { stdio: "inherit" }
+);
 
 function addFrame(edgePoints, x1, y1, x2, y2, strength = 180) {
   for (let x = x1; x <= x2; x += 1) {
@@ -189,5 +204,5 @@ try {
     `Mask adapter smoke test passed: ${masks.length} masks, no tiny fragments or duplicates, satellite grouping, fallback replacement and fallback recovery ok.`
   );
 } finally {
-  await fs.rm(tempPath, { force: true });
+  await fs.rm(tempDir, { recursive: true, force: true });
 }
