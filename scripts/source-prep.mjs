@@ -25,6 +25,7 @@ await runPatch("./patch-ui-auto-detect-masks-v1.mjs", { required: true });
 await runPatch("./patch-fallback-closed-shape-gate-v1.mjs");
 await runPatch("./patch-fallback-three-side-gate-v1.mjs");
 await runPatch("./patch-adapter-diagnostics-v1.mjs");
+await runPatch("./patch-adapter-aligned-satellites-v1.mjs", { required: true });
 
 const edgePath = "src/edgeDetect.ts";
 let edge = await fs.readFile(edgePath, "utf8");
