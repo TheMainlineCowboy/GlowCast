@@ -70,6 +70,9 @@ jobs:
       - name: Outer-frame preference source smoke
         run: node scripts/smoke-outer-frame-preference-source.mjs
 
+      - name: Nested-detail selection source smoke
+        run: node scripts/smoke-nested-detail-selection-source.mjs
+
       - name: TypeScript check
         run: npx tsc
 
