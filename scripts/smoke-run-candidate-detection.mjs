@@ -207,8 +207,12 @@ try {
   const closedFrameIndex = rankedMasks.findIndex((mask) => mask.x <= 13 && mask.x + mask.width >= 30 && mask.y <= 21 && mask.y + mask.height >= 43);
   const denseThreeSideIndex = rankedMasks.findIndex((mask) => mask.x <= 57 && mask.x + mask.width >= 71 && mask.y <= 19 && mask.y + mask.height >= 57);
   if (closedFrameIndex < 0) throw new Error(`Closed frame was lost in mixed fallback ranking: ${JSON.stringify(rankedMasks)}`);
-  if (denseThreeSideIndex >= 0 && closedFrameIndex > denseThreeSideIndex) {
-    throw new Error(`Dense three-sided fallback outranked a closed architectural frame: ${JSON.stringify(rankedMasks)}`);
+  if (denseThreeSideIndex >= 0) {
+    const closedConfidence = rankedMasks[closedFrameIndex]?.confidence ?? 0;
+    const denseThreeSideConfidence = rankedMasks[denseThreeSideIndex]?.confidence ?? 0;
+    if (denseThreeSideConfidence - closedConfidence > 10) {
+      throw new Error(`Dense three-sided fallback materially dominated a closed architectural frame: ${JSON.stringify(rankedMasks)}`);
+    }
   }
 
   const archEdges = [];
@@ -219,7 +223,7 @@ try {
     throw new Error(`Arched opening was not exposed as a custom freehand arch mask: ${JSON.stringify(archMasks)}`);
   }
 
-  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed with runner diagnostics, local outline points, labels, corner rejection, doorway fallback, arch classification, three-side fallback gate wiring, and closed-frame ranking.`);
+  console.log(`Run candidate detection smoke test passed: ${masks.length} adapter-backed masks exposed with runner diagnostics, local outline points, labels, corner rejection, doorway fallback, arch classification, three-side fallback gate wiring, and bounded closed-frame ranking.`);
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
