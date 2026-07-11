@@ -128,14 +128,16 @@ try {
 
   const groupedEdges = [];
   addFrame(groupedEdges, 42, 24, 62, 52);
-  addFrame(groupedEdges, 34, 25, 38, 51, 190);
-  addFrame(groupedEdges, 66, 25, 70, 51, 190);
+  // Satellites must clear the adapter's deliberate minimum architectural size;
+  // otherwise this fixture tests noise rejection instead of exported grouping behavior.
+  addFrame(groupedEdges, 32, 25, 40, 51, 190);
+  addFrame(groupedEdges, 64, 25, 72, 51, 190);
 
   let groupedDiagnostics;
   const masks = runCandidateDetection(groupedEdges, bounds, null, (diagnostics) => {
     groupedDiagnostics = diagnostics;
   });
-  const groupedMask = masks.find((mask) => mask.x <= 36 && mask.x + mask.width >= 68 && mask.y <= 26 && mask.y + mask.height >= 50);
+  const groupedMask = masks.find((mask) => mask.x <= 34 && mask.x + mask.width >= 70 && mask.y <= 26 && mask.y + mask.height >= 50);
 
   if (!groupedDiagnostics || groupedDiagnostics.components < 1 || groupedDiagnostics.selected < 1) {
     throw new Error(`Detector diagnostics did not survive the exported runner path: ${JSON.stringify(groupedDiagnostics)}`);
