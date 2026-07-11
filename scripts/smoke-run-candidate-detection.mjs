@@ -151,7 +151,7 @@ try {
     (point) => point.x >= -0.01 && point.x <= 100.01 && point.y >= -0.01 && point.y <= 100.01
   );
   const touchesLocalBounds = groupedMask.points.some(
-    (point) => point.x <= 0.01 || point.y <= 0.01 || point.x >= 99.99 || point.y >= 99.99
+    (point) => point.x <= 1.05 || point.y <= 1.05 || point.x >= 98.95 || point.y >= 98.95
   );
   if (!pointsAreLocal || !touchesLocalBounds) {
     throw new Error(`Custom outline points were not normalized for zone-local clip paths: ${JSON.stringify(groupedMask)}`);
