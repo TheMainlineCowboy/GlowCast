@@ -53,7 +53,10 @@ jobs:
         run: node scripts/smoke-satellite-merge-behavior.mjs
 
       - name: Candidate detection smoke
-        run: node scripts/smoke-run-candidate-detection.mjs
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/smoke-run-candidate-detection.mjs 2>&1 | tee candidate-detection.log
 
       - name: UI wiring smoke
         run: node scripts/smoke-ui-auto-detect-wiring.mjs
@@ -70,13 +73,14 @@ jobs:
       - name: Vite production build
         run: npx vite build
 
-      - name: Upload synthetic detector diagnostics
+      - name: Upload detector diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: synthetic-frame-diagnostic
+          name: detector-diagnostic
           path: |
             synthetic-frame-diagnostic.json
             synthetic-broken-corner.log
+            candidate-detection.log
           if-no-files-found: error
           retention-days: 3
