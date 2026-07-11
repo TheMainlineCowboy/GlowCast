@@ -200,7 +200,8 @@ try {
   }
 
   const rankingEdges = [];
-  addFrame(rankingEdges, 12, 20, 31, 44, 190);
+  addFrame(rankingEdges, 12, 20, 31, 44, 210);
+  addFrame(rankingEdges, 12.25, 20.25, 30.75, 43.75, 210);
   addDenseThreeSidedDoorway(rankingEdges, 56, 18, 72, 58);
   const rankedMasks = runCandidateDetection(rankingEdges, bounds);
   const closedFrameIndex = rankedMasks.findIndex((mask) => mask.x <= 13 && mask.x + mask.width >= 30 && mask.y <= 21 && mask.y + mask.height >= 43);
