@@ -29,6 +29,7 @@ await runPatch("./patch-adapter-aligned-satellites-v1.mjs", { required: true });
 await runPatch("./patch-adapter-bounded-satellite-span-v1.mjs", { required: true });
 await runPatch("./patch-adapter-bounded-satellite-growth-v1.mjs", { required: true });
 await runPatch("./patch-adapter-preserve-repeated-openings-v1.mjs", { required: true });
+await runPatch("./patch-adapter-trim-like-satellites-v1.mjs", { required: true });
 
 const edgePath = "src/edgeDetect.ts";
 let edge = await fs.readFile(edgePath, "utf8");
