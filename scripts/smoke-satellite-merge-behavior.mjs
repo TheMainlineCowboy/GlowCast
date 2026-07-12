@@ -124,9 +124,7 @@ try {
     bounds
   );
 
-  const repeatedRowChanged = repeatedRow.some(
-    (mask) => mask.box.width !== 18 || mask.box.height !== 30
-  );
+  const repeatedRowChanged = repeatedRow.some((mask) => mask.box.width !== 18 || mask.box.height !== 30);
   if (repeatedRow.length !== 3 || repeatedRowChanged) {
     console.error("Satellite behavior smoke failed. Repeated adjacent openings collapsed into an oversized row mask.");
     console.error(JSON.stringify(repeatedRow, null, 2));
@@ -183,8 +181,32 @@ try {
     process.exit(1);
   }
 
+  const mixedOpeningTrim = groupNearbySatellites(
+    [
+      candidate("tall_door", { x: 12, y: 10, width: 18, height: 42 }),
+      candidate("short_window", { x: 38, y: 20, width: 24, height: 24 }),
+      candidate("door_trim", { x: 33, y: 18, width: 3, height: 38 })
+    ],
+    bounds
+  );
+
+  const mixedDoor = mixedOpeningTrim.find((mask) => mask.id === "tall_door");
+  const mixedWindow = mixedOpeningTrim.find((mask) => mask.id === "short_window");
+  if (
+    mixedOpeningTrim.length !== 2 ||
+    !mixedDoor ||
+    !covers(mixedDoor.box, { x: 12, y: 10, width: 24, height: 46, tolerance: 0.1 }) ||
+    !mixedWindow ||
+    mixedWindow.box.width !== 24 ||
+    mixedWindow.box.height !== 24
+  ) {
+    console.error("Satellite behavior smoke failed. Door-height trim attached to a shorter neighboring window.");
+    console.error(JSON.stringify(mixedOpeningTrim, null, 2));
+    process.exit(1);
+  }
+
   console.log(
-    "Satellite behavior smoke passed: useful trim merges, thin fragments are rejected, repeated openings stay separate, and ambiguous trim chooses the nearest parent."
+    "Satellite behavior smoke passed: useful trim merges, thin fragments are rejected, repeated openings stay separate, ambiguous trim chooses the nearest parent, and mixed-height trim chooses the matching opening."
   );
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
