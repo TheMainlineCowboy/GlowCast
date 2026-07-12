@@ -6,9 +6,12 @@ const buildSha =
   process.env.GITHUB_SHA?.slice(0, 7) ??
   "local";
 
+const base = process.env.GITHUB_PAGES === "true" ? "/GlowCast/" : "/";
+
 // Cloudflare runs `npm run build`, and the build script performs source prep
 // before TypeScript and Vite. Keep Vite side-effect free so prep only runs once.
 export default defineConfig({
+  base,
   plugins: [
     react(),
     {
