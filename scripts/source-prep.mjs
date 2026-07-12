@@ -33,6 +33,7 @@ await runPatch("./patch-adapter-trim-like-satellites-v1.mjs", { required: true }
 await runPatch("./patch-adapter-nearest-satellite-parent-v1.mjs", { required: true });
 await runPatch("./patch-adapter-span-aware-satellite-parent-v1.mjs", { required: true });
 await runPatch("./patch-adapter-overlap-aware-satellite-parent-v1.mjs", { required: true });
+await runPatch("./patch-smoke-overlap-aware-stacked-trim-v1.mjs", { required: true });
 await runPatch("./patch-adapter-anchor-satellite-parent-v1.mjs", { required: true });
 await runPatch("./patch-smoke-anchored-satellite-parent-v1.mjs", { required: true });
 
