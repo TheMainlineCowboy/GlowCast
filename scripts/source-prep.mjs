@@ -32,6 +32,7 @@ await runPatch("./patch-adapter-preserve-repeated-openings-v1.mjs", { required: 
 await runPatch("./patch-adapter-trim-like-satellites-v1.mjs", { required: true });
 await runPatch("./patch-adapter-nearest-satellite-parent-v1.mjs", { required: true });
 await runPatch("./patch-adapter-span-aware-satellite-parent-v1.mjs", { required: true });
+await runPatch("./patch-adapter-overlap-aware-satellite-parent-v1.mjs", { required: true });
 
 const edgePath = "src/edgeDetect.ts";
 let edge = await fs.readFile(edgePath, "utf8");
