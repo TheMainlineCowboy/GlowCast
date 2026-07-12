@@ -160,8 +160,31 @@ try {
     process.exit(1);
   }
 
+  const ambiguousTrim = groupNearbySatellites(
+    [
+      candidate("window_left", { x: 10, y: 28, width: 18, height: 30 }),
+      candidate("window_right", { x: 36, y: 28, width: 18, height: 30 }),
+      candidate("shared_shutter", { x: 31, y: 29, width: 3, height: 28 })
+    ],
+    bounds
+  );
+
+  const ambiguousLeft = ambiguousTrim.find((mask) => mask.id === "window_left");
+  const ambiguousRight = ambiguousTrim.find((mask) => mask.id === "window_right");
+  if (
+    ambiguousTrim.length !== 2 ||
+    !ambiguousLeft ||
+    ambiguousLeft.box.width !== 18 ||
+    !ambiguousRight ||
+    !covers(ambiguousRight.box, { x: 31, y: 28, width: 23, height: 30, tolerance: 0.1 })
+  ) {
+    console.error("Satellite behavior smoke failed. Ambiguous trim attached to the wrong neighboring opening.");
+    console.error(JSON.stringify(ambiguousTrim, null, 2));
+    process.exit(1);
+  }
+
   console.log(
-    "Satellite behavior smoke passed: useful trim merges, thin fragments are rejected, and repeated openings stay separate."
+    "Satellite behavior smoke passed: useful trim merges, thin fragments are rejected, repeated openings stay separate, and ambiguous trim chooses the nearest parent."
   );
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
