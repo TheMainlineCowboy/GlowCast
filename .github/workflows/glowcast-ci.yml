@@ -132,3 +132,30 @@ jobs:
       - name: Deploy GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Verify live GitHub Pages site
+        shell: bash
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          test -n "$PAGE_URL"
+
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error --location \
+              --connect-timeout 10 --max-time 30 \
+              "$PAGE_URL" --output /tmp/glowcast-index.html; then
+              break
+            fi
+
+            if [ "$attempt" -eq 12 ]; then
+              echo "GlowCast Pages site did not become reachable: $PAGE_URL" >&2
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          grep --fixed-strings --quiet '<title>GlowCast</title>' /tmp/glowcast-index.html
+          grep --fixed-strings --quiet 'id="root"' /tmp/glowcast-index.html
+          grep --extended-regexp --quiet 'src="[^"]*assets/[^"]+\.js"' /tmp/glowcast-index.html
