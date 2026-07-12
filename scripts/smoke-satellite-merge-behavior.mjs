@@ -115,7 +115,54 @@ try {
     process.exit(1);
   }
 
-  console.log("Satellite behavior smoke passed: useful trim merges, thin inflated fragments are rejected.");
+  const repeatedRow = groupNearbySatellites(
+    [
+      candidate("window_left", { x: 12, y: 28, width: 18, height: 30 }),
+      candidate("window_center", { x: 34, y: 28, width: 18, height: 30 }),
+      candidate("window_right", { x: 56, y: 28, width: 18, height: 30 })
+    ],
+    bounds
+  );
+
+  const repeatedRowChanged = repeatedRow.some(
+    (mask) => mask.box.width !== 18 || mask.box.height !== 30
+  );
+  if (repeatedRow.length !== 3 || repeatedRowChanged) {
+    console.error("Satellite behavior smoke failed. Repeated adjacent openings collapsed into an oversized row mask.");
+    console.error(JSON.stringify(repeatedRow, null, 2));
+    process.exit(1);
+  }
+
+  const repeatedRowWithTrim = groupNearbySatellites(
+    [
+      candidate("window_left", { x: 10, y: 28, width: 18, height: 30 }),
+      candidate("left_shutter", { x: 5, y: 29, width: 3, height: 28 }),
+      candidate("window_center", { x: 34, y: 28, width: 18, height: 30 }),
+      candidate("window_right", { x: 58, y: 28, width: 18, height: 30 })
+    ],
+    bounds
+  );
+
+  const trimmedLeft = repeatedRowWithTrim.find((mask) => mask.id === "window_left");
+  const untouchedCenter = repeatedRowWithTrim.find((mask) => mask.id === "window_center");
+  const untouchedRight = repeatedRowWithTrim.find((mask) => mask.id === "window_right");
+  if (
+    repeatedRowWithTrim.length !== 3 ||
+    !trimmedLeft ||
+    !covers(trimmedLeft.box, { x: 5, y: 28, width: 23, height: 30, tolerance: 0.1 }) ||
+    !untouchedCenter ||
+    untouchedCenter.box.width !== 18 ||
+    !untouchedRight ||
+    untouchedRight.box.width !== 18
+  ) {
+    console.error("Satellite behavior smoke failed. Trim grouping damaged neighboring openings in a repeated row.");
+    console.error(JSON.stringify(repeatedRowWithTrim, null, 2));
+    process.exit(1);
+  }
+
+  console.log(
+    "Satellite behavior smoke passed: useful trim merges, thin fragments are rejected, and repeated openings stay separate."
+  );
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
