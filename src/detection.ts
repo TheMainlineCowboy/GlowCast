@@ -62,6 +62,26 @@ function polygonToZone(points: ApiPoint[] | undefined, id: number, label: string
   };
 }
 
+function overlapRatio(a: Zone, b: Zone) {
+  const left = Math.max(a.x, b.x);
+  const top = Math.max(a.y, b.y);
+  const right = Math.min(a.x + a.width, b.x + b.width);
+  const bottom = Math.min(a.y + a.height, b.y + b.height);
+  const intersection = Math.max(0, right - left) * Math.max(0, bottom - top);
+  if (!intersection) return 0;
+
+  const smallerArea = Math.min(a.width * a.height, b.width * b.height);
+  return smallerArea ? intersection / smallerArea : 0;
+}
+
+function deduplicateMasks(masks: Zone[]) {
+  return [...masks]
+    .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
+    .filter((candidate, index, ordered) =>
+      ordered.slice(0, index).every((kept) => overlapRatio(candidate, kept) < 0.86)
+    );
+}
+
 export async function detectSurfaceAndMasks(imageUrl: string) {
   try {
     const response = await fetch("/api/analyze-projection", {
@@ -73,14 +93,19 @@ export async function detectSurfaceAndMasks(imageUrl: string) {
     if (!response.ok) throw new Error(await response.text());
     const analysis = await response.json() as ApiAnalysis;
     const warnings = analysis.debug?.warnings ?? [];
-    const masks = (analysis.masks ?? [])
+    const parsedMasks = (analysis.masks ?? [])
       .map((mask, index) => polygonToZone(mask.polygon ?? mask.points, Date.now() + index, mask.label ?? "AI avoid mask", Math.round((mask.confidence ?? 0.7) * 100)))
       .filter(Boolean) as Zone[];
+    const masks = deduplicateMasks(parsedMasks);
+    const removedDuplicates = parsedMasks.length - masks.length;
+    const detectorWarnings = removedDuplicates
+      ? [...warnings, `Removed ${removedDuplicates} overlapping automatic mask${removedDuplicates === 1 ? "" : "s"}.`]
+      : warnings;
 
     return {
       surface: polygonToZone(analysis.surface?.polygon, -1, "projection surface", 80) ?? defaultSurface(),
       masks,
-      warnings: masks.length ? warnings : [`AI returned 0 usable masks. ${warnings.length ? warnings.join(" | ") : "No backend warning was returned."}`]
+      warnings: masks.length ? detectorWarnings : [`AI returned 0 usable masks. ${detectorWarnings.length ? detectorWarnings.join(" | ") : "No backend warning was returned."}`]
     };
   } catch (error) {
     console.warn("Projection API detection failed.", error);
