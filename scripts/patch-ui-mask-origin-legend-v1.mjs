@@ -3,21 +3,23 @@ import fs from "node:fs/promises";
 const path = "src/App.tsx";
 let source = await fs.readFile(path, "utf8");
 
-const legend = `              <p className="helperText" aria-label="Mask badge legend">
+const legend = `
+              <p className="helperText" aria-label="Mask badge legend">
                 Badge key: <strong>A</strong> = auto-detected · <strong>M</strong> = manual correction
               </p>`;
 
 if (source.includes('aria-label="Mask badge legend"')) {
   console.log("Mask origin legend already present.");
 } else {
-  const headingPattern = /(\s*<h2>Surface \+ Masks(?:[^<]*)<\/h2>)/;
-  const match = source.match(headingPattern);
+  const headingTextIndex = source.indexOf("Surface + Masks");
+  const headingCloseIndex = headingTextIndex >= 0 ? source.indexOf("</h2>", headingTextIndex) : -1;
 
-  if (!match) {
+  if (headingCloseIndex < 0) {
     throw new Error("Surface and masks heading anchor not found.");
   }
 
-  source = source.replace(headingPattern, `${match[1]}\n${legend}`);
+  const insertAt = headingCloseIndex + "</h2>".length;
+  source = source.slice(0, insertAt) + legend + source.slice(insertAt);
   await fs.writeFile(path, source);
   console.log("Added visible mask origin legend.");
 }
