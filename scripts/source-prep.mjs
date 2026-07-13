@@ -40,6 +40,7 @@ await runPatch("./patch-adapter-anchor-satellite-parent-v1.mjs", { required: tru
 await runPatch("./patch-smoke-anchored-satellite-parent-v1.mjs", { required: true });
 await runPatch("./patch-adapter-suppress-overlapping-duplicates-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-count-status-v1.mjs", { required: true });
+await runPatch("./patch-ui-mask-origin-labels-v1.mjs", { required: true });
 
 const edgePath = "src/edgeDetect.ts";
 let edge = await fs.readFile(edgePath, "utf8");
