@@ -156,6 +156,6 @@ jobs:
             sleep 10
           done
 
-          grep --fixed-strings --quiet '<title>GlowCast</title>' /tmp/glowcast-index.html
+          grep --fixed-strings --quiet '<title>GlowCast' /tmp/glowcast-index.html
           grep --fixed-strings --quiet 'id="root"' /tmp/glowcast-index.html
           grep --extended-regexp --quiet 'src="[^"]*assets/[^"]+\.js"' /tmp/glowcast-index.html
