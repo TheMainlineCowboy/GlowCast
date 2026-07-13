@@ -4,7 +4,9 @@ const source = await fs.readFile("src/core/maskCandidateAdapter.ts", "utf8");
 
 const required = [
   "function prioritizeArchitecturalOpenings(",
-  "const architecturalScore = areaRatio * (0.78 + balance * 0.22);",
+  "const looksLikeThinTrim = balance < 0.14 && areaRatio < 0.08;",
+  "const trimPenalty = looksLikeThinTrim ? 0.45 : 1;",
+  "const architecturalScore = areaRatio * (0.78 + balance * 0.22) * trimPenalty;",
   ".sort((a, b) => b.architecturalScore - a.architecturalScore || a.index - b.index)",
   "prioritizeArchitecturalOpenings(suppressNestedInteriorDetails(grouped, bounds), bounds).slice(0, 10)"
 ];
@@ -15,4 +17,4 @@ for (const token of required) {
   }
 }
 
-console.log("architectural opening priority source smoke passed");
+console.log("architectural opening priority and thin-trim penalty source smoke passed");
