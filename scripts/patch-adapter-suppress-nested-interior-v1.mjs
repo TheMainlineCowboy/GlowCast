@@ -14,12 +14,18 @@ if (!source.includes(marker)) {
   source = source.replace(anchor, helper + anchor);
 }
 
-const oldReturn = "  return groupNearbySatellites(addFallbackCandidates(accepted, edgePoints, bounds), bounds).slice(0, 10);";
-const newReturn = `  const grouped = groupNearbySatellites(addFallbackCandidates(accepted, edgePoints, bounds), bounds);\n  return suppressNestedInteriorDetails(grouped, bounds).slice(0, 10);`;
+const diagnosticsReturn = "  const finalMasks = grouped.slice(0, 10);";
+const directReturn = "  return groupNearbySatellites(addFallbackCandidates(accepted, edgePoints, bounds), bounds).slice(0, 10);";
+const nestedDiagnosticsReturn = "  const finalMasks = suppressNestedInteriorDetails(grouped, bounds).slice(0, 10);";
 
-if (source.includes(oldReturn)) {
-  source = source.replace(oldReturn, newReturn);
-} else if (!source.includes("return suppressNestedInteriorDetails(grouped, bounds).slice(0, 10);")) {
+if (source.includes(diagnosticsReturn)) {
+  source = source.replace(diagnosticsReturn, nestedDiagnosticsReturn);
+} else if (source.includes(directReturn)) {
+  source = source.replace(
+    directReturn,
+    `  const grouped = groupNearbySatellites(addFallbackCandidates(accepted, edgePoints, bounds), bounds);\n  return suppressNestedInteriorDetails(grouped, bounds).slice(0, 10);`
+  );
+} else if (!source.includes(nestedDiagnosticsReturn) && !source.includes("return suppressNestedInteriorDetails(grouped, bounds).slice(0, 10);")) {
   throw new Error("mask candidate adapter return anchor not found");
 }
 
