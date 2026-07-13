@@ -22,6 +22,7 @@ await runPatch("./patch-detector-outer-frame-preference-v1.mjs", { required: tru
 await runPatch("./patch-detector-nested-detail-selection-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-detect-imports-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-detect-masks-v1.mjs", { required: true });
+await runPatch("./patch-ui-auto-detect-safety-copy-v1.mjs", { required: true });
 await runPatch("./patch-fallback-closed-shape-gate-v1.mjs");
 await runPatch("./patch-fallback-three-side-gate-v1.mjs");
 await runPatch("./patch-adapter-diagnostics-v1.mjs");
