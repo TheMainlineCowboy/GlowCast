@@ -1,0 +1,140 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
+
+const adapterPath = "src/core/maskCandidateAdapter.ts";
+const detectorPath = "src/core/architecturalDetector.ts";
+const edgeDetectPath = "src/edgeDetect.ts";
+const adapterSource = await fs.readFile(adapterPath, "utf8");
+
+const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-stable-mullion-ownership-"));
+const sourceRoot = path.join(tempDir, "src");
+const coreDir = path.join(sourceRoot, "core");
+const outDir = path.join(tempDir, "out");
+const sourcePath = path.join(coreDir, "maskCandidateAdapter.ts");
+const tempPath = path.join(outDir, "core", "maskCandidateAdapter.js");
+
+await fs.mkdir(coreDir, { recursive: true });
+await fs.writeFile(path.join(tempDir, "package.json"), '{"type":"module"}\n');
+await fs.writeFile(
+  sourcePath,
+  adapterSource.replace("function groupNearbySatellites", "export function groupNearbySatellites")
+);
+await fs.copyFile(detectorPath, path.join(coreDir, "architecturalDetector.ts"));
+await fs.copyFile(edgeDetectPath, path.join(sourceRoot, "edgeDetect.ts"));
+
+execFileSync(
+  process.execPath,
+  [
+    "node_modules/typescript/bin/tsc",
+    sourcePath,
+    "--ignoreConfig",
+    "--rootDir",
+    sourceRoot,
+    "--outDir",
+    outDir,
+    "--module",
+    "ES2020",
+    "--target",
+    "ES2020",
+    "--moduleResolution",
+    "Bundler",
+    "--skipLibCheck"
+  ],
+  { stdio: "inherit" }
+);
+
+const emittedAdapterPath = path.join(outDir, "core", "maskCandidateAdapter.js");
+const emittedDetectorPath = path.join(outDir, "core", "architecturalDetector.js");
+const emittedAdapter = await fs.readFile(emittedAdapterPath, "utf8");
+const emittedDetector = await fs.readFile(emittedDetectorPath, "utf8");
+await fs.writeFile(
+  emittedAdapterPath,
+  emittedAdapter.replace(/from\s+["']\.\/architecturalDetector["']/g, 'from "./architecturalDetector.js"')
+);
+await fs.writeFile(
+  emittedDetectorPath,
+  emittedDetector.replace(/from\s+["']\.\.\/edgeDetect["']/g, 'from "../edgeDetect.js"')
+);
+
+function candidate(id, box) {
+  return {
+    id,
+    box,
+    points: [
+      { x: box.x, y: box.y },
+      { x: box.x + box.width, y: box.y },
+      { x: box.x + box.width, y: box.y + box.height },
+      { x: box.x, y: box.y + box.height }
+    ]
+  };
+}
+
+function unchanged(actual, expected, tolerance = 0.001) {
+  return (
+    actual &&
+    Math.abs(actual.box.x - expected.x) <= tolerance &&
+    Math.abs(actual.box.y - expected.y) <= tolerance &&
+    Math.abs(actual.box.width - expected.width) <= tolerance &&
+    Math.abs(actual.box.height - expected.height) <= tolerance
+  );
+}
+
+function verifyFrame(groupNearbySatellites, frame, jitter) {
+  const bounds = { x: 0, y: 0, width: 100, height: 100 };
+  const leftWindow = { x: 22 + jitter.x, y: 25 + jitter.y, width: 20 + jitter.size, height: 30 + jitter.size };
+  const rightWindow = { x: 58 - jitter.x, y: 25 - jitter.y, width: 20 - jitter.size, height: 30 - jitter.size };
+  const confidentLeftMullion = { x: 43.4 + jitter.x, y: 27 + jitter.y, width: 1.4 + jitter.size, height: 26 - jitter.size };
+  const ambiguousSharedMullion = { x: 46.1 - jitter.x, y: 28 - jitter.y, width: 3.6 - jitter.size, height: 24 + jitter.size };
+
+  const grouped = groupNearbySatellites(
+    [
+      candidate(`left_window_${frame}`, leftWindow),
+      candidate(`right_window_${frame}`, rightWindow),
+      candidate(`confident_left_mullion_${frame}`, confidentLeftMullion),
+      candidate(`ambiguous_shared_mullion_${frame}`, ambiguousSharedMullion)
+    ],
+    bounds
+  );
+
+  const byId = new Map(grouped.map((mask) => [mask.id, mask]));
+  const mergedLeft = byId.get(`left_window_${frame}`);
+
+  if (
+    grouped.length !== 3 ||
+    !mergedLeft ||
+    mergedLeft.box.x > leftWindow.x + 0.001 ||
+    mergedLeft.box.x + mergedLeft.box.width + 0.001 < confidentLeftMullion.x + confidentLeftMullion.width ||
+    !unchanged(byId.get(`right_window_${frame}`), rightWindow) ||
+    !unchanged(byId.get(`ambiguous_shared_mullion_${frame}`), ambiguousSharedMullion) ||
+    byId.has(`confident_left_mullion_${frame}`)
+  ) {
+    console.error(
+      `Stable-mullion-ownership smoke failed for ${frame}. Alternating jitter must not make confident trim detach or ambiguous trim switch parents.`
+    );
+    console.error(JSON.stringify(grouped, null, 2));
+    process.exit(1);
+  }
+}
+
+try {
+  const { groupNearbySatellites } = await import(pathToFileURL(tempPath).href);
+  const frames = [
+    ["frame_1", { x: 0.12, y: -0.09, size: 0.08 }],
+    ["frame_2", { x: -0.11, y: 0.1, size: -0.07 }],
+    ["frame_3", { x: 0.09, y: 0.08, size: 0.06 }],
+    ["frame_4", { x: -0.1, y: -0.08, size: -0.06 }]
+  ];
+
+  for (const [frame, jitter] of frames) {
+    verifyFrame(groupNearbySatellites, frame, jitter);
+  }
+
+  console.log(
+    "Stable-mullion-ownership smoke passed: confident trim keeps its parent and ambiguous trim stays independent as coordinate and scale jitter alternate across frames."
+  );
+} finally {
+  await fs.rm(tempDir, { recursive: true, force: true });
+}
