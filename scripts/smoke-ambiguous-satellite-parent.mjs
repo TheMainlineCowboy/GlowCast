@@ -138,8 +138,33 @@ try {
     process.exit(1);
   }
 
+  const groupedWithRegeneratedId = groupNearbySatellites(
+    [
+      candidate("left_window", leftBox),
+      candidate("right_window", rightBox),
+      candidate("ambiguous_trim_original", ambiguousTrimBox),
+      candidate("ambiguous_trim_regenerated", { ...ambiguousTrimBox })
+    ],
+    bounds
+  );
+  const regeneratedById = new Map(groupedWithRegeneratedId.map((mask) => [mask.id, mask]));
+
+  if (
+    groupedWithRegeneratedId.length !== 4 ||
+    !unchanged(regeneratedById.get("left_window"), leftBox) ||
+    !unchanged(regeneratedById.get("right_window"), rightBox) ||
+    !unchanged(regeneratedById.get("ambiguous_trim_original"), ambiguousTrimBox) ||
+    !unchanged(regeneratedById.get("ambiguous_trim_regenerated"), ambiguousTrimBox)
+  ) {
+    console.error(
+      "Ambiguous-satellite-parent smoke failed. A geometrically identical fragment regenerated under a different ID escaped the frozen ambiguity decision."
+    );
+    console.error(JSON.stringify(groupedWithRegeneratedId, null, 2));
+    process.exit(1);
+  }
+
   console.log(
-    "Ambiguous-satellite-parent smoke passed: equally eligible trim stays separate, including when another nearby trim merges first and changes a parent box."
+    "Ambiguous-satellite-parent smoke passed: equally eligible trim stays separate through nearby merges and regenerated candidate IDs."
   );
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
