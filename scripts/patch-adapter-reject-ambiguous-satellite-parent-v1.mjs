@@ -101,10 +101,13 @@ source = source.replace(
 
     for (const { box, scores } of attachmentScoresBySatellite.values()) {
       const competingScores = [...scores].sort((a, b) => a.score - b.score);
-      const ambiguityMargin = competingScores[1]?.score - competingScores[0]?.score;
+      const bestScore = competingScores[0]?.score;
+      const ambiguityMargin = competingScores[1]?.score - bestScore;
+      const relativeAmbiguityMargin =
+        bestScore === undefined ? 0.03 : Math.max(0.03, Math.abs(bestScore) * 0.12);
       if (
         ambiguityMargin !== undefined &&
-        ambiguityMargin < 0.03 &&
+        ambiguityMargin < relativeAmbiguityMargin &&
         !ambiguousSatelliteBoxes.some((ambiguousBox) => isSameSatelliteGeometry(ambiguousBox, box))
       ) {
         ambiguousSatelliteBoxes.push({ ...box });
