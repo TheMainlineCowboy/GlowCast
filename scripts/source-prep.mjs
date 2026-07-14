@@ -42,6 +42,7 @@ await runPatch("./patch-adapter-suppress-overlapping-duplicates-v1.mjs", { requi
 await runPatch("./patch-adapter-suppress-nested-interior-v1.mjs", { required: true });
 await runPatch("./patch-adapter-prioritize-architectural-openings-v1.mjs", { required: true });
 await runPatch("./patch-adapter-penalize-open-fragments-v1.mjs", { required: true });
+await runPatch("./patch-adapter-reject-sparse-open-fragments-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-origin-legend-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-count-status-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-origin-labels-v1.mjs", { required: true });
