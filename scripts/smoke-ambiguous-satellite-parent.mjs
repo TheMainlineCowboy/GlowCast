@@ -194,8 +194,37 @@ try {
     process.exit(1);
   }
 
+  const boundaryJitterTrimBox = {
+    ...ambiguousTrimBox,
+    x: ambiguousTrimBox.x + 0.14
+  };
+  const groupedAcrossRoundingBoundary = groupNearbySatellites(
+    [
+      candidate("left_window", leftBox),
+      candidate("right_window", rightBox),
+      candidate("ambiguous_trim_original", ambiguousTrimBox),
+      candidate("ambiguous_trim_boundary_jitter", boundaryJitterTrimBox)
+    ],
+    bounds
+  );
+  const boundaryById = new Map(groupedAcrossRoundingBoundary.map((mask) => [mask.id, mask]));
+
+  if (
+    groupedAcrossRoundingBoundary.length !== 4 ||
+    !unchanged(boundaryById.get("left_window"), leftBox) ||
+    !unchanged(boundaryById.get("right_window"), rightBox) ||
+    !unchanged(boundaryById.get("ambiguous_trim_original"), ambiguousTrimBox) ||
+    !unchanged(boundaryById.get("ambiguous_trim_boundary_jitter"), boundaryJitterTrimBox)
+  ) {
+    console.error(
+      "Ambiguous-satellite-parent smoke failed. A near-identical fragment crossed a rounding bucket boundary and escaped the frozen ambiguity decision."
+    );
+    console.error(JSON.stringify(groupedAcrossRoundingBoundary, null, 2));
+    process.exit(1);
+  }
+
   console.log(
-    "Ambiguous-satellite-parent smoke passed: equally eligible trim stays separate through nearby merges, regenerated IDs, and subpixel geometry jitter."
+    "Ambiguous-satellite-parent smoke passed: equally eligible trim stays separate through nearby merges, regenerated IDs, subpixel jitter, and rounding-boundary changes."
   );
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });

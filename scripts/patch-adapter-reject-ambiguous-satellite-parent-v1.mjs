@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 const adapterPath = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(adapterPath, "utf8");
 
-const marker = "const ambiguousSatelliteKeys = new Set<string>();";
+const marker = "const ambiguousSatelliteBoxes: SimpleBox[] = [];";
 if (source.includes(marker)) {
   console.log("ambiguous satellite parent patch already applied");
   process.exit(0);
@@ -15,7 +15,25 @@ if (!source.includes(groupedAnchor)) {
 }
 source = source.replace(
   groupedAnchor,
-  `${groupedAnchor}\n  const ambiguousSatelliteKeys = new Set<string>();\n  const satelliteGeometryKey = (candidate: MaskCandidateOutput) =>\n    [candidate.box.x, candidate.box.y, candidate.box.width, candidate.box.height]\n      .map((value) => Math.round(value * 4) / 4)\n      .join(\":\");`
+  `${groupedAnchor}
+  const ambiguousSatelliteBoxes: SimpleBox[] = [];
+  const isSameSatelliteGeometry = (a: SimpleBox, b: SimpleBox) => {
+    const shortestSide = Math.max(1, Math.min(a.width, a.height, b.width, b.height));
+    const tolerance = Math.max(0.35, shortestSide * 0.025);
+    const centerAX = a.x + a.width / 2;
+    const centerAY = a.y + a.height / 2;
+    const centerBX = b.x + b.width / 2;
+    const centerBY = b.y + b.height / 2;
+
+    return (
+      Math.abs(centerAX - centerBX) <= tolerance &&
+      Math.abs(centerAY - centerBY) <= tolerance &&
+      Math.abs(a.width - b.width) <= tolerance * 1.5 &&
+      Math.abs(a.height - b.height) <= tolerance * 1.5
+    );
+  };
+  const isAmbiguousSatellite = (candidate: MaskCandidateOutput) =>
+    ambiguousSatelliteBoxes.some((box) => isSameSatelliteGeometry(box, candidate.box));`
 );
 
 const bestAttachmentAnchor = `    let bestAttachment:
@@ -26,7 +44,11 @@ if (!source.includes(bestAttachmentAnchor)) {
 }
 source = source.replace(
   bestAttachmentAnchor,
-  `${bestAttachmentAnchor}\n    const attachmentScoresBySatellite = new Map<\n      string,\n      Array<{ parentId: string; score: number }>\n    >();`
+  `${bestAttachmentAnchor}
+    const attachmentScoresBySatellite = new Map<
+      string,
+      { box: SimpleBox; scores: Array<{ parentId: string; score: number }> }
+    >();`
 );
 
 const satelliteAnchor = "        const satellite = grouped[j];";
@@ -35,7 +57,8 @@ if (!source.includes(satelliteAnchor)) {
 }
 source = source.replace(
   satelliteAnchor,
-  `${satelliteAnchor}\n        const satelliteKey = satelliteGeometryKey(satellite);\n        if (ambiguousSatelliteKeys.has(satelliteKey)) continue;`
+  `${satelliteAnchor}
+        if (isAmbiguousSatellite(satellite)) continue;`
 );
 
 const scoreAnchor = `        const score =
@@ -49,7 +72,13 @@ if (!source.includes(scoreAnchor)) {
 }
 source = source.replace(
   scoreAnchor,
-  `${scoreAnchor}\n        const satelliteScores = attachmentScoresBySatellite.get(satelliteKey) ?? [];\n        satelliteScores.push({ parentId: parent.id, score });\n        attachmentScoresBySatellite.set(satelliteKey, satelliteScores);`
+  `${scoreAnchor}
+        const satelliteScores = attachmentScoresBySatellite.get(satellite.id) ?? {
+          box: { ...satellite.box },
+          scores: []
+        };
+        satelliteScores.scores.push({ parentId: parent.id, score });
+        attachmentScoresBySatellite.set(satellite.id, satelliteScores);`
 );
 
 const selectionAnchor = `    if (!bestAttachment) break;
@@ -63,16 +92,20 @@ source = source.replace(
   selectionAnchor,
   `    if (!bestAttachment) break;
 
-    for (const [satelliteKey, scores] of attachmentScoresBySatellite) {
+    for (const { box, scores } of attachmentScoresBySatellite.values()) {
       const competingScores = [...scores].sort((a, b) => a.score - b.score);
       const ambiguityMargin = competingScores[1]?.score - competingScores[0]?.score;
-      if (ambiguityMargin !== undefined && ambiguityMargin < 0.03) {
-        ambiguousSatelliteKeys.add(satelliteKey);
+      if (
+        ambiguityMargin !== undefined &&
+        ambiguityMargin < 0.03 &&
+        !ambiguousSatelliteBoxes.some((ambiguousBox) => isSameSatelliteGeometry(ambiguousBox, box))
+      ) {
+        ambiguousSatelliteBoxes.push({ ...box });
       }
     }
 
     const selectedSatellite = grouped[bestAttachment.satelliteIndex];
-    if (ambiguousSatelliteKeys.has(satelliteGeometryKey(selectedSatellite))) continue;
+    if (isAmbiguousSatellite(selectedSatellite)) continue;
 
     const parent = grouped[bestAttachment.parentIndex];
     const satellite = selectedSatellite;`
