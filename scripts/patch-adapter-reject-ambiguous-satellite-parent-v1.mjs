@@ -51,7 +51,7 @@ if (!source.includes(selectionAnchor)) {
 }
 source = source.replace(
   selectionAnchor,
-  `    if (!bestAttachment) break;\n\n    const parent = grouped[bestAttachment.parentIndex];\n    const satellite = grouped[bestAttachment.satelliteIndex];\n    const competingScores = [...(attachmentScoresBySatellite.get(satellite.id) ?? [])].sort(\n      (a, b) => a.score - b.score\n    );\n    const ambiguityMargin = competingScores[1]?.score - competingScores[0]?.score;\n    if (ambiguityMargin !== undefined && ambiguityMargin < 0.16) {\n      ambiguousSatelliteIds.add(satellite.id);\n      continue;\n    }`
+  `    if (!bestAttachment) break;\n\n    const parent = grouped[bestAttachment.parentIndex];\n    const satellite = grouped[bestAttachment.satelliteIndex];\n    const competingScores = [...(attachmentScoresBySatellite.get(satellite.id) ?? [])].sort(\n      (a, b) => a.score - b.score\n    );\n    const ambiguityMargin = competingScores[1]?.score - competingScores[0]?.score;\n    if (ambiguityMargin !== undefined && ambiguityMargin < 0.03) {\n      ambiguousSatelliteIds.add(satellite.id);\n      continue;\n    }`
 );
 
 await fs.writeFile(adapterPath, source);
