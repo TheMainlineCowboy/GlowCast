@@ -223,8 +223,49 @@ try {
     process.exit(1);
   }
 
+  const scale = 3;
+  const scaledBounds = { x: 0, y: 0, width: bounds.width * scale, height: bounds.height * scale };
+  const scaleBox = (box) => ({
+    x: box.x * scale,
+    y: box.y * scale,
+    width: box.width * scale,
+    height: box.height * scale
+  });
+  const scaledLeftBox = scaleBox(leftBox);
+  const scaledRightBox = scaleBox(rightBox);
+  const scaledAmbiguousTrimBox = scaleBox(ambiguousTrimBox);
+  const scaledJitterTrimBox = {
+    ...scaledAmbiguousTrimBox,
+    x: scaledAmbiguousTrimBox.x + 0.42,
+    y: scaledAmbiguousTrimBox.y - 0.32
+  };
+  const groupedAtHigherResolution = groupNearbySatellites(
+    [
+      candidate("scaled_left_window", scaledLeftBox),
+      candidate("scaled_right_window", scaledRightBox),
+      candidate("scaled_ambiguous_trim", scaledAmbiguousTrimBox),
+      candidate("scaled_ambiguous_trim_jitter", scaledJitterTrimBox)
+    ],
+    scaledBounds
+  );
+  const scaledById = new Map(groupedAtHigherResolution.map((mask) => [mask.id, mask]));
+
+  if (
+    groupedAtHigherResolution.length !== 4 ||
+    !unchanged(scaledById.get("scaled_left_window"), scaledLeftBox) ||
+    !unchanged(scaledById.get("scaled_right_window"), scaledRightBox) ||
+    !unchanged(scaledById.get("scaled_ambiguous_trim"), scaledAmbiguousTrimBox) ||
+    !unchanged(scaledById.get("scaled_ambiguous_trim_jitter"), scaledJitterTrimBox)
+  ) {
+    console.error(
+      "Ambiguous-satellite-parent smoke failed. Resolution-scaled detector jitter escaped the same frozen ambiguity decision."
+    );
+    console.error(JSON.stringify(groupedAtHigherResolution, null, 2));
+    process.exit(1);
+  }
+
   console.log(
-    "Ambiguous-satellite-parent smoke passed: equally eligible trim stays separate through nearby merges, regenerated IDs, subpixel jitter, and rounding-boundary changes."
+    "Ambiguous-satellite-parent smoke passed: equally eligible trim stays separate through nearby merges, regenerated IDs, subpixel jitter, rounding-boundary changes, and resolution scaling."
   );
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
