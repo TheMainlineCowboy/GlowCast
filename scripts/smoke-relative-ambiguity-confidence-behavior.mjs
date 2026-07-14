@@ -149,8 +149,57 @@ try {
     process.exit(1);
   }
 
+  // Move the same trim steadily from the ambiguous zone toward the right opening.
+  // The decision may transition once from independent to right-attached, but it
+  // must never attach to the wrong opening or flicker back to independent afterward.
+  const transitionXs = [46.7, 47.5, 48.3, 49.1, 50.3, 51.5];
+  let rightAttachmentSeen = false;
+
+  for (const x of transitionXs) {
+    const trimBox = { x, y: 29, width: x === 51.5 ? 5 : 7, height: 22 };
+    const grouped = groupNearbySatellites(
+      [
+        candidate("left_window", leftBox),
+        candidate("right_window", rightBox),
+        candidate("transition_trim", trimBox)
+      ],
+      bounds
+    );
+    const byId = new Map(grouped.map((mask) => [mask.id, mask]));
+    const currentRight = byId.get("right_window");
+    const independent =
+      grouped.length === 3 &&
+      unchanged(byId.get("left_window"), leftBox) &&
+      unchanged(currentRight, rightBox) &&
+      unchanged(byId.get("transition_trim"), trimBox);
+    const attachedRight =
+      grouped.length === 2 &&
+      unchanged(byId.get("left_window"), leftBox) &&
+      !byId.has("transition_trim") &&
+      currentRight &&
+      currentRight.box.x <= trimBox.x &&
+      currentRight.box.x + currentRight.box.width === rightBox.x + rightBox.width;
+
+    if ((!independent && !attachedRight) || (rightAttachmentSeen && independent)) {
+      console.error(
+        "Relative-ambiguity transition smoke failed. Trim attached to the wrong parent or ownership flickered while confidence increased."
+      );
+      console.error(JSON.stringify({ x, grouped }, null, 2));
+      process.exit(1);
+    }
+
+    rightAttachmentSeen ||= attachedRight;
+  }
+
+  if (!rightAttachmentSeen) {
+    console.error(
+      "Relative-ambiguity transition smoke failed. Increasing confidence never produced the expected right-parent attachment."
+    );
+    process.exit(1);
+  }
+
   console.log(
-    "Relative-ambiguity behavior smoke passed: high-cost near-ties remain independent while clearly better parent matches still attach."
+    "Relative-ambiguity behavior smoke passed: near-ties remain independent, clearly better matches attach, and the confidence transition is stable."
   );
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
