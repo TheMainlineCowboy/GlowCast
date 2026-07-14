@@ -18,7 +18,9 @@ source = source.replace(
   `${groupedAnchor}\n  const ambiguousSatelliteIds = new Set<string>();`
 );
 
-const bestAttachmentAnchor = `    let bestAttachment:\n      | { parentIndex: number; satelliteIndex: number; score: number }\n      | undefined;`;
+const bestAttachmentAnchor = `    let bestAttachment:
+      | { parentIndex: number; satelliteIndex: number; score: number }
+      | undefined;`;
 if (!source.includes(bestAttachmentAnchor)) {
   throw new Error("Unable to locate best satellite attachment declaration");
 }
@@ -36,7 +38,12 @@ source = source.replace(
   `${satelliteAnchor}\n        if (ambiguousSatelliteIds.has(satellite.id)) continue;`
 );
 
-const scoreAnchor = `        const score =\n          normalizedGap * 4 +\n          normalizedCenterOffset +\n          crossAxisSpanMismatch * 2.5 +\n          crossAxisOverlapDeficit * 8 -\n          parentProminencePenalty;`;
+const scoreAnchor = `        const score =
+          normalizedGap * 4 +
+          normalizedCenterOffset +
+          crossAxisSpanMismatch * 2.5 +
+          crossAxisOverlapDeficit * 8 -
+          parentProminencePenalty;`;
 if (!source.includes(scoreAnchor)) {
   throw new Error("Unable to locate satellite parent score");
 }
@@ -45,13 +52,30 @@ source = source.replace(
   `${scoreAnchor}\n        const satelliteScores = attachmentScoresBySatellite.get(satellite.id) ?? [];\n        satelliteScores.push({ parentId: parent.id, score });\n        attachmentScoresBySatellite.set(satellite.id, satelliteScores);`
 );
 
-const selectionAnchor = `    if (!bestAttachment) break;\n\n    const parent = grouped[bestAttachment.parentIndex];\n    const satellite = grouped[bestAttachment.satelliteIndex];`;
+const selectionAnchor = `    if (!bestAttachment) break;
+
+    const parent = grouped[bestAttachment.parentIndex];
+    const satellite = grouped[bestAttachment.satelliteIndex];`;
 if (!source.includes(selectionAnchor)) {
   throw new Error("Unable to locate selected satellite attachment");
 }
 source = source.replace(
   selectionAnchor,
-  `    if (!bestAttachment) break;\n\n    const parent = grouped[bestAttachment.parentIndex];\n    const satellite = grouped[bestAttachment.satelliteIndex];\n    const competingScores = [...(attachmentScoresBySatellite.get(satellite.id) ?? [])].sort(\n      (a, b) => a.score - b.score\n    );\n    const ambiguityMargin = competingScores[1]?.score - competingScores[0]?.score;\n    if (ambiguityMargin !== undefined && ambiguityMargin < 0.03) {\n      ambiguousSatelliteIds.add(satellite.id);\n      continue;\n    }`
+  `    if (!bestAttachment) break;
+
+    for (const [satelliteId, scores] of attachmentScoresBySatellite) {
+      const competingScores = [...scores].sort((a, b) => a.score - b.score);
+      const ambiguityMargin = competingScores[1]?.score - competingScores[0]?.score;
+      if (ambiguityMargin !== undefined && ambiguityMargin < 0.03) {
+        ambiguousSatelliteIds.add(satelliteId);
+      }
+    }
+
+    const selectedSatellite = grouped[bestAttachment.satelliteIndex];
+    if (ambiguousSatelliteIds.has(selectedSatellite.id)) continue;
+
+    const parent = grouped[bestAttachment.parentIndex];
+    const satellite = selectedSatellite;`
 );
 
 await fs.writeFile(adapterPath, source);
