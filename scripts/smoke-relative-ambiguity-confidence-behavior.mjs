@@ -72,6 +72,16 @@ function candidate(id, box) {
   };
 }
 
+function unchanged(actual, expected) {
+  return (
+    actual &&
+    actual.box.x === expected.x &&
+    actual.box.y === expected.y &&
+    actual.box.width === expected.width &&
+    actual.box.height === expected.height
+  );
+}
+
 try {
   const { groupNearbySatellites } = await import(pathToFileURL(tempPath).href);
   const bounds = { x: 0, y: 0, width: 100, height: 100 };
@@ -82,7 +92,7 @@ try {
   // threshold, but the two scores remain close relative to their overall cost.
   // The scale-aware ambiguity margin must therefore keep it independent.
   const relativelyAmbiguousTrimBox = { x: 46.7, y: 29, width: 7, height: 22 };
-  const grouped = groupNearbySatellites(
+  const ambiguousGrouped = groupNearbySatellites(
     [
       candidate("left_window", leftBox),
       candidate("right_window", rightBox),
@@ -91,29 +101,56 @@ try {
     bounds
   );
 
-  const byId = new Map(grouped.map((mask) => [mask.id, mask]));
-  const unchanged = (actual, expected) =>
-    actual &&
-    actual.box.x === expected.x &&
-    actual.box.y === expected.y &&
-    actual.box.width === expected.width &&
-    actual.box.height === expected.height;
-
+  const ambiguousById = new Map(ambiguousGrouped.map((mask) => [mask.id, mask]));
   if (
-    grouped.length !== 3 ||
-    !unchanged(byId.get("left_window"), leftBox) ||
-    !unchanged(byId.get("right_window"), rightBox) ||
-    !unchanged(byId.get("relative_ambiguity_trim"), relativelyAmbiguousTrimBox)
+    ambiguousGrouped.length !== 3 ||
+    !unchanged(ambiguousById.get("left_window"), leftBox) ||
+    !unchanged(ambiguousById.get("right_window"), rightBox) ||
+    !unchanged(ambiguousById.get("relative_ambiguity_trim"), relativelyAmbiguousTrimBox)
   ) {
     console.error(
       "Relative-ambiguity behavior smoke failed. A high-cost near-tie exceeded the old fixed margin and attached to a neighboring opening instead of remaining independent."
     );
-    console.error(JSON.stringify(grouped, null, 2));
+    console.error(JSON.stringify(ambiguousGrouped, null, 2));
+    process.exit(1);
+  }
+
+  // This fragment is close enough to the right opening to be a confident parent
+  // match. The safer relative threshold must not become so conservative that it
+  // leaves clearly associated architectural trim detached.
+  const confidentTrimBox = { x: 51.5, y: 29, width: 5, height: 22 };
+  const confidentGrouped = groupNearbySatellites(
+    [
+      candidate("left_window", leftBox),
+      candidate("right_window", rightBox),
+      candidate("confident_right_trim", confidentTrimBox)
+    ],
+    bounds
+  );
+
+  const confidentById = new Map(confidentGrouped.map((mask) => [mask.id, mask]));
+  const mergedRight = confidentById.get("right_window");
+  const rightExpandedTowardTrim =
+    mergedRight &&
+    mergedRight.box.x < rightBox.x &&
+    mergedRight.box.x <= confidentTrimBox.x &&
+    mergedRight.box.x + mergedRight.box.width === rightBox.x + rightBox.width;
+
+  if (
+    confidentGrouped.length !== 2 ||
+    !unchanged(confidentById.get("left_window"), leftBox) ||
+    confidentById.has("confident_right_trim") ||
+    !rightExpandedTowardTrim
+  ) {
+    console.error(
+      "Relative-ambiguity behavior smoke failed. A clearly better parent match stayed detached or attached to the wrong opening."
+    );
+    console.error(JSON.stringify(confidentGrouped, null, 2));
     process.exit(1);
   }
 
   console.log(
-    "Relative-ambiguity behavior smoke passed: a parent-score difference above 0.03 but below the scale-aware confidence margin remains independent."
+    "Relative-ambiguity behavior smoke passed: high-cost near-ties remain independent while clearly better parent matches still attach."
   );
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
