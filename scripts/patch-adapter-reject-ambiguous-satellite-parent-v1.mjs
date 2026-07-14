@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 const adapterPath = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(adapterPath, "utf8");
 
-const marker = "const ambiguousSatelliteIds = new Set<string>();";
+const marker = "const ambiguousSatelliteKeys = new Set<string>();";
 if (source.includes(marker)) {
   console.log("ambiguous satellite parent patch already applied");
   process.exit(0);
@@ -15,7 +15,7 @@ if (!source.includes(groupedAnchor)) {
 }
 source = source.replace(
   groupedAnchor,
-  `${groupedAnchor}\n  const ambiguousSatelliteIds = new Set<string>();`
+  `${groupedAnchor}\n  const ambiguousSatelliteKeys = new Set<string>();\n  const satelliteGeometryKey = (candidate: MaskCandidateOutput) =>\n    [candidate.box.x, candidate.box.y, candidate.box.width, candidate.box.height]\n      .map((value) => value.toFixed(2))\n      .join(\":\");`
 );
 
 const bestAttachmentAnchor = `    let bestAttachment:
@@ -35,7 +35,7 @@ if (!source.includes(satelliteAnchor)) {
 }
 source = source.replace(
   satelliteAnchor,
-  `${satelliteAnchor}\n        if (ambiguousSatelliteIds.has(satellite.id)) continue;`
+  `${satelliteAnchor}\n        const satelliteKey = satelliteGeometryKey(satellite);\n        if (ambiguousSatelliteKeys.has(satelliteKey)) continue;`
 );
 
 const scoreAnchor = `        const score =
@@ -49,7 +49,7 @@ if (!source.includes(scoreAnchor)) {
 }
 source = source.replace(
   scoreAnchor,
-  `${scoreAnchor}\n        const satelliteScores = attachmentScoresBySatellite.get(satellite.id) ?? [];\n        satelliteScores.push({ parentId: parent.id, score });\n        attachmentScoresBySatellite.set(satellite.id, satelliteScores);`
+  `${scoreAnchor}\n        const satelliteScores = attachmentScoresBySatellite.get(satelliteKey) ?? [];\n        satelliteScores.push({ parentId: parent.id, score });\n        attachmentScoresBySatellite.set(satelliteKey, satelliteScores);`
 );
 
 const selectionAnchor = `    if (!bestAttachment) break;
@@ -63,16 +63,16 @@ source = source.replace(
   selectionAnchor,
   `    if (!bestAttachment) break;
 
-    for (const [satelliteId, scores] of attachmentScoresBySatellite) {
+    for (const [satelliteKey, scores] of attachmentScoresBySatellite) {
       const competingScores = [...scores].sort((a, b) => a.score - b.score);
       const ambiguityMargin = competingScores[1]?.score - competingScores[0]?.score;
       if (ambiguityMargin !== undefined && ambiguityMargin < 0.03) {
-        ambiguousSatelliteIds.add(satelliteId);
+        ambiguousSatelliteKeys.add(satelliteKey);
       }
     }
 
     const selectedSatellite = grouped[bestAttachment.satelliteIndex];
-    if (ambiguousSatelliteIds.has(selectedSatellite.id)) continue;
+    if (ambiguousSatelliteKeys.has(satelliteGeometryKey(selectedSatellite))) continue;
 
     const parent = grouped[bestAttachment.parentIndex];
     const satellite = selectedSatellite;`
