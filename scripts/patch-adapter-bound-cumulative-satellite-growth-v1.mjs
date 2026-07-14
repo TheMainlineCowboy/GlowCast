@@ -33,7 +33,7 @@ if (!source.includes(mergedBoxAnchor)) {
 }
 source = source.replace(
   mergedBoxAnchor,
-  `${mergedBoxAnchor}\n    const originalParentArea =\n      originalParentAreas.get(parent.id) ?? Math.max(parent.box.width * parent.box.height, 1);\n    const cumulativeGrowthRatio = (mergedBox.width * mergedBox.height) / originalParentArea;\n    if (cumulativeGrowthRatio > 1.72) {\n      blockedSatelliteAttachments.add(parent.id + \":\" + satellite.id);\n      continue;\n    }`
+  `${mergedBoxAnchor}\n    const originalParentArea =\n      originalParentAreas.get(parent.id) ?? Math.max(parent.box.width * parent.box.height, 1);\n    const cumulativeGrowthRatio = (mergedBox.width * mergedBox.height) / originalParentArea;\n    if (cumulativeGrowthRatio > 2.05) {\n      blockedSatelliteAttachments.add(parent.id + \":\" + satellite.id);\n      continue;\n    }`
 );
 
 await fs.writeFile(adapterPath, source);
