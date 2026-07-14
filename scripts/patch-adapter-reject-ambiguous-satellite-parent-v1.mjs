@@ -19,17 +19,24 @@ source = source.replace(
   const ambiguousSatelliteBoxes: SimpleBox[] = [];
   const isSameSatelliteGeometry = (a: SimpleBox, b: SimpleBox) => {
     const shortestSide = Math.max(1, Math.min(a.width, a.height, b.width, b.height));
-    const tolerance = Math.max(0.35, shortestSide * 0.025);
+    const centerTolerance = Math.max(0.18, shortestSide * 0.025);
+    const sizeTolerance = Math.max(0.24, shortestSide * 0.04);
     const centerAX = a.x + a.width / 2;
     const centerAY = a.y + a.height / 2;
     const centerBX = b.x + b.width / 2;
     const centerBY = b.y + b.height / 2;
+    const overlapWidth = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+    const overlapHeight = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+    const overlapArea = overlapWidth * overlapHeight;
+    const smallerArea = Math.max(1, Math.min(a.width * a.height, b.width * b.height));
+    const overlapRatio = overlapArea / smallerArea;
 
     return (
-      Math.abs(centerAX - centerBX) <= tolerance &&
-      Math.abs(centerAY - centerBY) <= tolerance &&
-      Math.abs(a.width - b.width) <= tolerance * 1.5 &&
-      Math.abs(a.height - b.height) <= tolerance * 1.5
+      Math.abs(centerAX - centerBX) <= centerTolerance &&
+      Math.abs(centerAY - centerBY) <= centerTolerance &&
+      Math.abs(a.width - b.width) <= sizeTolerance &&
+      Math.abs(a.height - b.height) <= sizeTolerance &&
+      overlapRatio >= 0.88
     );
   };
   const isAmbiguousSatellite = (candidate: MaskCandidateOutput) =>
