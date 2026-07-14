@@ -109,8 +109,37 @@ try {
     process.exit(1);
   }
 
+  const leftInnerTrimBox = { x: 43.5, y: 27, width: 1.5, height: 26 };
+  const groupedAfterNearbyMerge = groupNearbySatellites(
+    [
+      candidate("left_window", leftBox),
+      candidate("right_window", rightBox),
+      candidate("left_inner_trim", leftInnerTrimBox),
+      candidate("ambiguous_trim", ambiguousTrimBox)
+    ],
+    bounds
+  );
+  const afterMergeById = new Map(groupedAfterNearbyMerge.map((mask) => [mask.id, mask]));
+  const mergedLeft = afterMergeById.get("left_window");
+  const preservedAmbiguous = afterMergeById.get("ambiguous_trim");
+
+  if (
+    groupedAfterNearbyMerge.length !== 3 ||
+    !mergedLeft ||
+    mergedLeft.box.x !== leftBox.x ||
+    mergedLeft.box.x + mergedLeft.box.width < leftInnerTrimBox.x + leftInnerTrimBox.width ||
+    !unchanged(afterMergeById.get("right_window"), rightBox) ||
+    !unchanged(preservedAmbiguous, ambiguousTrimBox)
+  ) {
+    console.error(
+      "Ambiguous-satellite-parent smoke failed. An initially ambiguous fragment was reconsidered after a different nearby trim merged and changed the parent geometry."
+    );
+    console.error(JSON.stringify(groupedAfterNearbyMerge, null, 2));
+    process.exit(1);
+  }
+
   console.log(
-    "Ambiguous-satellite-parent smoke passed: both openings stayed intact and the equally eligible trim fragment remained separate."
+    "Ambiguous-satellite-parent smoke passed: equally eligible trim stays separate, including when another nearby trim merges first and changes a parent box."
   );
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
