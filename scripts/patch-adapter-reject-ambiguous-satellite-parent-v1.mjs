@@ -15,7 +15,7 @@ if (!source.includes(groupedAnchor)) {
 }
 source = source.replace(
   groupedAnchor,
-  `${groupedAnchor}\n  const ambiguousSatelliteKeys = new Set<string>();\n  const satelliteGeometryKey = (candidate: MaskCandidateOutput) =>\n    [candidate.box.x, candidate.box.y, candidate.box.width, candidate.box.height]\n      .map((value) => value.toFixed(2))\n      .join(\":\");`
+  `${groupedAnchor}\n  const ambiguousSatelliteKeys = new Set<string>();\n  const satelliteGeometryKey = (candidate: MaskCandidateOutput) =>\n    [candidate.box.x, candidate.box.y, candidate.box.width, candidate.box.height]\n      .map((value) => Math.round(value * 4) / 4)\n      .join(\":\");`
 );
 
 const bestAttachmentAnchor = `    let bestAttachment:
