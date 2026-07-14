@@ -18,13 +18,13 @@ source = source.replace(
   `${groupedAnchor}\n  const originalParentAreas = new Map(\n    grouped.map((candidate) => [candidate.id, Math.max(candidate.box.width * candidate.box.height, 1)])\n  );`
 );
 
-const mergedBoxAnchor = "        const mergedBox = mergeBoxes(parent.box, satellite.box);";
+const mergedBoxAnchor = "    const mergedBox = mergeBoxes(parent.box, satellite.box);";
 if (!source.includes(mergedBoxAnchor)) {
-  throw new Error("Unable to locate merged satellite box calculation");
+  throw new Error("Unable to locate selected satellite merge calculation");
 }
 source = source.replace(
   mergedBoxAnchor,
-  `${mergedBoxAnchor}\n        const originalParentArea =\n          originalParentAreas.get(parent.id) ?? Math.max(parent.box.width * parent.box.height, 1);\n        const cumulativeGrowthRatio = (mergedBox.width * mergedBox.height) / originalParentArea;\n        if (cumulativeGrowthRatio > 1.72) continue;`
+  `${mergedBoxAnchor}\n    const originalParentArea =\n      originalParentAreas.get(parent.id) ?? Math.max(parent.box.width * parent.box.height, 1);\n    const cumulativeGrowthRatio = (mergedBox.width * mergedBox.height) / originalParentArea;\n    if (cumulativeGrowthRatio > 1.72) {\n      grouped.splice(bestAttachment.satelliteIndex, 1);\n      changed = true;\n      continue;\n    }`
 );
 
 await fs.writeFile(adapterPath, source);
