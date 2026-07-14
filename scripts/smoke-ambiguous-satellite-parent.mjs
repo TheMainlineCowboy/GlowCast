@@ -163,8 +163,39 @@ try {
     process.exit(1);
   }
 
+  const jitteredTrimBox = {
+    x: ambiguousTrimBox.x + 0.08,
+    y: ambiguousTrimBox.y - 0.07,
+    width: ambiguousTrimBox.width + 0.06,
+    height: ambiguousTrimBox.height - 0.09
+  };
+  const groupedWithSubpixelJitter = groupNearbySatellites(
+    [
+      candidate("left_window", leftBox),
+      candidate("right_window", rightBox),
+      candidate("ambiguous_trim_original", ambiguousTrimBox),
+      candidate("ambiguous_trim_subpixel", jitteredTrimBox)
+    ],
+    bounds
+  );
+  const jitteredById = new Map(groupedWithSubpixelJitter.map((mask) => [mask.id, mask]));
+
+  if (
+    groupedWithSubpixelJitter.length !== 4 ||
+    !unchanged(jitteredById.get("left_window"), leftBox) ||
+    !unchanged(jitteredById.get("right_window"), rightBox) ||
+    !unchanged(jitteredById.get("ambiguous_trim_original"), ambiguousTrimBox) ||
+    !unchanged(jitteredById.get("ambiguous_trim_subpixel"), jitteredTrimBox)
+  ) {
+    console.error(
+      "Ambiguous-satellite-parent smoke failed. Subpixel detector jitter allowed the same uncertain fragment to evade the frozen ambiguity decision."
+    );
+    console.error(JSON.stringify(groupedWithSubpixelJitter, null, 2));
+    process.exit(1);
+  }
+
   console.log(
-    "Ambiguous-satellite-parent smoke passed: equally eligible trim stays separate through nearby merges and regenerated candidate IDs."
+    "Ambiguous-satellite-parent smoke passed: equally eligible trim stays separate through nearby merges, regenerated IDs, and subpixel geometry jitter."
   );
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
