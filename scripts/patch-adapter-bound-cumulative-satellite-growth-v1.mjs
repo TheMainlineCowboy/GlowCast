@@ -15,7 +15,16 @@ if (!source.includes(groupedAnchor)) {
 }
 source = source.replace(
   groupedAnchor,
-  `${groupedAnchor}\n  const originalParentAreas = new Map(\n    grouped.map((candidate) => [candidate.id, Math.max(candidate.box.width * candidate.box.height, 1)])\n  );`
+  `${groupedAnchor}\n  const originalParentAreas = new Map(\n    grouped.map((candidate) => [candidate.id, Math.max(candidate.box.width * candidate.box.height, 1)])\n  );\n  const blockedSatelliteAttachments = new Set<string>();`
+);
+
+const pairAnchor = "        if (i === j) continue;";
+if (!source.includes(pairAnchor)) {
+  throw new Error("Unable to locate satellite pair guard");
+}
+source = source.replace(
+  pairAnchor,
+  `${pairAnchor}\n\n        const attachmentKey = grouped[i].id + \":\" + grouped[j].id;\n        if (blockedSatelliteAttachments.has(attachmentKey)) continue;`
 );
 
 const mergedBoxAnchor = "    const mergedBox = mergeBoxes(parent.box, satellite.box);";
@@ -24,7 +33,7 @@ if (!source.includes(mergedBoxAnchor)) {
 }
 source = source.replace(
   mergedBoxAnchor,
-  `${mergedBoxAnchor}\n    const originalParentArea =\n      originalParentAreas.get(parent.id) ?? Math.max(parent.box.width * parent.box.height, 1);\n    const cumulativeGrowthRatio = (mergedBox.width * mergedBox.height) / originalParentArea;\n    if (cumulativeGrowthRatio > 1.72) {\n      grouped.splice(bestAttachment.satelliteIndex, 1);\n      changed = true;\n      continue;\n    }`
+  `${mergedBoxAnchor}\n    const originalParentArea =\n      originalParentAreas.get(parent.id) ?? Math.max(parent.box.width * parent.box.height, 1);\n    const cumulativeGrowthRatio = (mergedBox.width * mergedBox.height) / originalParentArea;\n    if (cumulativeGrowthRatio > 1.72) {\n      blockedSatelliteAttachments.add(parent.id + \":\" + satellite.id);\n      continue;\n    }`
 );
 
 await fs.writeFile(adapterPath, source);
