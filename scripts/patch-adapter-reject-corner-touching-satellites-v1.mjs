@@ -3,35 +3,25 @@ import fs from "node:fs/promises";
 const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
-const sideBlockPattern = /  const sideBySideTrim =\n(?:    .*\n){4}/;
-const stackedBlockPattern = /  const stackedTrim =\n(?:    .*\n){4}/;
+const replacements = [
+  ["verticalAlignment >= 0.52", "verticalAlignment >= 0.62"],
+  [
+    "satellite.height >= parent.height * 0.45;",
+    "satellite.height >= parent.height * 0.62 &&\n    satellite.width <= parent.width * 0.58;",
+  ],
+  ["horizontalAlignment >= 0.52", "horizontalAlignment >= 0.62"],
+  [
+    "satellite.width >= parent.width * 0.45;",
+    "satellite.width >= parent.width * 0.62 &&\n    satellite.height <= parent.height * 0.58;",
+  ],
+];
 
-const desiredSide = `  const sideBySideTrim =
-    gap.x <= Math.max(2.5, bounds.width * 0.045) &&
-    gap.y <= Math.max(1.2, bounds.height * 0.02) &&
-    verticalAlignment >= 0.62 &&
-    satellite.height >= parent.height * 0.62 &&
-    satellite.width <= parent.width * 0.58;\n`;
-
-const desiredStacked = `  const stackedTrim =
-    gap.y <= Math.max(2.5, bounds.height * 0.045) &&
-    gap.x <= Math.max(1.2, bounds.width * 0.02) &&
-    horizontalAlignment >= 0.62 &&
-    satellite.width >= parent.width * 0.62 &&
-    satellite.height <= parent.height * 0.58;\n`;
-
-if (!source.includes(desiredSide)) {
-  if (!sideBlockPattern.test(source)) {
-    throw new Error("side-by-side satellite gate block not found");
+for (const [from, to] of replacements) {
+  if (source.includes(from)) {
+    source = source.replace(from, to);
+  } else if (!source.includes(to)) {
+    throw new Error(`corner-touching satellite gate anchor not found: ${from}`);
   }
-  source = source.replace(sideBlockPattern, desiredSide);
-}
-
-if (!source.includes(desiredStacked)) {
-  if (!stackedBlockPattern.test(source)) {
-    throw new Error("stacked satellite gate block not found");
-  }
-  source = source.replace(stackedBlockPattern, desiredStacked);
 }
 
 await fs.writeFile(path, source);
