@@ -48,6 +48,8 @@ await runPatch("./patch-adapter-reject-negligible-satellites-v1.mjs", { required
 await runPatch("./patch-adapter-prefer-strongest-satellite-parent-v1.mjs", { required: true });
 await runPatch("./patch-adapter-bound-cumulative-satellite-growth-v1.mjs", { required: true });
 await runPatch("./patch-adapter-reject-ambiguous-satellite-parent-v1.mjs", { required: true });
+await runPatch("./patch-adapter-quantize-ambiguity-scores-v1.mjs", { required: true });
+await runPatch("./smoke-quantized-ambiguity-scores-source.mjs", { required: true });
 await runPatch("./patch-ui-mask-origin-legend-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-count-status-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-origin-counts-v1.mjs", { required: true });
