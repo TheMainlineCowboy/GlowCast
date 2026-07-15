@@ -20,4 +20,5 @@ if (!source.includes('selectedZoneId === zone.id')) {
   throw new Error("Review focus is not tied to the selected zone.");
 }
 
+await import("./smoke-ui-approve-selected-auto-mask-source.mjs");
 console.log("Automatic-mask review focus source regression passed.");
