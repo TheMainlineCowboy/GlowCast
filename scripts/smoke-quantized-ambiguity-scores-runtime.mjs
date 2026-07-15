@@ -5,34 +5,24 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 const adapterPath = "src/core/maskCandidateAdapter.ts";
-const detectorPath = "src/core/architecturalDetector.ts";
-const edgeDetectPath = "src/edgeDetect.ts";
 const adapterSource = await fs.readFile(adapterPath, "utf8");
+const marker = "const quantizeAttachmentScore = (score: number) => Math.round(score * 10000) / 10000;";
 
-if (!adapterSource.includes("const quantizeAttachmentScore")) {
+if (!adapterSource.includes(marker)) {
   throw new Error("Quantized ambiguity runtime smoke requires prepared quantizeAttachmentScore source.");
 }
 
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-quantized-ambiguity-runtime-"));
-const sourceRoot = path.join(tempDir, "src");
-const coreDir = path.join(sourceRoot, "core");
+const sourcePath = path.join(tempDir, "quantizeAttachmentScore.ts");
 const outDir = path.join(tempDir, "out");
-const sourcePath = path.join(coreDir, "maskCandidateAdapter.ts");
 
-await fs.mkdir(coreDir, { recursive: true });
 await fs.writeFile(path.join(tempDir, "package.json"), '{"type":"module"}\n');
-await fs.writeFile(
-  sourcePath,
-  adapterSource.replace("const quantizeAttachmentScore", "export const quantizeAttachmentScore")
-);
-await fs.copyFile(detectorPath, path.join(coreDir, "architecturalDetector.ts"));
-await fs.copyFile(edgeDetectPath, path.join(sourceRoot, "edgeDetect.ts"));
+await fs.writeFile(sourcePath, `${marker.replace("const ", "export const ")}\n`);
 
 execFileSync(process.execPath, [
   "node_modules/typescript/bin/tsc",
   sourcePath,
   "--ignoreConfig",
-  "--rootDir", sourceRoot,
   "--outDir", outDir,
   "--module", "ES2020",
   "--target", "ES2020",
@@ -40,13 +30,10 @@ execFileSync(process.execPath, [
   "--skipLibCheck"
 ], { stdio: "inherit" });
 
-const emittedAdapterPath = path.join(outDir, "core", "maskCandidateAdapter.js");
-const emittedDetectorPath = path.join(outDir, "core", "architecturalDetector.js");
-await fs.writeFile(emittedAdapterPath, (await fs.readFile(emittedAdapterPath, "utf8")).replace(/from\s+["']\.\/architecturalDetector["']/g, 'from "./architecturalDetector.js"'));
-await fs.writeFile(emittedDetectorPath, (await fs.readFile(emittedDetectorPath, "utf8")).replace(/from\s+["']\.\.\/edgeDetect["']/g, 'from "../edgeDetect.js"'));
+const emittedPath = path.join(outDir, "quantizeAttachmentScore.js");
 
 try {
-  const { quantizeAttachmentScore } = await import(pathToFileURL(emittedAdapterPath).href);
+  const { quantizeAttachmentScore } = await import(pathToFileURL(emittedPath).href);
   const baseline = quantizeAttachmentScore(0.314159261);
   const insignificantNoise = quantizeAttachmentScore(0.314159269);
   const meaningfulDifference = quantizeAttachmentScore(0.314259269);
