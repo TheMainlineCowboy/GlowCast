@@ -102,4 +102,5 @@ if (start >= 0 && end > start) {
 }
 
 await fs.writeFile(edgePath, edge);
+await runPatch("./patch-adapter-stable-mask-identities-v1.mjs", { required: true });
 console.log("source prep complete");
