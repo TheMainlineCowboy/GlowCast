@@ -53,6 +53,7 @@ await runPatch("./smoke-quantized-ambiguity-scores-source.mjs", { required: true
 await runPatch("./smoke-quantized-ambiguity-scores-runtime.mjs", { required: true });
 await runPatch("./patch-adapter-preserve-more-architectural-masks-v1.mjs", { required: true });
 await runPatch("./smoke-preserve-more-architectural-masks-source.mjs", { required: true });
+await runPatch("./patch-adapter-mask-truncation-stats-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-origin-legend-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-count-status-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-origin-counts-v1.mjs", { required: true });
@@ -63,6 +64,8 @@ await runPatch("./patch-ui-auto-mask-review-progress-v1.mjs", { required: true }
 await runPatch("./patch-ui-auto-mask-review-state-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-mask-cap-warning-v1.mjs", { required: true });
 await runPatch("./smoke-ui-auto-mask-cap-warning-source.mjs", { required: true });
+await runPatch("./patch-ui-accurate-auto-mask-truncation-warning-v1.mjs", { required: true });
+await runPatch("./smoke-accurate-auto-mask-truncation-warning-source.mjs", { required: true });
 await runPatch("./patch-ui-review-next-auto-mask-v1.mjs", { required: true });
 await runPatch("./patch-ui-review-auto-mask-focus-v1.mjs", { required: true });
 await runPatch("./patch-ui-approve-selected-auto-mask-v1.mjs", { required: true });
