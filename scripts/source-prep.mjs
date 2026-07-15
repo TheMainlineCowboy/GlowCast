@@ -52,6 +52,7 @@ await runPatch("./patch-ui-mask-origin-legend-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-count-status-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-origin-counts-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-origin-labels-v1.mjs", { required: true });
+await runPatch("./patch-ui-auto-mask-review-filter-v1.mjs", { required: true });
 
 const edgePath = "src/edgeDetect.ts";
 let edge = await fs.readFile(edgePath, "utf8");
