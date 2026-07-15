@@ -56,6 +56,7 @@ await runPatch("./patch-ui-auto-mask-review-filter-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-mask-bulk-actions-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-mask-review-progress-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-mask-review-state-v1.mjs", { required: true });
+await runPatch("./patch-ui-review-next-auto-mask-v1.mjs", { required: true });
 
 const edgePath = "src/edgeDetect.ts";
 let edge = await fs.readFile(edgePath, "utf8");
