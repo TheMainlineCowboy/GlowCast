@@ -1,0 +1,17 @@
+import fs from "node:fs/promises";
+
+const path = "src/App.tsx";
+let source = await fs.readFile(path, "utf8");
+
+const progressStatus = `({includedZones.length} active / {zones.length} total · {zones.filter((zone) => (zone.label ?? "").startsWith("Auto architectural mask") && zone.included).length} of {zones.filter((zone) => (zone.label ?? "").startsWith("Auto architectural mask")).length} auto enabled · {zones.filter((zone) => !(zone.label ?? "").startsWith("Auto architectural mask")).length} manual)`;
+const reviewState = `${progressStatus}{" "}<strong aria-live="polite">{zones.filter((zone) => (zone.label ?? "").startsWith("Auto architectural mask")).length === 0 ? "· No auto masks yet" : zones.filter((zone) => (zone.label ?? "").startsWith("Auto architectural mask") && zone.included).length === zones.filter((zone) => (zone.label ?? "").startsWith("Auto architectural mask")).length ? "· Review complete" : \`· \${zones.filter((zone) => (zone.label ?? "").startsWith("Auto architectural mask") && !zone.included).length} auto need review\`}</strong>`;
+
+if (source.includes('aria-live="polite"') && source.includes('Review complete') && source.includes('auto need review')) {
+  console.log("Automatic mask review state already present.");
+} else if (source.includes(progressStatus)) {
+  source = source.replace(progressStatus, reviewState);
+  await fs.writeFile(path, source);
+  console.log("Added visible automatic mask review completion state.");
+} else {
+  throw new Error("Automatic mask review progress anchor not found.");
+}
