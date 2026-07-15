@@ -103,8 +103,10 @@ source = source.replace(
       const competingScores = [...scores].sort((a, b) => a.score - b.score);
       const bestScore = competingScores[0]?.score;
       const ambiguityMargin = competingScores[1]?.score - bestScore;
+      // A slightly wider relative deadband keeps trim from toggling parent ownership
+      // when detector jitter moves two weak parent scores across the old 12% boundary.
       const relativeAmbiguityMargin =
-        bestScore === undefined ? 0.03 : Math.max(0.03, Math.abs(bestScore) * 0.12);
+        bestScore === undefined ? 0.03 : Math.max(0.03, Math.abs(bestScore) * 0.14);
       if (
         ambiguityMargin !== undefined &&
         ambiguityMargin < relativeAmbiguityMargin &&
