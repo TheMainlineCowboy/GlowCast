@@ -9,18 +9,18 @@ if (source.includes(marker)) {
   process.exit(0);
 }
 
-const oldCap = "  const finalMasks = prioritizeArchitecturalOpenings(suppressNestedInteriorDetails(grouped, bounds), bounds).slice(0, 10);";
+const oldCap = "  const finalMasks = prioritizeArchitecturalOpenings(suppressWeakOpenFragments(suppressNestedInteriorDetails(grouped, bounds), bounds), bounds).slice(0, 10);";
 const newCap = `  // Repeated windows, shutters, and door groups can legitimately exceed ten masks.
   // Preserve a larger reviewable set so valid architectural openings are not silently
   // discarded before the user can inspect or disable them.
   const maxArchitecturalMasks = 16;
   const finalMasks = prioritizeArchitecturalOpenings(
-    suppressNestedInteriorDetails(grouped, bounds),
+    suppressWeakOpenFragments(suppressNestedInteriorDetails(grouped, bounds), bounds),
     bounds
   ).slice(0, maxArchitecturalMasks);`;
 
 if (!source.includes(oldCap)) {
-  throw new Error("Unable to locate prioritized architectural mask result cap");
+  throw new Error("Unable to locate filtered architectural mask result cap");
 }
 
 source = source.replace(oldCap, newCap);
