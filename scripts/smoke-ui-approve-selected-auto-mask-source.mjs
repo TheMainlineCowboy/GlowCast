@@ -4,23 +4,29 @@ const source = await fs.readFile("src/App.tsx", "utf8");
 
 const requiredFragments = [
   "const approveSelectedAutoMask = () => {",
-  "zone.id === selectedZoneId",
-  '(zone.label ?? "").startsWith("Auto architectural mask")',
-  "!zone.included",
+  "const disabledAutoMasks = zones.filter",
+  "const selectedIndex = disabledAutoMasks.findIndex",
+  "const remainingAutoMasks = disabledAutoMasks.filter",
+  "Math.min(selectedIndex, remainingAutoMasks.length - 1)",
   "zone.id === selectedAutoMask.id ? { ...zone, included: true } : zone",
+  "setSelectedZoneId(nextAutoMask?.id ?? null)",
   "onClick={approveSelectedAutoMask}",
-  "Enable Reviewed Auto Mask",
-  'aria-label="Enable the selected automatic mask after review"'
+  "Enable & Review Next Auto Mask",
+  'aria-label="Enable the selected automatic mask and review the next disabled automatic mask"'
 ];
 
 for (const fragment of requiredFragments) {
   if (!source.includes(fragment)) {
-    throw new Error(`Missing reviewed auto-mask approval wiring: ${fragment}`);
+    throw new Error(`Missing reviewed auto-mask approve-and-advance wiring: ${fragment}`);
   }
 }
 
-if (source.includes("setAllAutoMasksIncluded(true)} aria-label=\"Enable the selected automatic mask after review\"")) {
+if (source.includes("setAllAutoMasksIncluded(true)")) {
   throw new Error("Reviewed-mask approval must not enable every automatic mask.");
 }
 
-console.log("Selected automatic-mask approval source smoke passed.");
+if (source.includes("Enable Reviewed Auto Mask")) {
+  throw new Error("The previous non-advancing reviewed-mask label must not remain.");
+}
+
+console.log("Selected automatic-mask approve-and-advance source smoke passed.");
