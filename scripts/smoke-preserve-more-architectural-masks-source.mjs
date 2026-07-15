@@ -4,7 +4,7 @@ const source = await fs.readFile("src/core/maskCandidateAdapter.ts", "utf8");
 
 const requiredMarkers = [
   "const maxArchitecturalMasks = 16;",
-  ".slice(0, maxArchitecturalMasks)"
+  "const finalMasks = grouped.slice(0, maxArchitecturalMasks);"
 ];
 
 for (const marker of requiredMarkers) {
@@ -14,8 +14,8 @@ for (const marker of requiredMarkers) {
   }
 }
 
-if (source.includes(".slice(0, 10)")) {
-  console.error("Architectural mask preservation smoke failed: the old ten-mask truncation returned.");
+if (source.includes("const finalMasks = grouped.slice(0, 10);")) {
+  console.error("Architectural mask preservation smoke failed: the old diagnostics result cap returned.");
   process.exit(1);
 }
 
