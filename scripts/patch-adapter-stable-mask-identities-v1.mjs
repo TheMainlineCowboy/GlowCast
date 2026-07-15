@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 const adapterPath = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(adapterPath, "utf8");
 
-const helperMarker = "function stableMaskGeometryId(prefix: string, box: SimpleBox): string";
+const helperMarker = "function stableMaskGeometryId(prefix: string, box: SimpleBox, points: SimplePoint[]): string";
 if (!source.includes(helperMarker)) {
   const pointKeyAnchor = `function pointKey(point: SimplePoint): string {
   return \`${'${point.x.toFixed(2)},${point.y.toFixed(2)}'}\`;
@@ -16,27 +16,36 @@ if (!source.includes(helperMarker)) {
     pointKeyAnchor,
     `${pointKeyAnchor}
 
-function stableMaskGeometryId(prefix: string, box: SimpleBox): string {
+function stableMaskGeometryId(prefix: string, box: SimpleBox, points: SimplePoint[]): string {
   const geometry = [box.x, box.y, box.width, box.height]
     .map((value) => Math.round(value * 20).toString(36))
     .join("_");
-  return \`${'${prefix}_${geometry}'}\`;
+  const outline = points
+    .map((point) => \`${'${Math.round(point.x * 20).toString(36)},${Math.round(point.y * 20).toString(36)}'}\`)
+    .sort()
+    .join(";");
+  let fingerprint = 2166136261;
+  for (let index = 0; index < outline.length; index += 1) {
+    fingerprint ^= outline.charCodeAt(index);
+    fingerprint = Math.imul(fingerprint, 16777619);
+  }
+  return \`${'${prefix}_${geometry}_${(fingerprint >>> 0).toString(36)}'}\`;
 }`
   );
 }
 
 const fallbackId = 'id: "mask_fallback_" + Date.now() + "_" + next.length,';
 if (source.includes(fallbackId)) {
-  source = source.replace(fallbackId, 'id: stableMaskGeometryId("mask_fallback", box),');
+  source = source.replace(fallbackId, 'id: stableMaskGeometryId("mask_fallback", box, fallback.points),');
 }
 
 const candidateId = 'id: "mask_candidate_" + Date.now() + "_" + accepted.length,';
 if (source.includes(candidateId)) {
-  source = source.replace(candidateId, 'id: stableMaskGeometryId("mask_candidate", box),');
+  source = source.replace(candidateId, 'id: stableMaskGeometryId("mask_candidate", box, points),');
 }
 
-if (!source.includes('id: stableMaskGeometryId("mask_fallback", box),') || !source.includes('id: stableMaskGeometryId("mask_candidate", box),')) {
-  throw new Error("Unable to establish stable detector mask identities");
+if (!source.includes('id: stableMaskGeometryId("mask_fallback", box, fallback.points),') || !source.includes('id: stableMaskGeometryId("mask_candidate", box, points),')) {
+  throw new Error("Unable to establish distinct stable detector mask identities");
 }
 
 await fs.writeFile(adapterPath, source);
@@ -54,4 +63,4 @@ if (!edge.includes('id: "auto_mask_architectural_" + candidate.id,')) {
 await fs.writeFile(edgePath, edge);
 
 await import("./smoke-stable-auto-mask-identities-source.mjs");
-console.log("stable auto-mask identities ready");
+console.log("distinct stable auto-mask identities ready");
