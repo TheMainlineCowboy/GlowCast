@@ -53,4 +53,5 @@ if (!edge.includes('id: "auto_mask_architectural_" + candidate.id,')) {
 }
 await fs.writeFile(edgePath, edge);
 
+await import("./smoke-stable-auto-mask-identities-source.mjs");
 console.log("stable auto-mask identities ready");
