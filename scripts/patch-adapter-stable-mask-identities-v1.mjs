@@ -16,14 +16,20 @@ if (!source.includes(helperMarker)) {
     pointKeyAnchor,
     `${pointKeyAnchor}
 
+function canonicalOutlineKey(points: SimplePoint[]): string {
+  const keys = points.map((point) => \`${'${Math.round(point.x * 20).toString(36)},${Math.round(point.y * 20).toString(36)}'}\`);
+  if (keys.length === 0) return "empty";
+  const rotations = (sequence: string[]) => sequence.map((_, index) => sequence.slice(index).concat(sequence.slice(0, index)).join(";"));
+  const forward = rotations(keys);
+  const reverse = rotations([...keys].reverse());
+  return [...forward, ...reverse].sort()[0];
+}
+
 function stableMaskGeometryId(prefix: string, box: SimpleBox, points: SimplePoint[]): string {
   const geometry = [box.x, box.y, box.width, box.height]
     .map((value) => Math.round(value * 20).toString(36))
     .join("_");
-  const outline = points
-    .map((point) => \`${'${Math.round(point.x * 20).toString(36)},${Math.round(point.y * 20).toString(36)}'}\`)
-    .sort()
-    .join(";");
+  const outline = canonicalOutlineKey(points);
   let fingerprint = 2166136261;
   for (let index = 0; index < outline.length; index += 1) {
     fingerprint ^= outline.charCodeAt(index);
@@ -63,4 +69,4 @@ if (!edge.includes('id: "auto_mask_architectural_" + candidate.id,')) {
 await fs.writeFile(edgePath, edge);
 
 await import("./smoke-stable-auto-mask-identities-source.mjs");
-console.log("distinct stable auto-mask identities ready");
+console.log("connectivity-preserving stable auto-mask identities ready");
