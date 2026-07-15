@@ -4,12 +4,13 @@ const path = "src/App.tsx";
 let source = await fs.readFile(path, "utf8");
 
 const autoMaskCheck = '(zone.label ?? "").startsWith("Auto architectural mask")';
-const visibleAnchor = `  const visibleSetupZones = showOnlyAutoMasks ? zones.filter((zone) => ${autoMaskCheck}) : zones;`;
-const bulkAction = `  const setAllAutoMasksIncluded = (included: boolean) => {\n    setZones((currentZones) => currentZones.map((zone) =>\n      ${autoMaskCheck} ? { ...zone, included } : zone\n    ));\n  };`;
+const stateAnchor = "  const includedZones = zones.filter((zone) => zone.included);";
+const bulkActionMarker = "  const setAllAutoMasksIncluded = (included: boolean) => {";
+const bulkAction = `${bulkActionMarker}\n    setZones((currentZones) => currentZones.map((zone) =>\n      ${autoMaskCheck} ? { ...zone, included } : zone\n    ));\n  };`;
 
-if (!source.includes(bulkAction)) {
-  if (!source.includes(visibleAnchor)) throw new Error("Auto-mask review state anchor not found.");
-  source = source.replace(visibleAnchor, `${visibleAnchor}\n${bulkAction}`);
+if (!source.includes(bulkActionMarker)) {
+  if (!source.includes(stateAnchor)) throw new Error("Stable mask-state anchor not found.");
+  source = source.replace(stateAnchor, `${stateAnchor}\n${bulkAction}`);
 }
 
 const toolbarAnchor = '              <button onClick={() => { setDrawMode((value) => !value); setProjectionOnly(false); setCornerMode(false); setCornerPoints([]); setSurfacePolygonMode(false); }} disabled={!imageUrl} >';
