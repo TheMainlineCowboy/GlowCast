@@ -50,6 +50,7 @@ await runPatch("./patch-adapter-bound-cumulative-satellite-growth-v1.mjs", { req
 await runPatch("./patch-adapter-reject-ambiguous-satellite-parent-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-origin-legend-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-count-status-v1.mjs", { required: true });
+await runPatch("./patch-ui-mask-origin-counts-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-origin-labels-v1.mjs", { required: true });
 
 const edgePath = "src/edgeDetect.ts";
