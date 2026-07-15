@@ -4,10 +4,12 @@ const adapterSource = await fs.readFile("src/core/maskCandidateAdapter.ts", "utf
 const edgeSource = await fs.readFile("src/edgeDetect.ts", "utf8");
 
 const requiredAdapterMarkers = [
-  "function stableMaskGeometryId(prefix: string, box: SimpleBox): string",
+  "function stableMaskGeometryId(prefix: string, box: SimpleBox, points: SimplePoint[]): string",
   '.map((value) => Math.round(value * 20).toString(36))',
-  'id: stableMaskGeometryId("mask_candidate", box)',
-  'id: stableMaskGeometryId("mask_fallback", box)'
+  '.sort()',
+  'fingerprint = Math.imul(fingerprint, 16777619)',
+  'id: stableMaskGeometryId("mask_candidate", box, points)',
+  'id: stableMaskGeometryId("mask_fallback", box, fallback.points)'
 ];
 
 for (const marker of requiredAdapterMarkers) {
@@ -22,6 +24,11 @@ if (adapterSource.includes('"mask_candidate_" + Date.now()') || adapterSource.in
   process.exit(1);
 }
 
+if (adapterSource.includes('stableMaskGeometryId("mask_candidate", box)') || adapterSource.includes('stableMaskGeometryId("mask_fallback", box)')) {
+  console.error("Stable auto-mask identity smoke failed: box-only identities can collide for different outlines.");
+  process.exit(1);
+}
+
 if (!edgeSource.includes('id: "auto_mask_architectural_" + candidate.id,')) {
   console.error("Stable auto-mask identity smoke failed: UI masks do not inherit detector geometry identities.");
   process.exit(1);
@@ -31,4 +38,4 @@ if (edgeSource.includes('"auto_mask_architectural_" + Date.now()')) {
   process.exit(1);
 }
 
-console.log("Stable auto-mask identity smoke passed: unchanged geometry keeps deterministic detector, fallback, and UI mask identities.");
+console.log("Stable auto-mask identity smoke passed: unchanged outlines keep deterministic identities while different outlines sharing a box remain distinct.");
