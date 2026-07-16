@@ -9,6 +9,9 @@ const requiredFragments = [
   "const weakestSide = Math.min(...sideDensities)",
   "const strongestSide = Math.max(...sideDensities)",
   "const sideBalance = weakestSide / Math.max(0.01, strongestSide)",
+  "const horizontalBalance = Math.min(topBand, bottomBand) / Math.max(0.01, Math.max(topBand, bottomBand))",
+  "const verticalBalance = Math.min(leftBand, rightBand) / Math.max(0.01, Math.max(leftBand, rightBand))",
+  "const oppositeSideBalance = Math.min(horizontalBalance, verticalBalance)",
   "const frameDensity = (topBand + bottomBand + leftBand + rightBand) / 4",
   "const hollowContrast = frameDensity / Math.max(0.01, center)",
   "const sideThreshold = Math.max(0.08, ringDensity * 1.08, center * 0.72)",
@@ -16,7 +19,9 @@ const requiredFragments = [
   "supportedSides < 4",
   "weakestSide < sideThreshold",
   "sideBalance < 0.34",
-  "sideBalance * 0.8",
+  "oppositeSideBalance < 0.42",
+  "sideBalance * 0.6",
+  "oppositeSideBalance * 0.65",
   "componentFallbacks.length ? componentFallbacks : buildDensityWindowFallbacks(edgePoints, bounds)",
   "overlapRatio(existing, proposal) > 0.48",
   "if (accepted.length >= 6) break"
@@ -37,7 +42,7 @@ if (source.includes("const sideThreshold = Math.max(ringDensity * 1.08, center *
 }
 
 if (source.includes("score: contrast * 2 + supportedSides")) {
-  throw new Error("Density-window fallback regression failed: ranking must reward hollow balanced frames, not solid texture density.");
+  throw new Error("Density-window fallback regression failed: ranking must reward hollow frames with balanced opposite edges, not solid texture density.");
 }
 
-console.log("Density-window fallback source smoke passed: recovery requires nonzero, balanced support on all four sides and remains hollow-centered, overlap-suppressed, and bounded.");
+console.log("Density-window fallback source smoke passed: recovery requires nonzero, balanced support on every side and across opposite edge pairs while remaining hollow-centered, overlap-suppressed, and bounded.");

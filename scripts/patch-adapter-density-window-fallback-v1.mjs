@@ -72,12 +72,15 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
           const weakestSide = Math.min(...sideDensities);
           const strongestSide = Math.max(...sideDensities);
           const sideBalance = weakestSide / Math.max(0.01, strongestSide);
+          const horizontalBalance = Math.min(topBand, bottomBand) / Math.max(0.01, Math.max(topBand, bottomBand));
+          const verticalBalance = Math.min(leftBand, rightBand) / Math.max(0.01, Math.max(leftBand, rightBand));
+          const oppositeSideBalance = Math.min(horizontalBalance, verticalBalance);
           const contrast = insideDensity / Math.max(0.01, ringDensity);
 
           // Density windows are a last-resort recovery path. Require a closed four-sided
-          // frame with a quieter center and reasonably balanced side evidence so a single
-          // heavy shadow or trim line cannot complete an otherwise weak rectangle.
-          if (insideDensity <= 0 || contrast < 1.08 || hollowContrast < 1.12 || supportedSides < 4 || weakestSide < sideThreshold || sideBalance < 0.34) continue;
+          // frame with a quieter center and balanced opposite edges so a single shadow,
+          // trim line, or partial border cannot complete an otherwise weak rectangle.
+          if (insideDensity <= 0 || contrast < 1.08 || hollowContrast < 1.12 || supportedSides < 4 || weakestSide < sideThreshold || sideBalance < 0.34 || oppositeSideBalance < 0.42) continue;
 
           const box = {
             x: bounds.x + (left / columns) * bounds.width,
@@ -93,7 +96,7 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
             cells: insideArea,
             edgeCount: Math.round(inside),
             points: boxPoints(box),
-            score: contrast * 1.6 + hollowContrast * 1.4 + supportedSides * 0.45 + sideBalance * 0.8 + frameDensity * 0.04
+            score: contrast * 1.6 + hollowContrast * 1.4 + supportedSides * 0.45 + sideBalance * 0.6 + oppositeSideBalance * 0.65 + frameDensity * 0.04
           });
         }
       }
