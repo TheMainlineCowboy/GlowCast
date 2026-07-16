@@ -56,6 +56,7 @@ await runPatch("./patch-adapter-preserve-more-architectural-masks-v1.mjs", { req
 await runPatch("./smoke-preserve-more-architectural-masks-source.mjs", { required: true });
 await runPatch("./patch-adapter-mask-truncation-stats-v1.mjs", { required: true });
 await runPatch("./patch-adapter-density-window-fallback-v1.mjs", { required: true });
+await runPatch("./smoke-density-window-fallback-source.mjs", { required: true });
 await runPatch("./patch-ui-mask-origin-legend-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-count-status-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-origin-counts-v1.mjs", { required: true });
