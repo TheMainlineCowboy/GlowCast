@@ -75,12 +75,20 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
             sumRect(right - 1, top, right, verticalMid) / Math.max(1, verticalMid - top),
             sumRect(right - 1, verticalMid, right, bottom) / Math.max(1, bottom - verticalMid)
           ];
+          const cornerDensities = [
+            sumRect(left, top, left + 2, top + 2) / 4,
+            sumRect(right - 2, top, right, top + 2) / 4,
+            sumRect(left, bottom - 2, left + 2, bottom) / 4,
+            sumRect(right - 2, bottom - 2, right, bottom) / 4
+          ];
           const center = sumRect(left + 2, top + 2, right - 2, bottom - 2) / Math.max(1, (widthCells - 4) * (heightCells - 4));
           const frameDensity = (topBand + bottomBand + leftBand + rightBand) / 4;
           const hollowContrast = frameDensity / Math.max(0.01, center);
           const sideThreshold = Math.max(0.08, ringDensity * 1.08, center * 0.72);
           const halfSideThreshold = Math.max(0.05, sideThreshold * 0.58);
+          const cornerThreshold = Math.max(0.045, halfSideThreshold * 0.72);
           const distributedHalfSides = halfSideDensities.filter((density) => density >= halfSideThreshold).length;
+          const supportedCorners = cornerDensities.filter((density) => density >= cornerThreshold).length;
           const sideDensities = [topBand, bottomBand, leftBand, rightBand];
           const supportedSides = sideDensities.filter((density) => density >= sideThreshold).length;
           const weakestSide = Math.min(...sideDensities);
@@ -92,10 +100,10 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
           const contrast = insideDensity / Math.max(0.01, ringDensity);
 
           // Density windows are a last-resort recovery path. Require a closed four-sided
-          // frame with evidence distributed along the frame, a quieter center, and balanced
-          // opposite edges. Keep a complete two-cell context ring around every proposal so
-          // image boundaries cannot manufacture missing exterior evidence through clamping.
-          if (insideDensity <= 0 || contrast < 1.08 || hollowContrast < 1.12 || supportedSides < 4 || distributedHalfSides < 7 || weakestSide < sideThreshold || sideBalance < 0.34 || oppositeSideBalance < 0.42) continue;
+          // frame with evidence distributed along the frame and through most corners, a
+          // quieter center, and balanced opposite edges. Keep a complete two-cell context
+          // ring so image boundaries cannot manufacture missing evidence through clamping.
+          if (insideDensity <= 0 || contrast < 1.08 || hollowContrast < 1.12 || supportedSides < 4 || distributedHalfSides < 7 || supportedCorners < 3 || weakestSide < sideThreshold || sideBalance < 0.34 || oppositeSideBalance < 0.42) continue;
 
           const box = {
             x: bounds.x + (left / columns) * bounds.width,
@@ -111,7 +119,7 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
             cells: insideArea,
             edgeCount: Math.round(inside),
             points: boxPoints(box),
-            score: contrast * 1.6 + hollowContrast * 1.4 + supportedSides * 0.45 + distributedHalfSides * 0.12 + sideBalance * 0.6 + oppositeSideBalance * 0.65 + frameDensity * 0.04
+            score: contrast * 1.6 + hollowContrast * 1.4 + supportedSides * 0.45 + distributedHalfSides * 0.12 + supportedCorners * 0.16 + sideBalance * 0.6 + oppositeSideBalance * 0.65 + frameDensity * 0.04
           });
         }
       }
