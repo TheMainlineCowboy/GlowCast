@@ -38,7 +38,9 @@ const requiredFragments = [
   "oppositeSideBalance * 0.65",
   "componentFallbacks.length ? componentFallbacks : buildDensityWindowFallbacks(edgePoints, bounds)",
   "const nearDuplicate = accepted.some((existing) => {",
-  "centerDistance <= smallerDiagonal * 0.16",
+  "const horizontalOffset = Math.abs(proposalCenterX - existingCenterX) / Math.max(1, Math.min(existing.width, proposal.width))",
+  "const verticalOffset = Math.abs(proposalCenterY - existingCenterY) / Math.max(1, Math.min(existing.height, proposal.height))",
+  "horizontalOffset <= 0.18 && verticalOffset <= 0.18",
   "areaRatio >= 0.52",
   "if (nearDuplicate) continue",
   "if (accepted.length >= 6) break"
@@ -71,6 +73,10 @@ if (source.includes("const sideThreshold = Math.max(ringDensity * 1.08, center *
   throw new Error("Density-window fallback regression failed: empty sides must not pass through a zero support threshold.");
 }
 
+if (source.includes("centerDistance <= smallerDiagonal * 0.16")) {
+  throw new Error("Density-window fallback regression failed: diagonal-only deduplication can collapse close adjacent windows.");
+}
+
 if (source.includes("if (accepted.some((existing) => overlapRatio(existing, proposal) > 0.48)) continue;")) {
   throw new Error("Density-window fallback regression failed: offset, similarly sized proposals must be suppressed even when raw overlap is just below the old cutoff.");
 }
@@ -79,4 +85,4 @@ if (source.includes("score: contrast * 2 + supportedSides")) {
   throw new Error("Density-window fallback regression failed: ranking must reward hollow frames with distributed, corner-connected, balanced edge evidence, not solid texture density.");
 }
 
-console.log("Density-window fallback source smoke passed: recovery keeps a complete exterior context ring, requires nonzero distributed and corner-connected support, and suppresses overlapping or near-centered duplicate masks.");
+console.log("Density-window fallback source smoke passed: recovery preserves adjacent openings while suppressing overlapping or axis-aligned near-duplicate masks.");
