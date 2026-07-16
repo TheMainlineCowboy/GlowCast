@@ -9,8 +9,11 @@ const requiredFragments = [
   "const horizontalMid = left + Math.floor(widthCells / 2)",
   "const verticalMid = top + Math.floor(heightCells / 2)",
   "const halfSideDensities = [",
+  "const cornerDensities = [",
   "const halfSideThreshold = Math.max(0.05, sideThreshold * 0.58)",
+  "const cornerThreshold = Math.max(0.045, halfSideThreshold * 0.72)",
   "const distributedHalfSides = halfSideDensities.filter((density) => density >= halfSideThreshold).length",
+  "const supportedCorners = cornerDensities.filter((density) => density >= cornerThreshold).length",
   "const sideDensities = [topBand, bottomBand, leftBand, rightBand]",
   "const supportedSides = sideDensities.filter((density) => density >= sideThreshold).length",
   "const weakestSide = Math.min(...sideDensities)",
@@ -25,10 +28,12 @@ const requiredFragments = [
   "hollowContrast < 1.12",
   "supportedSides < 4",
   "distributedHalfSides < 7",
+  "supportedCorners < 3",
   "weakestSide < sideThreshold",
   "sideBalance < 0.34",
   "oppositeSideBalance < 0.42",
   "distributedHalfSides * 0.12",
+  "supportedCorners * 0.16",
   "sideBalance * 0.6",
   "oppositeSideBalance * 0.65",
   "componentFallbacks.length ? componentFallbacks : buildDensityWindowFallbacks(edgePoints, bounds)",
@@ -55,12 +60,16 @@ if (source.includes("distributedHalfSides < 6")) {
   throw new Error("Density-window fallback regression failed: frame evidence must be distributed across nearly every half-side segment.");
 }
 
+if (source.includes("supportedCorners < 2")) {
+  throw new Error("Density-window fallback regression failed: disconnected edges must not pass without continuity through most frame corners.");
+}
+
 if (source.includes("const sideThreshold = Math.max(ringDensity * 1.08, center * 0.72)")) {
   throw new Error("Density-window fallback regression failed: empty sides must not pass through a zero support threshold.");
 }
 
 if (source.includes("score: contrast * 2 + supportedSides")) {
-  throw new Error("Density-window fallback regression failed: ranking must reward hollow frames with distributed, balanced edge evidence, not solid texture density.");
+  throw new Error("Density-window fallback regression failed: ranking must reward hollow frames with distributed, corner-connected, balanced edge evidence, not solid texture density.");
 }
 
-console.log("Density-window fallback source smoke passed: recovery keeps a complete exterior context ring, requires nonzero distributed support along every side and across opposite edge pairs, and remains hollow-centered, overlap-suppressed, and bounded.");
+console.log("Density-window fallback source smoke passed: recovery keeps a complete exterior context ring, requires nonzero distributed and corner-connected support along every side and across opposite edge pairs, and remains hollow-centered, overlap-suppressed, and bounded.");
