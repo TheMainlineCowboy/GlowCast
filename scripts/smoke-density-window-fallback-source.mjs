@@ -6,6 +6,9 @@ const requiredFragments = [
   "function buildDensityWindowFallbacks(",
   "const supportedSides = [topBand, bottomBand, leftBand, rightBand]",
   "const weakestSide = Math.min(topBand, bottomBand, leftBand, rightBand)",
+  "const frameDensity = (topBand + bottomBand + leftBand + rightBand) / 4",
+  "const hollowContrast = frameDensity / Math.max(0.01, center)",
+  "hollowContrast < 1.12",
   "supportedSides < 4",
   "weakestSide < sideThreshold",
   "componentFallbacks.length ? componentFallbacks : buildDensityWindowFallbacks(edgePoints, bounds)",
@@ -23,4 +26,8 @@ if (source.includes("supportedSides < 3")) {
   throw new Error("Density-window fallback regression failed: three-sided frames must not be accepted.");
 }
 
-console.log("Density-window fallback source smoke passed: recovery remains last-resort, four-sided, overlap-suppressed, and bounded.");
+if (source.includes("score: contrast * 2 + supportedSides")) {
+  throw new Error("Density-window fallback regression failed: ranking must reward hollow frames, not solid texture density.");
+}
+
+console.log("Density-window fallback source smoke passed: recovery remains last-resort, four-sided, hollow-centered, overlap-suppressed, and bounded.");
