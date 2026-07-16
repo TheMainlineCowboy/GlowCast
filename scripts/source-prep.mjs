@@ -51,6 +51,7 @@ await runPatch("./patch-adapter-reject-ambiguous-satellite-parent-v1.mjs", { req
 await runPatch("./patch-adapter-quantize-ambiguity-scores-v1.mjs", { required: true });
 await runPatch("./smoke-quantized-ambiguity-scores-source.mjs", { required: true });
 await runPatch("./smoke-quantized-ambiguity-scores-runtime.mjs", { required: true });
+await runPatch("./smoke-relative-ambiguity-confidence-source.mjs", { required: true });
 await runPatch("./patch-adapter-preserve-more-architectural-masks-v1.mjs", { required: true });
 await runPatch("./smoke-preserve-more-architectural-masks-source.mjs", { required: true });
 await runPatch("./patch-adapter-mask-truncation-stats-v1.mjs", { required: true });
