@@ -25,7 +25,10 @@ const requiredFragments = [
   "const verticalBalance = Math.min(leftBand, rightBand) / Math.max(0.01, Math.max(leftBand, rightBand))",
   "const oppositeSideBalance = Math.min(horizontalBalance, verticalBalance)",
   "const frameDensity = (topBand + bottomBand + leftBand + rightBand) / 4",
-  "const hollowContrast = frameDensity / Math.max(0.01, center)",
+  "const verticalMullionClearDensity = (leftInterior + rightInterior) / 2",
+  "const horizontalMullionClearDensity = (topInterior + bottomInterior) / 2",
+  "const mullionTolerantInteriorDensity = Math.min(center, verticalMullionClearDensity, horizontalMullionClearDensity)",
+  "const hollowContrast = frameDensity / Math.max(0.01, mullionTolerantInteriorDensity)",
   "const sideThreshold = Math.max(0.08, ringDensity * 1.08, center * 0.72)",
   "hollowContrast < 1.12",
   "supportedSides < 4",
@@ -93,6 +96,10 @@ if (source.includes("const sideThreshold = Math.max(ringDensity * 1.08, center *
   throw new Error("Density-window fallback regression failed: empty sides must not pass through a zero support threshold.");
 }
 
+if (source.includes("const hollowContrast = frameDensity / Math.max(0.01, center)")) {
+  throw new Error("Density-window fallback regression failed: a single central mullion must not make an otherwise hollow architectural frame look solid.");
+}
+
 if (source.includes("centerDistance <= smallerDiagonal * 0.16")) {
   throw new Error("Density-window fallback regression failed: diagonal-only deduplication can collapse close adjacent windows.");
 }
@@ -105,4 +112,4 @@ if (source.includes("score: contrast * 2 + supportedSides")) {
   throw new Error("Density-window fallback regression failed: ranking must reward hollow frames with distributed, corner-connected, balanced edge evidence, not solid texture density.");
 }
 
-console.log("Density-window fallback source smoke passed: recovery includes slim and tall door-shaped openings with stronger safeguards for narrow vertical candidates.");
+console.log("Density-window fallback source smoke passed: recovery includes slim and tall openings, preserves safety gates, and tolerates a single central mullion.");
