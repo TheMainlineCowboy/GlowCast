@@ -128,7 +128,22 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
 
   const accepted: FallbackComponent[] = [];
   for (const proposal of proposals.sort((a, b) => b.score - a.score)) {
-    if (accepted.some((existing) => overlapRatio(existing, proposal) > 0.48)) continue;
+    const proposalCenterX = proposal.x + proposal.width / 2;
+    const proposalCenterY = proposal.y + proposal.height / 2;
+    const nearDuplicate = accepted.some((existing) => {
+      if (overlapRatio(existing, proposal) > 0.48) return true;
+      const existingCenterX = existing.x + existing.width / 2;
+      const existingCenterY = existing.y + existing.height / 2;
+      const centerDistance = Math.hypot(proposalCenterX - existingCenterX, proposalCenterY - existingCenterY);
+      const smallerDiagonal = Math.hypot(
+        Math.min(existing.width, proposal.width),
+        Math.min(existing.height, proposal.height)
+      );
+      const areaRatio = Math.min(existing.width * existing.height, proposal.width * proposal.height) /
+        Math.max(existing.width * existing.height, proposal.width * proposal.height, 1);
+      return centerDistance <= smallerDiagonal * 0.16 && areaRatio >= 0.52;
+    });
+    if (nearDuplicate) continue;
     accepted.push(proposal);
     if (accepted.length >= 6) break;
   }
