@@ -134,14 +134,11 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
       if (overlapRatio(existing, proposal) > 0.48) return true;
       const existingCenterX = existing.x + existing.width / 2;
       const existingCenterY = existing.y + existing.height / 2;
-      const centerDistance = Math.hypot(proposalCenterX - existingCenterX, proposalCenterY - existingCenterY);
-      const smallerDiagonal = Math.hypot(
-        Math.min(existing.width, proposal.width),
-        Math.min(existing.height, proposal.height)
-      );
+      const horizontalOffset = Math.abs(proposalCenterX - existingCenterX) / Math.max(1, Math.min(existing.width, proposal.width));
+      const verticalOffset = Math.abs(proposalCenterY - existingCenterY) / Math.max(1, Math.min(existing.height, proposal.height));
       const areaRatio = Math.min(existing.width * existing.height, proposal.width * proposal.height) /
         Math.max(existing.width * existing.height, proposal.width * proposal.height, 1);
-      return centerDistance <= smallerDiagonal * 0.16 && areaRatio >= 0.52;
+      return horizontalOffset <= 0.18 && verticalOffset <= 0.18 && areaRatio >= 0.52;
     });
     if (nearDuplicate) continue;
     accepted.push(proposal);
