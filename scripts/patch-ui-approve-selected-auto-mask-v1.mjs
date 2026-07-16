@@ -20,20 +20,22 @@ if (existingFunctionStart >= 0) {
 }
 
 const oldButtonLabel = "Enable Reviewed Auto Mask";
-const buttonLabel = "Enable & Review Next Auto Mask";
-source = source.replace(oldButtonLabel, buttonLabel);
+const staticButtonLabel = "Enable & Review Next Auto Mask";
+const countedButtonLabel = `{\`Enable & Review Next Auto Mask (\${zones.filter((zone) => ${autoMaskCheck} && !zone.included).length} remaining)\`}`;
+source = source.replace(oldButtonLabel, staticButtonLabel);
 source = source.replace(
   'aria-label="Enable the selected automatic mask after review"',
   'aria-label="Enable the selected automatic mask and review the next disabled automatic mask"'
 );
+source = source.replace(staticButtonLabel, countedButtonLabel);
 
-if (!source.includes(buttonLabel)) {
+if (!source.includes(countedButtonLabel)) {
   const reviewButtonMarker = '<button type="button" onClick={reviewNextDisabledAutoMask}';
   const buttonIndex = source.indexOf(reviewButtonMarker);
   if (buttonIndex < 0) throw new Error("Review-next button anchor not found.");
-  const approveButton = `              <button type="button" onClick={approveSelectedAutoMask} disabled={!zones.some((zone) => zone.id === selectedZoneId && ${autoMaskCheck} && !zone.included)} aria-label="Enable the selected automatic mask and review the next disabled automatic mask">\n                ${buttonLabel}\n              </button>\n`;
+  const approveButton = `              <button type="button" onClick={approveSelectedAutoMask} disabled={!zones.some((zone) => zone.id === selectedZoneId && ${autoMaskCheck} && !zone.included)} aria-label="Enable the selected automatic mask and review the next disabled automatic mask">\n                ${countedButtonLabel}\n              </button>\n`;
   source = source.slice(0, buttonIndex) + approveButton.trimStart() + source.slice(buttonIndex);
 }
 
 await fs.writeFile(path, source);
-console.log("Applied selected automatic-mask approve-and-advance source patch.");
+console.log("Applied selected automatic-mask approve-and-advance source patch with remaining count.");
