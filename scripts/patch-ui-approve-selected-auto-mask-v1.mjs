@@ -19,21 +19,26 @@ if (existingFunctionStart >= 0) {
   source = source.slice(0, markerIndex) + approveFunction.trimStart() + source.slice(markerIndex);
 }
 
-const oldButtonLabel = "Enable Reviewed Auto Mask";
-const buttonLabel = "Enable & Review Next Auto Mask";
-source = source.replace(oldButtonLabel, buttonLabel);
+source = source.replace("Enable Reviewed Auto Mask", "Enable & Review Next Auto Mask");
 source = source.replace(
   'aria-label="Enable the selected automatic mask after review"',
   'aria-label="Enable the selected automatic mask and review the next disabled automatic mask"'
 );
 
-if (!source.includes(buttonLabel)) {
+const oldButtonBody = `                Enable & Review Next Auto Mask\n`;
+const countedButtonBody = `                {zones.some((zone) => ${autoMaskCheck} && !zone.included)\n                  ? \`Enable & Review Next Auto Mask (\${zones.filter((zone) => ${autoMaskCheck} && !zone.included).length} remaining)\`\n                  : "Enable & Review Next Auto Mask"}\n`;
+
+if (source.includes("Enable & Review Next Auto Mask (") && source.includes("remaining)")) {
+  console.log("Approve-and-advance remaining count already present.");
+} else if (source.includes(oldButtonBody)) {
+  source = source.replace(oldButtonBody, countedButtonBody);
+} else if (!source.includes("Enable & Review Next Auto Mask")) {
   const reviewButtonMarker = '<button type="button" onClick={reviewNextDisabledAutoMask}';
   const buttonIndex = source.indexOf(reviewButtonMarker);
   if (buttonIndex < 0) throw new Error("Review-next button anchor not found.");
-  const approveButton = `              <button type="button" onClick={approveSelectedAutoMask} disabled={!zones.some((zone) => zone.id === selectedZoneId && ${autoMaskCheck} && !zone.included)} aria-label="Enable the selected automatic mask and review the next disabled automatic mask">\n                ${buttonLabel}\n              </button>\n`;
+  const approveButton = `              <button type="button" onClick={approveSelectedAutoMask} disabled={!zones.some((zone) => zone.id === selectedZoneId && ${autoMaskCheck} && !zone.included)} aria-label="Enable the selected automatic mask and review the next disabled automatic mask">\n${countedButtonBody}              </button>\n`;
   source = source.slice(0, buttonIndex) + approveButton.trimStart() + source.slice(buttonIndex);
 }
 
 await fs.writeFile(path, source);
-console.log("Applied selected automatic-mask approve-and-advance source patch.");
+console.log("Applied selected automatic-mask approve-and-advance source patch with remaining count.");
