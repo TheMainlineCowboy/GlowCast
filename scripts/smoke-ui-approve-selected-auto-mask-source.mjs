@@ -11,7 +11,8 @@ const requiredFragments = [
   "zone.id === selectedAutoMask.id ? { ...zone, included: true } : zone",
   "setSelectedZoneId(nextAutoMask?.id ?? null)",
   "onClick={approveSelectedAutoMask}",
-  "Enable & Review Next Auto Mask",
+  "Enable & Review Next Auto Mask (",
+  ".length} remaining)",
   'aria-label="Enable the selected automatic mask and review the next disabled automatic mask"'
 ];
 
@@ -29,4 +30,8 @@ if (source.includes("Enable Reviewed Auto Mask")) {
   throw new Error("The previous non-advancing reviewed-mask label must not remain.");
 }
 
-console.log("Selected automatic-mask approve-and-advance source smoke passed.");
+if (source.includes(">Enable & Review Next Auto Mask<")) {
+  throw new Error("The approve-and-advance action must expose the live remaining-mask count.");
+}
+
+console.log("Selected automatic-mask approve-and-advance remaining-count source smoke passed.");
