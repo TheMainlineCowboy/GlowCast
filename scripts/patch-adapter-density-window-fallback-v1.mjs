@@ -67,13 +67,17 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
           const frameDensity = (topBand + bottomBand + leftBand + rightBand) / 4;
           const hollowContrast = frameDensity / Math.max(0.01, center);
           const sideThreshold = Math.max(0.08, ringDensity * 1.08, center * 0.72);
-          const supportedSides = [topBand, bottomBand, leftBand, rightBand].filter((density) => density >= sideThreshold).length;
-          const weakestSide = Math.min(topBand, bottomBand, leftBand, rightBand);
+          const sideDensities = [topBand, bottomBand, leftBand, rightBand];
+          const supportedSides = sideDensities.filter((density) => density >= sideThreshold).length;
+          const weakestSide = Math.min(...sideDensities);
+          const strongestSide = Math.max(...sideDensities);
+          const sideBalance = weakestSide / Math.max(0.01, strongestSide);
           const contrast = insideDensity / Math.max(0.01, ringDensity);
 
           // Density windows are a last-resort recovery path. Require a closed four-sided
-          // frame with a quieter center so solid texture patches cannot become masks.
-          if (insideDensity <= 0 || contrast < 1.08 || hollowContrast < 1.12 || supportedSides < 4 || weakestSide < sideThreshold) continue;
+          // frame with a quieter center and reasonably balanced side evidence so a single
+          // heavy shadow or trim line cannot complete an otherwise weak rectangle.
+          if (insideDensity <= 0 || contrast < 1.08 || hollowContrast < 1.12 || supportedSides < 4 || weakestSide < sideThreshold || sideBalance < 0.34) continue;
 
           const box = {
             x: bounds.x + (left / columns) * bounds.width,
@@ -89,7 +93,7 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
             cells: insideArea,
             edgeCount: Math.round(inside),
             points: boxPoints(box),
-            score: contrast * 1.6 + hollowContrast * 1.4 + supportedSides * 0.45 + frameDensity * 0.04
+            score: contrast * 1.6 + hollowContrast * 1.4 + supportedSides * 0.45 + sideBalance * 0.8 + frameDensity * 0.04
           });
         }
       }
