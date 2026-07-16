@@ -44,7 +44,7 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
 
   const proposals: FallbackComponent[] = [];
   const widths = [7, 9, 11, 13];
-  const heights = [6, 8, 10, 12];
+  const heights = [6, 8, 10, 12, 14, 16];
 
   for (const widthCells of widths) {
     for (const heightCells of heights) {
