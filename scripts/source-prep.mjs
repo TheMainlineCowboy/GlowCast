@@ -74,6 +74,7 @@ await runPatch("./patch-ui-review-next-auto-mask-v1.mjs", { required: true });
 await runPatch("./smoke-ui-review-next-auto-mask-source.mjs", { required: true });
 await runPatch("./patch-ui-review-auto-mask-focus-v1.mjs", { required: true });
 await runPatch("./patch-ui-approve-selected-auto-mask-v1.mjs", { required: true });
+await runPatch("./smoke-ui-approve-selected-auto-mask-source.mjs", { required: true });
 
 const edgePath = "src/edgeDetect.ts";
 let edge = await fs.readFile(edgePath, "utf8");
