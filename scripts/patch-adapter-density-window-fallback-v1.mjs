@@ -66,7 +66,7 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
           const center = sumRect(left + 2, top + 2, right - 2, bottom - 2) / Math.max(1, (widthCells - 4) * (heightCells - 4));
           const frameDensity = (topBand + bottomBand + leftBand + rightBand) / 4;
           const hollowContrast = frameDensity / Math.max(0.01, center);
-          const sideThreshold = Math.max(ringDensity * 1.08, center * 0.72);
+          const sideThreshold = Math.max(0.08, ringDensity * 1.08, center * 0.72);
           const supportedSides = [topBand, bottomBand, leftBand, rightBand].filter((density) => density >= sideThreshold).length;
           const weakestSide = Math.min(topBand, bottomBand, leftBand, rightBand);
           const contrast = insideDensity / Math.max(0.01, ringDensity);
