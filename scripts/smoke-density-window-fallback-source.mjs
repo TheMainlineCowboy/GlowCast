@@ -30,4 +30,6 @@ if (source.includes("score: contrast * 2 + supportedSides")) {
   throw new Error("Density-window fallback regression failed: ranking must reward hollow frames, not solid texture density.");
 }
 
-console.log("Density-window fallback source smoke passed: recovery remains last-resort, four-sided, hollow-centered, overlap-suppressed, and bounded.");
+await import("./smoke-density-window-fallback-runtime.mjs");
+
+console.log("Density-window fallback source and runtime smoke passed: recovery remains last-resort, four-sided, hollow-centered, overlap-suppressed, and bounded.");
