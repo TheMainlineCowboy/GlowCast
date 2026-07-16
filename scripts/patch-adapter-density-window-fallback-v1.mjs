@@ -63,10 +63,24 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
           const bottomBand = sumRect(left, bottom - 1, right, bottom) / Math.max(1, widthCells);
           const leftBand = sumRect(left, top, left + 1, bottom) / Math.max(1, heightCells);
           const rightBand = sumRect(right - 1, top, right, bottom) / Math.max(1, heightCells);
+          const horizontalMid = left + Math.floor(widthCells / 2);
+          const verticalMid = top + Math.floor(heightCells / 2);
+          const halfSideDensities = [
+            sumRect(left, top, horizontalMid, top + 1) / Math.max(1, horizontalMid - left),
+            sumRect(horizontalMid, top, right, top + 1) / Math.max(1, right - horizontalMid),
+            sumRect(left, bottom - 1, horizontalMid, bottom) / Math.max(1, horizontalMid - left),
+            sumRect(horizontalMid, bottom - 1, right, bottom) / Math.max(1, right - horizontalMid),
+            sumRect(left, top, left + 1, verticalMid) / Math.max(1, verticalMid - top),
+            sumRect(left, verticalMid, left + 1, bottom) / Math.max(1, bottom - verticalMid),
+            sumRect(right - 1, top, right, verticalMid) / Math.max(1, verticalMid - top),
+            sumRect(right - 1, verticalMid, right, bottom) / Math.max(1, bottom - verticalMid)
+          ];
           const center = sumRect(left + 2, top + 2, right - 2, bottom - 2) / Math.max(1, (widthCells - 4) * (heightCells - 4));
           const frameDensity = (topBand + bottomBand + leftBand + rightBand) / 4;
           const hollowContrast = frameDensity / Math.max(0.01, center);
           const sideThreshold = Math.max(0.08, ringDensity * 1.08, center * 0.72);
+          const halfSideThreshold = Math.max(0.05, sideThreshold * 0.58);
+          const distributedHalfSides = halfSideDensities.filter((density) => density >= halfSideThreshold).length;
           const sideDensities = [topBand, bottomBand, leftBand, rightBand];
           const supportedSides = sideDensities.filter((density) => density >= sideThreshold).length;
           const weakestSide = Math.min(...sideDensities);
@@ -78,10 +92,10 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
           const contrast = insideDensity / Math.max(0.01, ringDensity);
 
           // Density windows are a last-resort recovery path. Require a closed four-sided
-          // frame with a quieter center and balanced opposite edges. Keep a complete
-          // two-cell context ring around every proposal so image boundaries cannot
-          // manufacture missing exterior evidence through clamped sampling.
-          if (insideDensity <= 0 || contrast < 1.08 || hollowContrast < 1.12 || supportedSides < 4 || weakestSide < sideThreshold || sideBalance < 0.34 || oppositeSideBalance < 0.42) continue;
+          // frame with evidence distributed along the frame, a quieter center, and balanced
+          // opposite edges. Keep a complete two-cell context ring around every proposal so
+          // image boundaries cannot manufacture missing exterior evidence through clamping.
+          if (insideDensity <= 0 || contrast < 1.08 || hollowContrast < 1.12 || supportedSides < 4 || distributedHalfSides < 7 || weakestSide < sideThreshold || sideBalance < 0.34 || oppositeSideBalance < 0.42) continue;
 
           const box = {
             x: bounds.x + (left / columns) * bounds.width,
@@ -97,7 +111,7 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
             cells: insideArea,
             edgeCount: Math.round(inside),
             points: boxPoints(box),
-            score: contrast * 1.6 + hollowContrast * 1.4 + supportedSides * 0.45 + sideBalance * 0.6 + oppositeSideBalance * 0.65 + frameDensity * 0.04
+            score: contrast * 1.6 + hollowContrast * 1.4 + supportedSides * 0.45 + distributedHalfSides * 0.12 + sideBalance * 0.6 + oppositeSideBalance * 0.65 + frameDensity * 0.04
           });
         }
       }
