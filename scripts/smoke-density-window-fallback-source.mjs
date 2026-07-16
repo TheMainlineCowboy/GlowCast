@@ -4,6 +4,7 @@ const source = await fs.readFile("src/core/maskCandidateAdapter.ts", "utf8");
 
 const requiredFragments = [
   "function buildDensityWindowFallbacks(",
+  "const widths = [5, 7, 9, 11, 13]",
   "const heights = [6, 8, 10, 12, 14, 16]",
   "for (let top = 2; top + heightCells <= rows - 2; top += 2)",
   "for (let left = 2; left + widthCells <= columns - 2; left += 2)",
@@ -33,6 +34,12 @@ const requiredFragments = [
   "weakestSide < sideThreshold",
   "sideBalance < 0.34",
   "oppositeSideBalance < 0.42",
+  "const isSlimVertical = aspect < 0.35",
+  "if (aspect < 0.22 || aspect > 2.8) continue",
+  "heightCells < 10",
+  "hollowContrast < 1.28",
+  "oppositeSideBalance < 0.5",
+  "supportedCorners < 4",
   "distributedHalfSides * 0.12",
   "supportedCorners * 0.16",
   "sideBalance * 0.6",
@@ -53,8 +60,16 @@ for (const fragment of requiredFragments) {
   }
 }
 
+if (source.includes("const widths = [7, 9, 11, 13]")) {
+  throw new Error("Density-window fallback regression failed: slim vertical architectural openings must remain in the recovery search range.");
+}
+
 if (source.includes("const heights = [6, 8, 10, 12]")) {
   throw new Error("Density-window fallback regression failed: tall door-shaped openings must remain in the recovery search range.");
+}
+
+if (source.includes("if (aspect < 0.35 || aspect > 2.8) continue")) {
+  throw new Error("Density-window fallback regression failed: slim door recovery must not be disabled by the previous minimum aspect ratio.");
 }
 
 if (source.includes("for (let top = 1; top + heightCells < rows - 1; top += 2)") ||
@@ -90,4 +105,4 @@ if (source.includes("score: contrast * 2 + supportedSides")) {
   throw new Error("Density-window fallback regression failed: ranking must reward hollow frames with distributed, corner-connected, balanced edge evidence, not solid texture density.");
 }
 
-console.log("Density-window fallback source smoke passed: recovery includes tall door-shaped openings while preserving adjacent openings and suppressing unsafe duplicates.");
+console.log("Density-window fallback source smoke passed: recovery includes slim and tall door-shaped openings with stronger safeguards for narrow vertical candidates.");
