@@ -48,8 +48,8 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
 
   for (const widthCells of widths) {
     for (const heightCells of heights) {
-      for (let top = 1; top + heightCells < rows - 1; top += 2) {
-        for (let left = 1; left + widthCells < columns - 1; left += 2) {
+      for (let top = 2; top + heightCells <= rows - 2; top += 2) {
+        for (let left = 2; left + widthCells <= columns - 2; left += 2) {
           const right = left + widthCells;
           const bottom = top + heightCells;
           const inside = sumRect(left, top, right, bottom);
@@ -78,8 +78,9 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
           const contrast = insideDensity / Math.max(0.01, ringDensity);
 
           // Density windows are a last-resort recovery path. Require a closed four-sided
-          // frame with a quieter center and balanced opposite edges so a single shadow,
-          // trim line, or partial border cannot complete an otherwise weak rectangle.
+          // frame with a quieter center and balanced opposite edges. Keep a complete
+          // two-cell context ring around every proposal so image boundaries cannot
+          // manufacture missing exterior evidence through clamped sampling.
           if (insideDensity <= 0 || contrast < 1.08 || hollowContrast < 1.12 || supportedSides < 4 || weakestSide < sideThreshold || sideBalance < 0.34 || oppositeSideBalance < 0.42) continue;
 
           const box = {
