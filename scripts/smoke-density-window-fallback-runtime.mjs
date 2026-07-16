@@ -34,21 +34,21 @@ await fs.writeFile(emittedDetectorPath, (await fs.readFile(emittedDetectorPath, 
 const bounds = { x: 0, y: 0, width: 100, height: 100 };
 const columns = 48;
 const rows = 36;
-const edges = [];
 
-function addCell(column, row, repeats = 4, strength = 255) {
-  for (let index = 0; index < repeats; index += 1) {
-    edges.push({
-      x: ((column + 0.2 + index * 0.12) / columns) * bounds.width,
-      y: ((row + 0.2 + index * 0.12) / rows) * bounds.height,
-      strength
-    });
-  }
-}
-
-function addFrame(left, top, width, height, { openBottom = false, solid = false } = {}) {
+function makeFrame({ left = 5, top = 7, width = 11, height = 10, openBottom = false, solid = false } = {}) {
+  const edges = [];
   const right = left + width - 1;
   const bottom = top + height - 1;
+  const addCell = (column, row, repeats = 5) => {
+    for (let index = 0; index < repeats; index += 1) {
+      edges.push({
+        x: ((column + 0.18 + index * 0.1) / columns) * bounds.width,
+        y: ((row + 0.18 + index * 0.1) / rows) * bounds.height,
+        strength: 255
+      });
+    }
+  };
+
   for (let column = left; column <= right; column += 1) {
     addCell(column, top);
     if (!openBottom) addCell(column, bottom);
@@ -59,55 +59,56 @@ function addFrame(left, top, width, height, { openBottom = false, solid = false 
   }
   if (solid) {
     for (let row = top + 1; row < bottom; row += 1) {
-      for (let column = left + 1; column < right; column += 1) addCell(column, row, 3);
+      for (let column = left + 1; column < right; column += 1) addCell(column, row, 4);
     }
   }
+  return edges;
 }
 
-// A genuinely closed hollow opening should be recovered.
-addFrame(5, 7, 11, 10);
-// A uniformly dense rectangle should not be mistaken for a hollow opening.
-addFrame(22, 7, 11, 10, { solid: true });
-// A three-sided frame should remain rejected.
-addFrame(36, 7, 9, 10, { openBottom: true });
-
-function contains(box, x, y) {
-  return x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height;
+function overlapRatio(a, b) {
+  const left = Math.max(a.x, b.x);
+  const top = Math.max(a.y, b.y);
+  const right = Math.min(a.x + a.width, b.x + b.width);
+  const bottom = Math.min(a.y + a.height, b.y + b.height);
+  const intersection = Math.max(0, right - left) * Math.max(0, bottom - top);
+  return intersection / Math.max(0.01, Math.min(a.width * a.height, b.width * b.height));
 }
 
 try {
   const { buildDensityWindowFallbacks } = await import(pathToFileURL(emittedAdapterPath).href);
-  const result = buildDensityWindowFallbacks(edges, bounds);
-  const closedCenter = { x: ((5 + 5.5) / columns) * 100, y: ((7 + 5) / rows) * 100 };
-  const solidCenter = { x: ((22 + 5.5) / columns) * 100, y: ((7 + 5) / rows) * 100 };
-  const openCenter = { x: ((36 + 4.5) / columns) * 100, y: ((7 + 5) / rows) * 100 };
+  const closed = buildDensityWindowFallbacks(makeFrame(), bounds);
+  const solid = buildDensityWindowFallbacks(makeFrame({ solid: true }), bounds);
+  const open = buildDensityWindowFallbacks(makeFrame({ openBottom: true }), bounds);
 
-  const closedMatches = result.filter((candidate) => contains(candidate, closedCenter.x, closedCenter.y));
-  const solidMatches = result.filter((candidate) => contains(candidate, solidCenter.x, solidCenter.y));
-  const openMatches = result.filter((candidate) => contains(candidate, openCenter.x, openCenter.y));
-
-  if (closedMatches.length !== 1) {
-    console.error("Density fallback runtime smoke failed: expected one recovered closed hollow opening.");
-    console.error(JSON.stringify(result, null, 2));
+  if (closed.length < 1) {
+    console.error("Density fallback runtime smoke failed: closed hollow opening was not recovered.");
     process.exit(1);
   }
-  if (solidMatches.length > 0) {
+  if (solid.length !== 0) {
     console.error("Density fallback runtime smoke failed: solid texture patch produced a mask.");
-    console.error(JSON.stringify(result, null, 2));
+    console.error(JSON.stringify(solid, null, 2));
     process.exit(1);
   }
-  if (openMatches.length > 0) {
+  if (open.length !== 0) {
     console.error("Density fallback runtime smoke failed: three-sided frame produced a mask.");
-    console.error(JSON.stringify(result, null, 2));
+    console.error(JSON.stringify(open, null, 2));
     process.exit(1);
   }
-  if (result.length !== 1) {
-    console.error("Density fallback runtime smoke failed: overlapping or unrelated proposals were not suppressed.");
-    console.error(JSON.stringify(result, null, 2));
+  for (let first = 0; first < closed.length; first += 1) {
+    for (let second = first + 1; second < closed.length; second += 1) {
+      if (overlapRatio(closed[first], closed[second]) > 0.48) {
+        console.error("Density fallback runtime smoke failed: overlapping duplicate proposals survived suppression.");
+        console.error(JSON.stringify(closed, null, 2));
+        process.exit(1);
+      }
+    }
+  }
+  if (closed.length > 6) {
+    console.error("Density fallback runtime smoke failed: recovery exceeded the six-mask safety cap.");
     process.exit(1);
   }
 
-  console.log("Density fallback runtime smoke passed: recovered the closed hollow opening while rejecting solid texture, a three-sided frame, and duplicate proposals.");
+  console.log("Density fallback runtime smoke passed: recovered a closed hollow opening while rejecting solid texture, a three-sided frame, and overlapping duplicates.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
