@@ -9,7 +9,8 @@ const required = [
   "(currentIndex + 1) % disabledAutoMasks.length",
   "setSelectedTarget(\"zone\")",
   "setSelectedZoneId(nextMask.id)",
-  "Review Next Auto Mask",
+  "Review Next Auto Mask (",
+  "remaining)",
   'aria-label="Select the next disabled automatic mask for review"'
 ];
 
@@ -23,8 +24,12 @@ if (!source.includes('disabled={!zones.some((zone) => (zone.label ?? "").startsW
   throw new Error("Review-next action must disable itself when no disabled automatic masks remain.");
 }
 
+if (!source.includes('zones.filter((zone) => (zone.label ?? "").startsWith("Auto architectural mask") && !zone.included).length')) {
+  throw new Error("Review-next action must show the live remaining automatic-mask count.");
+}
+
 if (!source.includes('startsWith("Auto architectural mask") && !zone.included')) {
   throw new Error("Review-next action must only cycle through disabled automatic masks.");
 }
 
-console.log("Next automatic-mask review source regression passed.");
+console.log("Counted next automatic-mask review source regression passed.");
