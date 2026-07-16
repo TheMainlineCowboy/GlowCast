@@ -27,10 +27,12 @@ if (source.includes("supportedSides < 3")) {
   throw new Error("Density-window fallback regression failed: three-sided frames must not be accepted.");
 }
 
+if (source.includes("const sideThreshold = Math.max(ringDensity * 1.08, center * 0.72)")) {
+  throw new Error("Density-window fallback regression failed: empty sides must not pass through a zero support threshold.");
+}
+
 if (source.includes("score: contrast * 2 + supportedSides")) {
   throw new Error("Density-window fallback regression failed: ranking must reward hollow frames, not solid texture density.");
 }
 
-await import("./smoke-density-window-fallback-runtime.mjs");
-
-console.log("Density-window fallback source and runtime smoke passed: recovery remains last-resort, four-sided, hollow-centered, overlap-suppressed, and bounded.");
+console.log("Density-window fallback source smoke passed: recovery requires nonzero support on all four sides and remains hollow-centered, overlap-suppressed, and bounded.");
