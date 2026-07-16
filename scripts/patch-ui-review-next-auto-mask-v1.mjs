@@ -15,14 +15,20 @@ if (!source.includes(functionMarker)) {
   source = source.slice(0, insertionIndex) + reviewFunction + source.slice(insertionIndex);
 }
 
-const buttonLabel = "Review Next Auto Mask";
-if (!source.includes(buttonLabel)) {
+const oldButtonBody = `                Review Next Auto Mask\n`;
+const countedButtonBody = `                {zones.some((zone) => ${autoMaskCheck} && !zone.included)\n                  ? \`Review Next Auto Mask (\${zones.filter((zone) => ${autoMaskCheck} && !zone.included).length} remaining)\`\n                  : "Review Next Auto Mask"}\n`;
+
+if (source.includes("Review Next Auto Mask (") && source.includes("remaining)")) {
+  console.log("Remaining automatic-mask review count already present.");
+} else if (source.includes(oldButtonBody)) {
+  source = source.replace(oldButtonBody, countedButtonBody);
+} else if (!source.includes("Review Next Auto Mask")) {
   const bulkButtonMarker = '<button type="button" onClick={() => setAllAutoMasksIncluded(true)}';
   const buttonIndex = source.indexOf(bulkButtonMarker);
   if (buttonIndex < 0) throw new Error("Automatic-mask bulk action anchor not found.");
-  const reviewButton = `              <button type="button" onClick={reviewNextDisabledAutoMask} disabled={!zones.some((zone) => ${autoMaskCheck} && !zone.included)} aria-label="Select the next disabled automatic mask for review">\n                ${buttonLabel}\n              </button>\n`;
+  const reviewButton = `              <button type="button" onClick={reviewNextDisabledAutoMask} disabled={!zones.some((zone) => ${autoMaskCheck} && !zone.included)} aria-label="Select the next disabled automatic mask for review">\n${countedButtonBody}              </button>\n`;
   source = source.slice(0, buttonIndex) + reviewButton.trimStart() + source.slice(buttonIndex);
 }
 
 await fs.writeFile(path, source);
-console.log("Applied next automatic-mask review action source patch.");
+console.log("Applied counted next automatic-mask review action source patch.");
