@@ -64,10 +64,14 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
           const leftBand = sumRect(left, top, left + 1, bottom) / Math.max(1, heightCells);
           const rightBand = sumRect(right - 1, top, right, bottom) / Math.max(1, heightCells);
           const center = sumRect(left + 2, top + 2, right - 2, bottom - 2) / Math.max(1, (widthCells - 4) * (heightCells - 4));
-          const supportedSides = [topBand, bottomBand, leftBand, rightBand].filter((density) => density >= Math.max(ringDensity * 1.08, center * 0.72)).length;
+          const sideThreshold = Math.max(ringDensity * 1.08, center * 0.72);
+          const supportedSides = [topBand, bottomBand, leftBand, rightBand].filter((density) => density >= sideThreshold).length;
+          const weakestSide = Math.min(topBand, bottomBand, leftBand, rightBand);
           const contrast = insideDensity / Math.max(0.01, ringDensity);
 
-          if (insideDensity <= 0 || contrast < 1.08 || supportedSides < 3) continue;
+          // Density windows are a last-resort recovery path. Require a closed four-sided
+          // frame so an L-shaped corner or three-sided opening can never become a mask.
+          if (insideDensity <= 0 || contrast < 1.08 || supportedSides < 4 || weakestSide < sideThreshold) continue;
 
           const box = {
             x: bounds.x + (left / columns) * bounds.width,
