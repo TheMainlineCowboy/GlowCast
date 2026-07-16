@@ -8,6 +8,7 @@ const requiredFragments = [
   "const weakestSide = Math.min(topBand, bottomBand, leftBand, rightBand)",
   "const frameDensity = (topBand + bottomBand + leftBand + rightBand) / 4",
   "const hollowContrast = frameDensity / Math.max(0.01, center)",
+  "const sideThreshold = Math.max(0.08, ringDensity * 1.08, center * 0.72)",
   "hollowContrast < 1.12",
   "supportedSides < 4",
   "weakestSide < sideThreshold",
