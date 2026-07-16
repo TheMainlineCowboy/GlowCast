@@ -43,7 +43,7 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
   };
 
   const proposals: FallbackComponent[] = [];
-  const widths = [7, 9, 11, 13];
+  const widths = [5, 7, 9, 11, 13];
   const heights = [6, 8, 10, 12, 14, 16];
 
   for (const widthCells of widths) {
@@ -112,7 +112,9 @@ if (source.includes("function buildDensityWindowFallbacks(")) {
             height: (heightCells / rows) * bounds.height
           };
           const aspect = box.width / Math.max(box.height, 0.01);
-          if (aspect < 0.35 || aspect > 2.8) continue;
+          const isSlimVertical = aspect < 0.35;
+          if (aspect < 0.22 || aspect > 2.8) continue;
+          if (isSlimVertical && (heightCells < 10 || hollowContrast < 1.28 || oppositeSideBalance < 0.5 || supportedCorners < 4)) continue;
 
           proposals.push({
             ...box,
