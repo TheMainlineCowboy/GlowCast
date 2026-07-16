@@ -4,6 +4,7 @@ const source = await fs.readFile("src/core/maskCandidateAdapter.ts", "utf8");
 
 const requiredFragments = [
   "function buildDensityWindowFallbacks(",
+  "const heights = [6, 8, 10, 12, 14, 16]",
   "for (let top = 2; top + heightCells <= rows - 2; top += 2)",
   "for (let left = 2; left + widthCells <= columns - 2; left += 2)",
   "const horizontalMid = left + Math.floor(widthCells / 2)",
@@ -52,6 +53,10 @@ for (const fragment of requiredFragments) {
   }
 }
 
+if (source.includes("const heights = [6, 8, 10, 12]")) {
+  throw new Error("Density-window fallback regression failed: tall door-shaped openings must remain in the recovery search range.");
+}
+
 if (source.includes("for (let top = 1; top + heightCells < rows - 1; top += 2)") ||
     source.includes("for (let left = 1; left + widthCells < columns - 1; left += 2)")) {
   throw new Error("Density-window fallback regression failed: border-adjacent proposals must retain a complete two-cell context ring.");
@@ -85,4 +90,4 @@ if (source.includes("score: contrast * 2 + supportedSides")) {
   throw new Error("Density-window fallback regression failed: ranking must reward hollow frames with distributed, corner-connected, balanced edge evidence, not solid texture density.");
 }
 
-console.log("Density-window fallback source smoke passed: recovery preserves adjacent openings while suppressing overlapping or axis-aligned near-duplicate masks.");
+console.log("Density-window fallback source smoke passed: recovery includes tall door-shaped openings while preserving adjacent openings and suppressing unsafe duplicates.");
