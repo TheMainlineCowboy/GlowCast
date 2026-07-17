@@ -25,6 +25,12 @@ const requiredFragments = [
   "const verticalBalance = Math.min(leftBand, rightBand) / Math.max(0.01, Math.max(leftBand, rightBand))",
   "const oppositeSideBalance = Math.min(horizontalBalance, verticalBalance)",
   "const frameDensity = (topBand + bottomBand + leftBand + rightBand) / 4",
+  "const horizontalMullionGutter = widthCells >= 9 ? 1 : 0",
+  "const verticalMullionGutter = heightCells >= 10 ? 1 : 0",
+  "horizontalMid - horizontalMullionGutter",
+  "horizontalMid + 1 + horizontalMullionGutter",
+  "verticalMid - verticalMullionGutter",
+  "verticalMid + 1 + verticalMullionGutter",
   "const verticalMullionClearDensity = Math.max(leftInterior, rightInterior)",
   "const horizontalMullionClearDensity = Math.max(topInterior, bottomInterior)",
   "const topLeftInterior = widthCells >= 7 && heightCells >= 8",
@@ -110,6 +116,11 @@ if (source.includes("const verticalMullionClearDensity = (leftInterior + rightIn
   throw new Error("Density-window fallback regression failed: one clear pane must not hide a solid or heavily textured pane across a divider.");
 }
 
+if (source.includes("sumRect(left + 2, top + 2, horizontalMid, bottom - 2)") ||
+    source.includes("sumRect(left + 2, top + 2, right - 2, verticalMid)")) {
+  throw new Error("Density-window fallback regression failed: thick mullion pixels must be excluded from pane-clearance sampling when enough interior space exists.");
+}
+
 if (source.includes("const crossMullionClearDensity = (topLeftInterior + topRightInterior + bottomLeftInterior + bottomRightInterior) / 4")) {
   throw new Error("Density-window fallback regression failed: one clear quadrant must not hide a filled pane in a cross-divided opening.");
 }
@@ -130,4 +141,4 @@ if (source.includes("score: contrast * 2 + supportedSides")) {
   throw new Error("Density-window fallback regression failed: ranking must reward hollow frames with distributed, corner-connected, balanced edge evidence, not solid texture density.");
 }
 
-console.log("Density-window fallback source smoke passed: recovery includes slim and tall openings, preserves safety gates, and tolerates single or intersecting dividers only when every surrounding pane remains hollow.");
+console.log("Density-window fallback source smoke passed: recovery includes slim and tall openings, preserves safety gates, and tolerates thick single or intersecting dividers only when every surrounding pane remains hollow.");
