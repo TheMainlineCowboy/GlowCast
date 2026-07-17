@@ -3,8 +3,8 @@ import fs from "node:fs/promises";
 const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
-if (source.includes("const crossMullionEvidenceThreshold = Math.max(mullionEvidenceThreshold * 1.18, frameDensity * 0.28);")) {
-  console.log("Density fallback high-confidence connected cross-mullion evidence already present.");
+if (source.includes("const offCenterVerticalMullionInteriorDensity = widthCells >= 9")) {
+  console.log("Density fallback off-center vertical mullion recovery already present.");
 } else {
   const crossMullionBody = `          const innerWidth = Math.max(1, widthCells - 4);
           const innerHeight = Math.max(1, heightCells - 4);
@@ -53,7 +53,27 @@ if (source.includes("const crossMullionEvidenceThreshold = Math.max(mullionEvide
           const crossMullionEvidence = Math.min(verticalMullionEvidence, horizontalMullionEvidence, mullionIntersectionEvidence);
           const mullionEvidenceThreshold = Math.max(0.055, frameDensity * 0.22);
           const crossMullionEvidenceThreshold = Math.max(mullionEvidenceThreshold * 1.18, frameDensity * 0.28);
-          const verticalMullionInteriorDensity = verticalMullionEvidence >= mullionEvidenceThreshold ? verticalMullionClearDensity : center;
+          const offCenterVerticalMullionInteriorDensity = widthCells >= 9
+            ? [-1, 1].reduce((bestDensity, offset) => {
+                const dividerMid = horizontalMid + offset;
+                const leftPaneWidth = dividerMid - left - 2 - horizontalMullionGutter;
+                const rightPaneWidth = right - dividerMid - 3 - horizontalMullionGutter;
+                if (leftPaneWidth < 2 || rightPaneWidth < 2) return bestDensity;
+                const shiftedLeftInterior = sumRect(left + 2, top + 2, dividerMid - horizontalMullionGutter, bottom - 2) / Math.max(1, leftPaneWidth * innerHeight);
+                const shiftedRightInterior = sumRect(dividerMid + 1 + horizontalMullionGutter, top + 2, right - 2, bottom - 2) / Math.max(1, rightPaneWidth * innerHeight);
+                const shiftedTopEvidence = sumRect(dividerMid - horizontalMullionGutter, top + 2, dividerMid + 1 + horizontalMullionGutter, verticalMid) / Math.max(1, verticalDividerWidth * verticalTopHeight);
+                const shiftedBottomEvidence = sumRect(dividerMid - horizontalMullionGutter, verticalMid + 1, dividerMid + 1 + horizontalMullionGutter, bottom - 2) / Math.max(1, verticalDividerWidth * verticalBottomHeight);
+                const shiftedEvidence = Math.min(shiftedTopEvidence, shiftedBottomEvidence);
+                const shiftedClearDensity = Math.max(shiftedLeftInterior, shiftedRightInterior);
+                return shiftedEvidence >= mullionEvidenceThreshold
+                  ? Math.min(bestDensity, shiftedClearDensity)
+                  : bestDensity;
+              }, center)
+            : center;
+          const verticalMullionInteriorDensity = Math.min(
+            verticalMullionEvidence >= mullionEvidenceThreshold ? verticalMullionClearDensity : center,
+            offCenterVerticalMullionInteriorDensity
+          );
           const horizontalMullionInteriorDensity = horizontalMullionEvidence >= mullionEvidenceThreshold ? horizontalMullionClearDensity : center;
           const crossMullionInteriorDensity = crossMullionEvidence >= crossMullionEvidenceThreshold
             ? crossMullionClearDensity
@@ -79,11 +99,11 @@ ${crossMullionBody}
           const hollowContrast = frameDensity / Math.max(0.01, mullionTolerantInteriorDensity);`;
 
     if (!source.includes(cleanInstallAnchor)) {
-      throw new Error("Density fallback high-confidence cross-mullion clean-install anchor not found.");
+      throw new Error("Density fallback off-center mullion clean-install anchor not found.");
     }
     source = source.replace(cleanInstallAnchor, cleanInstallReplacement);
   }
 
   await fs.writeFile(path, source);
-  console.log("Required stronger center-connected evidence before applying four-pane tolerance.");
+  console.log("Recovered one-cell off-center vertical mullions while retaining two-half evidence and pane-clearance safeguards.");
 }
