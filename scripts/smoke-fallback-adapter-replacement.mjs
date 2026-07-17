@@ -82,13 +82,13 @@ try {
   }
   assertBox(oversizedCentered[0].box, seedMask().box, "Oversized centered fallback");
 
-  const oneSidedTrimEdges = [];
-  addFrame(oneSidedTrimEdges, 20, 17, 47, 43);
-  const oneSidedTrim = addFallbackCandidates([seedMask()], oneSidedTrimEdges, bounds);
-  if (oneSidedTrim.length !== 1) {
-    throw new Error(`One-sided trim fallback created a duplicate: ${JSON.stringify(oneSidedTrim)}`);
+  const largeOneSidedTrimEdges = [];
+  addFrame(largeOneSidedTrimEdges, 19, 17, 45, 42);
+  const largeOneSidedTrim = addFallbackCandidates([seedMask()], largeOneSidedTrimEdges, bounds);
+  if (largeOneSidedTrim.length !== 1) {
+    throw new Error(`Large one-sided trim fallback created a duplicate: ${JSON.stringify(largeOneSidedTrim)}`);
   }
-  assertBox(oneSidedTrim[0].box, seedMask().box, "One-sided trim fallback");
+  assertBox(largeOneSidedTrim[0].box, seedMask().box, "Large one-sided trim fallback");
 
   const shiftedRightEdges = [];
   addFrame(shiftedRightEdges, 24, 16, 52, 44);
@@ -102,7 +102,7 @@ try {
   if (shiftedDown.length !== 1) throw new Error(`Down-shifted fallback created a duplicate: ${JSON.stringify(shiftedDown)}`);
   assertBox(shiftedDown[0].box, seedMask().box, "Down-shifted fallback");
 
-  console.log("Fallback adapter replacement smoke passed: bounded balanced repair accepted; oversized, one-sided, displaced, and footprint-clipping replacements rejected.");
+  console.log("Fallback adapter replacement smoke passed: bounded balanced repair accepted; oversized, growth-scaled one-sided, displaced, and footprint-clipping replacements rejected.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
