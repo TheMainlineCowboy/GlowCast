@@ -48,7 +48,14 @@ const requiredFragments = [
   "const crossMullionEvidence = Math.min(verticalMullionEvidence, horizontalMullionEvidence, mullionIntersectionEvidence)",
   "const mullionEvidenceThreshold = Math.max(0.055, frameDensity * 0.22)",
   "const crossMullionEvidenceThreshold = Math.max(mullionEvidenceThreshold * 1.18, frameDensity * 0.28)",
+  "const offCenterVerticalMullionInteriorDensity = widthCells >= 9",
+  "[-1, 1].reduce((bestDensity, offset) => {",
+  "const dividerMid = horizontalMid + offset",
+  "if (leftPaneWidth < 2 || rightPaneWidth < 2) return bestDensity",
+  "const shiftedEvidence = Math.min(shiftedTopEvidence, shiftedBottomEvidence)",
+  "shiftedEvidence >= mullionEvidenceThreshold",
   "verticalMullionEvidence >= mullionEvidenceThreshold ? verticalMullionClearDensity : center",
+  "offCenterVerticalMullionInteriorDensity",
   "horizontalMullionEvidence >= mullionEvidenceThreshold ? horizontalMullionClearDensity : center",
   "crossMullionEvidence >= crossMullionEvidenceThreshold",
   "const mullionTolerantInteriorDensity = Math.min(center, verticalMullionInteriorDensity, horizontalMullionInteriorDensity, crossMullionInteriorDensity)",
@@ -85,6 +92,10 @@ for (const fragment of requiredFragments) {
   if (!source.includes(fragment)) {
     throw new Error(`Density-window fallback regression failed: missing required behavior: ${fragment}`);
   }
+}
+
+if (source.includes("const verticalMullionInteriorDensity = verticalMullionEvidence >= mullionEvidenceThreshold ? verticalMullionClearDensity : center;")) {
+  throw new Error("Density-window fallback regression failed: legitimate one-cell off-center vertical dividers must remain recoverable.");
 }
 
 if (source.includes("const horizontalMullionGutter = widthCells >= 9 ? 1 : 0") ||
@@ -172,4 +183,4 @@ if (source.includes("score: contrast * 2 + supportedSides")) {
   throw new Error("Density-window fallback regression failed: ranking must reward hollow frames with distributed, corner-connected, balanced edge evidence, not solid texture density.");
 }
 
-console.log("Density-window fallback source smoke passed: recovery preserves safety gates and only grants four-pane tolerance to strongly connected dividers.");
+console.log("Density-window fallback source smoke passed: recovery preserves safety gates and supports strongly evidenced centered or slightly off-center vertical dividers.");
