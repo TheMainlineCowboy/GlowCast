@@ -3,9 +3,11 @@ import fs from "node:fs/promises";
 const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
-if (source.includes("const verticalOffsets = widthCells >= 13 ? [-2, -1, 1, 2] : [-1, 1];")) {
-  console.log("Two-cell off-center vertical mullion recovery already present.");
-} else {
+const offsetsFragment = "const verticalOffsets = widthCells >= 13 ? [-2, -1, 1, 2] : [-1, 1];";
+const oldThreshold = "Math.max(mullionEvidenceThreshold * 1.15, frameDensity * 0.27)";
+const strongerThreshold = "Math.max(mullionEvidenceThreshold * 1.25, frameDensity * 0.3)";
+
+if (!source.includes(offsetsFragment)) {
   const oldStart = `          const offCenterVerticalMullionInteriorDensity = widthCells >= 9
             ? [-1, 1].reduce((bestDensity, offset) => {`;
   const newStart = `          const verticalOffsets = widthCells >= 13 ? [-2, -1, 1, 2] : [-1, 1];
@@ -15,7 +17,7 @@ if (source.includes("const verticalOffsets = widthCells >= 13 ? [-2, -1, 1, 2] :
                   ? Math.min(bestDensity, shiftedClearDensity)
                   : bestDensity;`;
   const newGate = `                const shiftedEvidenceThreshold = Math.abs(offset) === 2
-                  ? Math.max(mullionEvidenceThreshold * 1.15, frameDensity * 0.27)
+                  ? ${strongerThreshold}
                   : mullionEvidenceThreshold;
                 return shiftedEvidence >= shiftedEvidenceThreshold
                   ? Math.min(bestDensity, shiftedClearDensity)
@@ -25,6 +27,13 @@ if (source.includes("const verticalOffsets = widthCells >= 13 ? [-2, -1, 1, 2] :
     throw new Error("Two-cell vertical mullion recovery anchors not found.");
   }
   source = source.replace(oldStart, newStart).replace(oldGate, newGate);
-  await fs.writeFile(path, source);
-  console.log("Recovered two-cell off-center vertical mullions on large openings with stronger divider evidence.");
+} else if (source.includes(oldThreshold)) {
+  source = source.replace(oldThreshold, strongerThreshold);
 }
+
+if (!source.includes(offsetsFragment) || !source.includes(strongerThreshold)) {
+  throw new Error("Stricter two-cell vertical mullion confidence was not applied.");
+}
+
+await fs.writeFile(path, source);
+console.log("Recovered two-cell off-center vertical mullions with stricter far-offset divider confidence.");
