@@ -9,9 +9,16 @@ const requiredSnippets = [
   "const fallbackAspect = box.width / Math.max(box.height, 0.01);",
   "const existingAspect = existing.box.width / Math.max(existing.box.height, 0.01);",
   "const aspectChange = Math.max(fallbackAspect / existingAspect, existingAspect / fallbackAspect);",
+  "const existingCenterX = existing.box.x + existing.box.width / 2;",
+  "const existingCenterY = existing.box.y + existing.box.height / 2;",
+  "const fallbackCenterX = box.x + box.width / 2;",
+  "const fallbackCenterY = box.y + box.height / 2;",
+  "const normalizedCenterDrift = Math.hypot(",
   "const extremeFallbackAspect = fallbackAspect < 0.35 || fallbackAspect > 3.2;",
   "const shapeConsistentFallback = aspectChange <= 1.6;",
+  "const centerConsistentFallback = normalizedCenterDrift <= 0.22;",
   "shapeConsistentFallback &&",
+  "centerConsistentFallback &&",
   "id: existing.id",
   "const offCenterHorizontalMullionInteriorDensity = heightCells >= 10",
   "const dividerMid = verticalMid + offset",
@@ -22,13 +29,18 @@ const requiredSnippets = [
 
 const missingFromSource = requiredSnippets.filter((snippet) => !adapter.includes(snippet));
 if (missingFromSource.length) {
-  console.error("Fallback source smoke failed. Checked-in adapter source lacks required duplicate cleanup, shape consistency, extreme-aspect preservation, or off-center horizontal mullion behavior.");
+  console.error("Fallback source smoke failed. Checked-in adapter source lacks required duplicate cleanup, center and shape consistency, extreme-aspect preservation, or off-center horizontal mullion behavior.");
   console.error(JSON.stringify(missingFromSource, null, 2));
   process.exit(1);
 }
 
 if (adapter.includes("const duplicate = next.some((existing) => overlapRatio(existing.box, box) > 0.58);\n    if (duplicate) continue;")) {
   console.error("Fallback duplicate source smoke failed. Old skip-only fallback duplicate block is still present.");
+  process.exit(1);
+}
+
+if (adapter.includes("shapeConsistentFallback &&\n        fallbackArea > existingArea * 1.12")) {
+  console.error("Fallback duplicate source smoke failed. Displaced fallbacks can still replace stronger architectural masks.");
   process.exit(1);
 }
 
@@ -42,4 +54,4 @@ if (adapter.includes("const horizontalMullionInteriorDensity = horizontalMullion
   process.exit(1);
 }
 
-console.log("Fallback source smoke passed: ordinary shape-consistent overlaps may replace fragments, shape-distorting and extreme-aspect duplicates preserve stronger masks, and off-center horizontal dividers retain evidence and pane-clearance safeguards.");
+console.log("Fallback source smoke passed: only centered, shape-consistent overlaps may repair fragments; displaced, distorted, and extreme-aspect duplicates preserve stronger masks.");
