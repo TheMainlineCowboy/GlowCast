@@ -3,8 +3,8 @@ import fs from "node:fs/promises";
 const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
-if (source.includes("const crossMullionEvidence = Math.min(verticalMullionEvidence, horizontalMullionEvidence, mullionIntersectionEvidence);")) {
-  console.log("Density fallback connected cross-mullion evidence already present.");
+if (source.includes("const crossMullionEvidenceThreshold = Math.max(mullionEvidenceThreshold * 1.18, frameDensity * 0.28);")) {
+  console.log("Density fallback high-confidence connected cross-mullion evidence already present.");
 } else {
   const crossMullionBody = `          const innerWidth = Math.max(1, widthCells - 4);
           const innerHeight = Math.max(1, heightCells - 4);
@@ -52,9 +52,10 @@ if (source.includes("const crossMullionEvidence = Math.min(verticalMullionEviden
           const mullionIntersectionEvidence = sumRect(horizontalMid - horizontalMullionGutter, verticalMid - verticalMullionGutter, horizontalMid + 1 + horizontalMullionGutter, verticalMid + 1 + verticalMullionGutter) / Math.max(1, verticalDividerWidth * horizontalDividerHeight);
           const crossMullionEvidence = Math.min(verticalMullionEvidence, horizontalMullionEvidence, mullionIntersectionEvidence);
           const mullionEvidenceThreshold = Math.max(0.055, frameDensity * 0.22);
+          const crossMullionEvidenceThreshold = Math.max(mullionEvidenceThreshold * 1.18, frameDensity * 0.28);
           const verticalMullionInteriorDensity = verticalMullionEvidence >= mullionEvidenceThreshold ? verticalMullionClearDensity : center;
           const horizontalMullionInteriorDensity = horizontalMullionEvidence >= mullionEvidenceThreshold ? horizontalMullionClearDensity : center;
-          const crossMullionInteriorDensity = crossMullionEvidence >= mullionEvidenceThreshold
+          const crossMullionInteriorDensity = crossMullionEvidence >= crossMullionEvidenceThreshold
             ? crossMullionClearDensity
             : center;
           const mullionTolerantInteriorDensity = Math.min(center, verticalMullionInteriorDensity, horizontalMullionInteriorDensity, crossMullionInteriorDensity);`;
@@ -78,11 +79,11 @@ ${crossMullionBody}
           const hollowContrast = frameDensity / Math.max(0.01, mullionTolerantInteriorDensity);`;
 
     if (!source.includes(cleanInstallAnchor)) {
-      throw new Error("Density fallback connected-cross-mullion clean-install anchor not found.");
+      throw new Error("Density fallback high-confidence cross-mullion clean-install anchor not found.");
     }
     source = source.replace(cleanInstallAnchor, cleanInstallReplacement);
   }
 
   await fs.writeFile(path, source);
-  console.log("Required cross-divider evidence to connect at the center before applying four-pane tolerance.");
+  console.log("Required stronger center-connected evidence before applying four-pane tolerance.");
 }
