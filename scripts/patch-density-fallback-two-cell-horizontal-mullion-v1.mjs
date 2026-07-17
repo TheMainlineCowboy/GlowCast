@@ -35,5 +35,25 @@ if (!source.includes(offsetsFragment) || !source.includes(strongerThreshold)) {
   throw new Error("Stricter two-cell horizontal mullion confidence was not applied.");
 }
 
+const closureAnchor = "    if (sideCoverage.sides < 3 || !sideCoverage.hasHorizontal || !sideCoverage.hasVertical) continue;";
+const closureGate = `    if (sideCoverage.sides < 3 || !sideCoverage.hasHorizontal || !sideCoverage.hasVertical) continue;
+    // Very wide or very tall fallback components are especially likely to be trim,
+    // seams, gutters, or railings. Require a fully closed outline before exposing
+    // them as automatic masks, while preserving three-sided recovery for ordinary
+    // doors, arches, and windows.
+    const extremeAspect = aspect < 0.35 || aspect > 3.2;
+    if (extremeAspect && sideCoverage.sides < 4) continue;`;
+
+if (!source.includes("const extremeAspect = aspect < 0.35 || aspect > 3.2;")) {
+  if (!source.includes(closureAnchor)) {
+    throw new Error("Fallback side-coverage anchor not found.");
+  }
+  source = source.replace(closureAnchor, closureGate);
+}
+
+if (!source.includes("if (extremeAspect && sideCoverage.sides < 4) continue;")) {
+  throw new Error("Extreme-aspect fallback closure gate was not applied.");
+}
+
 await fs.writeFile(path, source);
-console.log("Recovered two-cell off-center horizontal mullions with stricter far-offset divider confidence.");
+console.log("Recovered two-cell horizontal mullions and required complete closure for extreme-aspect fallback masks.");
