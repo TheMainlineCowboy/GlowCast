@@ -55,6 +55,9 @@ jobs:
       - name: Mask adapter smoke
         run: node scripts/smoke-mask-adapter.mjs
 
+      - name: Fallback adapter replacement smoke
+        run: node scripts/smoke-fallback-adapter-replacement.mjs
+
       - name: Satellite merge smoke
         run: node scripts/smoke-satellite-merge-behavior.mjs
 
