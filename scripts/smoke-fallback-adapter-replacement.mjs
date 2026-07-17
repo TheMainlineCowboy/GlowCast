@@ -98,6 +98,14 @@ try {
   }
   assertBox(centered[0].box, { x: 16, y: 16, width: 29, height: 29 }, "Centered repair");
 
+  const oversizedCenteredEdges = [];
+  addFrame(oversizedCenteredEdges, 6, 6, 54, 54);
+  const oversizedCentered = addFallbackCandidates([seedMask()], oversizedCenteredEdges, bounds);
+  if (oversizedCentered.length !== 1) {
+    throw new Error(`Oversized centered fallback created a duplicate: ${JSON.stringify(oversizedCentered)}`);
+  }
+  assertBox(oversizedCentered[0].box, seedMask().box, "Oversized centered fallback");
+
   const shiftedRightEdges = [];
   addFrame(shiftedRightEdges, 24, 16, 52, 44);
   const shiftedRight = addFallbackCandidates([seedMask()], shiftedRightEdges, bounds);
@@ -114,7 +122,7 @@ try {
   }
   assertBox(shiftedDown[0].box, seedMask().box, "Down-shifted fallback");
 
-  console.log("Fallback adapter replacement smoke passed: centered repair accepted; displaced and footprint-clipping replacements rejected.");
+  console.log("Fallback adapter replacement smoke passed: bounded centered repair accepted; oversized, displaced, and footprint-clipping replacements rejected.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
