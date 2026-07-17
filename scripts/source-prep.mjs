@@ -83,6 +83,7 @@ await runPatch("./patch-fallback-duplicate-center-drift-v1.mjs", { required: tru
 await runPatch("./smoke-fallback-center-drift-behavior.mjs", { required: true });
 await runPatch("./patch-fallback-duplicate-footprint-retention-v1.mjs", { required: true });
 await runPatch("./smoke-fallback-footprint-retention-behavior.mjs", { required: true });
+await runPatch("./patch-fallback-duplicate-growth-cap-v1.mjs", { required: true });
 
 const edgePath = "src/edgeDetect.ts";
 let edge = await fs.readFile(edgePath, "utf8");
