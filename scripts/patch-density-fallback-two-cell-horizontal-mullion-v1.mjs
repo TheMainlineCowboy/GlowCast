@@ -59,7 +59,7 @@ const duplicateAnchor = `      const existing = next[duplicateIndex];
       const existingArea = existing.box.width * existing.box.height;
       const fallbackArea = box.width * box.height;
       if (fallbackArea > existingArea * 1.12 && fallback.score >= 1.2) {`;
-const duplicateGate = `      const existing = next[duplicateIndex];
+const extremeDuplicateGate = `      const existing = next[duplicateIndex];
       const existingArea = existing.box.width * existing.box.height;
       const fallbackArea = box.width * box.height;
       const fallbackAspect = box.width / Math.max(box.height, 0.01);
@@ -72,12 +72,38 @@ if (!source.includes("const extremeFallbackAspect = fallbackAspect < 0.35 || fal
   if (!source.includes(duplicateAnchor)) {
     throw new Error("Fallback duplicate replacement anchor not found.");
   }
-  source = source.replace(duplicateAnchor, duplicateGate);
+  source = source.replace(duplicateAnchor, extremeDuplicateGate);
 }
 
-if (!source.includes("if (!extremeFallbackAspect && fallbackArea > existingArea * 1.12 && fallback.score >= 1.2)")) {
-  throw new Error("Extreme-aspect fallback duplicate preservation was not applied.");
+const shapeAnchor = `      const fallbackAspect = box.width / Math.max(box.height, 0.01);
+      const extremeFallbackAspect = fallbackAspect < 0.35 || fallbackAspect > 3.2;
+      // Long, thin fallbacks may be valid closed fixtures, but they should never
+      // displace a stronger architectural detector result in the same region.
+      if (!extremeFallbackAspect && fallbackArea > existingArea * 1.12 && fallback.score >= 1.2) {`;
+const shapeGate = `      const fallbackAspect = box.width / Math.max(box.height, 0.01);
+      const existingAspect = existing.box.width / Math.max(existing.box.height, 0.01);
+      const aspectChange = Math.max(fallbackAspect / existingAspect, existingAspect / fallbackAspect);
+      const extremeFallbackAspect = fallbackAspect < 0.35 || fallbackAspect > 3.2;
+      const shapeConsistentFallback = aspectChange <= 1.6;
+      // A larger fallback may repair a fragmented opening, but it should not turn a
+      // strong window or door into a differently shaped mask by absorbing nearby trim.
+      if (
+        !extremeFallbackAspect &&
+        shapeConsistentFallback &&
+        fallbackArea > existingArea * 1.12 &&
+        fallback.score >= 1.2
+      ) {`;
+
+if (!source.includes("const shapeConsistentFallback = aspectChange <= 1.6;")) {
+  if (!source.includes(shapeAnchor)) {
+    throw new Error("Fallback duplicate shape-consistency anchor not found.");
+  }
+  source = source.replace(shapeAnchor, shapeGate);
+}
+
+if (!source.includes("shapeConsistentFallback &&") || !source.includes("const aspectChange = Math.max(fallbackAspect / existingAspect, existingAspect / fallbackAspect);")) {
+  throw new Error("Fallback duplicate shape consistency was not applied.");
 }
 
 await fs.writeFile(path, source);
-console.log("Recovered two-cell horizontal mullions, required extreme-aspect closure, and preserved stronger overlapping masks.");
+console.log("Recovered two-cell horizontal mullions, required extreme-aspect closure, and preserved stronger masks from shape-distorting fallback duplicates.");
