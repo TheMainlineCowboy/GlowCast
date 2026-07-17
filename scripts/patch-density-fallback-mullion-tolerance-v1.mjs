@@ -3,8 +3,8 @@ import fs from "node:fs/promises";
 const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
-if (source.includes("const verticalMullionEvidence = Math.min(verticalMullionTopEvidence, verticalMullionBottomEvidence);")) {
-  console.log("Density fallback distributed mullion evidence already present.");
+if (source.includes("const crossMullionEvidence = Math.min(verticalMullionEvidence, horizontalMullionEvidence, mullionIntersectionEvidence);")) {
+  console.log("Density fallback connected cross-mullion evidence already present.");
 } else {
   const crossMullionBody = `          const innerWidth = Math.max(1, widthCells - 4);
           const innerHeight = Math.max(1, heightCells - 4);
@@ -49,10 +49,12 @@ if (source.includes("const verticalMullionEvidence = Math.min(verticalMullionTop
           const horizontalMullionRightEvidence = sumRect(horizontalMid + 1, verticalMid - verticalMullionGutter, right - 2, verticalMid + 1 + verticalMullionGutter) / Math.max(1, horizontalDividerHeight * horizontalRightWidth);
           const verticalMullionEvidence = Math.min(verticalMullionTopEvidence, verticalMullionBottomEvidence);
           const horizontalMullionEvidence = Math.min(horizontalMullionLeftEvidence, horizontalMullionRightEvidence);
+          const mullionIntersectionEvidence = sumRect(horizontalMid - horizontalMullionGutter, verticalMid - verticalMullionGutter, horizontalMid + 1 + horizontalMullionGutter, verticalMid + 1 + verticalMullionGutter) / Math.max(1, verticalDividerWidth * horizontalDividerHeight);
+          const crossMullionEvidence = Math.min(verticalMullionEvidence, horizontalMullionEvidence, mullionIntersectionEvidence);
           const mullionEvidenceThreshold = Math.max(0.055, frameDensity * 0.22);
           const verticalMullionInteriorDensity = verticalMullionEvidence >= mullionEvidenceThreshold ? verticalMullionClearDensity : center;
           const horizontalMullionInteriorDensity = horizontalMullionEvidence >= mullionEvidenceThreshold ? horizontalMullionClearDensity : center;
-          const crossMullionInteriorDensity = verticalMullionEvidence >= mullionEvidenceThreshold && horizontalMullionEvidence >= mullionEvidenceThreshold
+          const crossMullionInteriorDensity = crossMullionEvidence >= mullionEvidenceThreshold
             ? crossMullionClearDensity
             : center;
           const mullionTolerantInteriorDensity = Math.min(center, verticalMullionInteriorDensity, horizontalMullionInteriorDensity, crossMullionInteriorDensity);`;
@@ -76,11 +78,11 @@ ${crossMullionBody}
           const hollowContrast = frameDensity / Math.max(0.01, mullionTolerantInteriorDensity);`;
 
     if (!source.includes(cleanInstallAnchor)) {
-      throw new Error("Density fallback distributed-mullion-evidence clean-install anchor not found.");
+      throw new Error("Density fallback connected-cross-mullion clean-install anchor not found.");
     }
     source = source.replace(cleanInstallAnchor, cleanInstallReplacement);
   }
 
   await fs.writeFile(path, source);
-  console.log("Required divider evidence to continue across both halves before applying mullion-tolerant pane scoring.");
+  console.log("Required cross-divider evidence to connect at the center before applying four-pane tolerance.");
 }
