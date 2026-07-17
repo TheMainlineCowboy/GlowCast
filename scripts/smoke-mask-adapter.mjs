@@ -94,8 +94,8 @@ try {
   const replacedFallbacks = addFallbackCandidates(
     [{
       id: "seed_fragment",
-      box: { x: 14, y: 14, width: 24, height: 24 },
-      points: [{ x: 14, y: 14 }, { x: 38, y: 14 }, { x: 38, y: 38 }, { x: 14, y: 38 }]
+      box: { x: 13, y: 13, width: 26, height: 26 },
+      points: [{ x: 13, y: 13 }, { x: 39, y: 13 }, { x: 39, y: 39 }, { x: 13, y: 39 }]
     }],
     replacementEdges,
     bounds
