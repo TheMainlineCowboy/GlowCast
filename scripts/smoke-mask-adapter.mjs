@@ -51,9 +51,6 @@ execFileSync(
   { stdio: "inherit" }
 );
 
-// TypeScript preserves extensionless source imports in ES module output. The
-// temporary smoke modules run directly in Node, so make those emitted imports
-// explicit without changing production source or bundler behavior.
 const emittedAdapterPath = path.join(outDir, "core", "maskCandidateAdapter.js");
 const emittedDetectorPath = path.join(outDir, "core", "architecturalDetector.js");
 const emittedAdapter = await fs.readFile(emittedAdapterPath, "utf8");
@@ -97,8 +94,8 @@ try {
   const replacedFallbacks = addFallbackCandidates(
     [{
       id: "seed_fragment",
-      box: { x: 17, y: 17, width: 14, height: 14 },
-      points: [{ x: 17, y: 17 }, { x: 31, y: 17 }, { x: 31, y: 31 }, { x: 17, y: 31 }]
+      box: { x: 14, y: 14, width: 24, height: 24 },
+      points: [{ x: 14, y: 14 }, { x: 38, y: 14 }, { x: 38, y: 38 }, { x: 14, y: 38 }]
     }],
     replacementEdges,
     bounds
@@ -107,7 +104,7 @@ try {
     throw new Error(`Larger fallback created a duplicate: ${JSON.stringify(replacedFallbacks)}`);
   }
   if (!hasBoxCovering(replacedFallbacks, { x: 10, y: 10, width: 32, height: 32, tolerance: 2 })) {
-    throw new Error(`Larger fallback did not replace fragment bounds: ${JSON.stringify(replacedFallbacks)}`);
+    throw new Error(`Bounded fallback did not repair fragment bounds: ${JSON.stringify(replacedFallbacks)}`);
   }
 
   const edgePoints = [];
@@ -139,8 +136,6 @@ try {
 
   const groupedEdges = [];
   addFrame(groupedEdges, 42, 24, 62, 52);
-  // Satellites must clear the adapter's deliberate minimum architectural size;
-  // otherwise this fixture tests noise rejection instead of grouping behavior.
   addFrame(groupedEdges, 32, 25, 40, 51, 190);
   addFrame(groupedEdges, 64, 25, 72, 51, 190);
   const groupedMasks = buildMaskCandidatesFromEdges(groupedEdges, bounds);
@@ -170,7 +165,7 @@ try {
   if (trimOnlyMasks.length > 0) throw new Error(`Single trim line became a fallback mask: ${JSON.stringify(trimOnlyMasks)}`);
 
   console.log(
-    `Mask adapter smoke test passed: ${masks.length} masks, no tiny fragments or duplicates, satellite grouping, fallback replacement and fallback recovery ok.`
+    `Mask adapter smoke test passed: ${masks.length} masks, no tiny fragments or duplicates, satellite grouping, bounded fallback replacement and fallback recovery ok.`
   );
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
