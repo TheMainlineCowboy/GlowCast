@@ -47,9 +47,10 @@ const requiredFragments = [
   "const mullionIntersectionEvidence = sumRect(",
   "const crossMullionEvidence = Math.min(verticalMullionEvidence, horizontalMullionEvidence, mullionIntersectionEvidence)",
   "const mullionEvidenceThreshold = Math.max(0.055, frameDensity * 0.22)",
+  "const crossMullionEvidenceThreshold = Math.max(mullionEvidenceThreshold * 1.18, frameDensity * 0.28)",
   "verticalMullionEvidence >= mullionEvidenceThreshold ? verticalMullionClearDensity : center",
   "horizontalMullionEvidence >= mullionEvidenceThreshold ? horizontalMullionClearDensity : center",
-  "crossMullionEvidence >= mullionEvidenceThreshold",
+  "crossMullionEvidence >= crossMullionEvidenceThreshold",
   "const mullionTolerantInteriorDensity = Math.min(center, verticalMullionInteriorDensity, horizontalMullionInteriorDensity, crossMullionInteriorDensity)",
   "const hollowContrast = frameDensity / Math.max(0.01, mullionTolerantInteriorDensity)",
   "const sideThreshold = Math.max(0.08, ringDensity * 1.08, center * 0.72)",
@@ -98,6 +99,10 @@ if (source.includes("const verticalMullionEvidence = sumRect(") ||
 
 if (source.includes("verticalMullionEvidence >= mullionEvidenceThreshold && horizontalMullionEvidence >= mullionEvidenceThreshold")) {
   throw new Error("Density-window fallback regression failed: disconnected crossing lines must not receive four-pane tolerance without center-intersection evidence.");
+}
+
+if (source.includes("crossMullionEvidence >= mullionEvidenceThreshold")) {
+  throw new Error("Density-window fallback regression failed: four-pane tolerance must require stronger connected evidence than a single-divider candidate.");
 }
 
 if (source.includes("const widths = [7, 9, 11, 13]")) {
@@ -167,4 +172,4 @@ if (source.includes("score: contrast * 2 + supportedSides")) {
   throw new Error("Density-window fallback regression failed: ranking must reward hollow frames with distributed, corner-connected, balanced edge evidence, not solid texture density.");
 }
 
-console.log("Density-window fallback source smoke passed: recovery preserves safety gates and only grants four-pane tolerance when distributed dividers visibly connect at the center.");
+console.log("Density-window fallback source smoke passed: recovery preserves safety gates and only grants four-pane tolerance to strongly connected dividers.");
