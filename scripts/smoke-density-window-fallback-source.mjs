@@ -44,10 +44,12 @@ const requiredFragments = [
   "const horizontalMullionRightEvidence = sumRect(",
   "const verticalMullionEvidence = Math.min(verticalMullionTopEvidence, verticalMullionBottomEvidence)",
   "const horizontalMullionEvidence = Math.min(horizontalMullionLeftEvidence, horizontalMullionRightEvidence)",
+  "const mullionIntersectionEvidence = sumRect(",
+  "const crossMullionEvidence = Math.min(verticalMullionEvidence, horizontalMullionEvidence, mullionIntersectionEvidence)",
   "const mullionEvidenceThreshold = Math.max(0.055, frameDensity * 0.22)",
   "verticalMullionEvidence >= mullionEvidenceThreshold ? verticalMullionClearDensity : center",
   "horizontalMullionEvidence >= mullionEvidenceThreshold ? horizontalMullionClearDensity : center",
-  "verticalMullionEvidence >= mullionEvidenceThreshold && horizontalMullionEvidence >= mullionEvidenceThreshold",
+  "crossMullionEvidence >= mullionEvidenceThreshold",
   "const mullionTolerantInteriorDensity = Math.min(center, verticalMullionInteriorDensity, horizontalMullionInteriorDensity, crossMullionInteriorDensity)",
   "const hollowContrast = frameDensity / Math.max(0.01, mullionTolerantInteriorDensity)",
   "const sideThreshold = Math.max(0.08, ringDensity * 1.08, center * 0.72)",
@@ -92,6 +94,10 @@ if (source.includes("const horizontalMullionGutter = widthCells >= 9 ? 1 : 0") |
 if (source.includes("const verticalMullionEvidence = sumRect(") ||
     source.includes("const horizontalMullionEvidence = sumRect(")) {
   throw new Error("Density-window fallback regression failed: one localized texture streak must not count as a divider across an entire opening.");
+}
+
+if (source.includes("verticalMullionEvidence >= mullionEvidenceThreshold && horizontalMullionEvidence >= mullionEvidenceThreshold")) {
+  throw new Error("Density-window fallback regression failed: disconnected crossing lines must not receive four-pane tolerance without center-intersection evidence.");
 }
 
 if (source.includes("const widths = [7, 9, 11, 13]")) {
@@ -161,4 +167,4 @@ if (source.includes("score: contrast * 2 + supportedSides")) {
   throw new Error("Density-window fallback regression failed: ranking must reward hollow frames with distributed, corner-connected, balanced edge evidence, not solid texture density.");
 }
 
-console.log("Density-window fallback source smoke passed: recovery preserves safety gates, scaled gutters, and distributed mullion evidence so short texture streaks cannot impersonate full dividers.");
+console.log("Density-window fallback source smoke passed: recovery preserves safety gates and only grants four-pane tolerance when distributed dividers visibly connect at the center.");
