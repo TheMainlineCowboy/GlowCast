@@ -38,8 +38,12 @@ const requiredFragments = [
   "const bottomLeftInterior = widthCells >= 7 && heightCells >= 8",
   "const bottomRightInterior = widthCells >= 7 && heightCells >= 8",
   "const crossMullionClearDensity = Math.max(topLeftInterior, topRightInterior, bottomLeftInterior, bottomRightInterior)",
-  "const verticalMullionEvidence = sumRect(",
-  "const horizontalMullionEvidence = sumRect(",
+  "const verticalMullionTopEvidence = sumRect(",
+  "const verticalMullionBottomEvidence = sumRect(",
+  "const horizontalMullionLeftEvidence = sumRect(",
+  "const horizontalMullionRightEvidence = sumRect(",
+  "const verticalMullionEvidence = Math.min(verticalMullionTopEvidence, verticalMullionBottomEvidence)",
+  "const horizontalMullionEvidence = Math.min(horizontalMullionLeftEvidence, horizontalMullionRightEvidence)",
   "const mullionEvidenceThreshold = Math.max(0.055, frameDensity * 0.22)",
   "verticalMullionEvidence >= mullionEvidenceThreshold ? verticalMullionClearDensity : center",
   "horizontalMullionEvidence >= mullionEvidenceThreshold ? horizontalMullionClearDensity : center",
@@ -83,6 +87,11 @@ for (const fragment of requiredFragments) {
 if (source.includes("const horizontalMullionGutter = widthCells >= 9 ? 1 : 0") ||
     source.includes("const verticalMullionGutter = heightCells >= 10 ? 1 : 0")) {
   throw new Error("Density-window fallback regression failed: extra-thick dividers must receive a wider pane-clearance gutter on large candidates.");
+}
+
+if (source.includes("const verticalMullionEvidence = sumRect(") ||
+    source.includes("const horizontalMullionEvidence = sumRect(")) {
+  throw new Error("Density-window fallback regression failed: one localized texture streak must not count as a divider across an entire opening.");
 }
 
 if (source.includes("const widths = [7, 9, 11, 13]")) {
@@ -152,4 +161,4 @@ if (source.includes("score: contrast * 2 + supportedSides")) {
   throw new Error("Density-window fallback regression failed: ranking must reward hollow frames with distributed, corner-connected, balanced edge evidence, not solid texture density.");
 }
 
-console.log("Density-window fallback source smoke passed: recovery preserves slim and tall openings, safety gates, scaled gutters, and evidence-gated mullion tolerance so unrelated interior texture cannot impersonate a divider.");
+console.log("Density-window fallback source smoke passed: recovery preserves safety gates, scaled gutters, and distributed mullion evidence so short texture streaks cannot impersonate full dividers.");
