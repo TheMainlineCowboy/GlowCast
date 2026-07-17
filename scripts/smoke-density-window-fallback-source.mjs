@@ -27,7 +27,12 @@ const requiredFragments = [
   "const frameDensity = (topBand + bottomBand + leftBand + rightBand) / 4",
   "const verticalMullionClearDensity = Math.max(leftInterior, rightInterior)",
   "const horizontalMullionClearDensity = Math.max(topInterior, bottomInterior)",
-  "const mullionTolerantInteriorDensity = Math.min(center, verticalMullionClearDensity, horizontalMullionClearDensity)",
+  "const topLeftInterior = widthCells >= 7 && heightCells >= 8",
+  "const topRightInterior = widthCells >= 7 && heightCells >= 8",
+  "const bottomLeftInterior = widthCells >= 7 && heightCells >= 8",
+  "const bottomRightInterior = widthCells >= 7 && heightCells >= 8",
+  "const crossMullionClearDensity = Math.max(topLeftInterior, topRightInterior, bottomLeftInterior, bottomRightInterior)",
+  "const mullionTolerantInteriorDensity = Math.min(center, verticalMullionClearDensity, horizontalMullionClearDensity, crossMullionClearDensity)",
   "const hollowContrast = frameDensity / Math.max(0.01, mullionTolerantInteriorDensity)",
   "const sideThreshold = Math.max(0.08, ringDensity * 1.08, center * 0.72)",
   "hollowContrast < 1.12",
@@ -105,6 +110,14 @@ if (source.includes("const verticalMullionClearDensity = (leftInterior + rightIn
   throw new Error("Density-window fallback regression failed: one clear pane must not hide a solid or heavily textured pane across a divider.");
 }
 
+if (source.includes("const crossMullionClearDensity = (topLeftInterior + topRightInterior + bottomLeftInterior + bottomRightInterior) / 4")) {
+  throw new Error("Density-window fallback regression failed: one clear quadrant must not hide a filled pane in a cross-divided opening.");
+}
+
+if (source.includes("const mullionTolerantInteriorDensity = Math.min(center, verticalMullionClearDensity, horizontalMullionClearDensity);")) {
+  throw new Error("Density-window fallback regression failed: intersecting mullions must be evaluated using all four surrounding panes.");
+}
+
 if (source.includes("centerDistance <= smallerDiagonal * 0.16")) {
   throw new Error("Density-window fallback regression failed: diagonal-only deduplication can collapse close adjacent windows.");
 }
@@ -117,4 +130,4 @@ if (source.includes("score: contrast * 2 + supportedSides")) {
   throw new Error("Density-window fallback regression failed: ranking must reward hollow frames with distributed, corner-connected, balanced edge evidence, not solid texture density.");
 }
 
-console.log("Density-window fallback source smoke passed: recovery includes slim and tall openings, preserves safety gates, and tolerates a single divider only when both panes remain hollow.");
+console.log("Density-window fallback source smoke passed: recovery includes slim and tall openings, preserves safety gates, and tolerates single or intersecting dividers only when every surrounding pane remains hollow.");
