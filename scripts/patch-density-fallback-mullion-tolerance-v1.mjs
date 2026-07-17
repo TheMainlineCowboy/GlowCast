@@ -3,8 +3,8 @@ import fs from "node:fs/promises";
 const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
-if (source.includes("const offCenterVerticalMullionInteriorDensity = widthCells >= 9")) {
-  console.log("Density fallback off-center vertical mullion recovery already present.");
+if (source.includes("const offCenterHorizontalMullionInteriorDensity = heightCells >= 10")) {
+  console.log("Density fallback off-center horizontal mullion recovery already present.");
 } else {
   const crossMullionBody = `          const innerWidth = Math.max(1, widthCells - 4);
           const innerHeight = Math.max(1, heightCells - 4);
@@ -70,11 +70,31 @@ if (source.includes("const offCenterVerticalMullionInteriorDensity = widthCells 
                   : bestDensity;
               }, center)
             : center;
+          const offCenterHorizontalMullionInteriorDensity = heightCells >= 10
+            ? [-1, 1].reduce((bestDensity, offset) => {
+                const dividerMid = verticalMid + offset;
+                const topPaneHeight = dividerMid - top - 2 - verticalMullionGutter;
+                const bottomPaneHeight = bottom - dividerMid - 3 - verticalMullionGutter;
+                if (topPaneHeight < 2 || bottomPaneHeight < 2) return bestDensity;
+                const shiftedTopInterior = sumRect(left + 2, top + 2, right - 2, dividerMid - verticalMullionGutter) / Math.max(1, innerWidth * topPaneHeight);
+                const shiftedBottomInterior = sumRect(left + 2, dividerMid + 1 + verticalMullionGutter, right - 2, bottom - 2) / Math.max(1, innerWidth * bottomPaneHeight);
+                const shiftedLeftEvidence = sumRect(left + 2, dividerMid - verticalMullionGutter, horizontalMid, dividerMid + 1 + verticalMullionGutter) / Math.max(1, horizontalDividerHeight * horizontalLeftWidth);
+                const shiftedRightEvidence = sumRect(horizontalMid + 1, dividerMid - verticalMullionGutter, right - 2, dividerMid + 1 + verticalMullionGutter) / Math.max(1, horizontalDividerHeight * horizontalRightWidth);
+                const shiftedEvidence = Math.min(shiftedLeftEvidence, shiftedRightEvidence);
+                const shiftedClearDensity = Math.max(shiftedTopInterior, shiftedBottomInterior);
+                return shiftedEvidence >= mullionEvidenceThreshold
+                  ? Math.min(bestDensity, shiftedClearDensity)
+                  : bestDensity;
+              }, center)
+            : center;
           const verticalMullionInteriorDensity = Math.min(
             verticalMullionEvidence >= mullionEvidenceThreshold ? verticalMullionClearDensity : center,
             offCenterVerticalMullionInteriorDensity
           );
-          const horizontalMullionInteriorDensity = horizontalMullionEvidence >= mullionEvidenceThreshold ? horizontalMullionClearDensity : center;
+          const horizontalMullionInteriorDensity = Math.min(
+            horizontalMullionEvidence >= mullionEvidenceThreshold ? horizontalMullionClearDensity : center,
+            offCenterHorizontalMullionInteriorDensity
+          );
           const crossMullionInteriorDensity = crossMullionEvidence >= crossMullionEvidenceThreshold
             ? crossMullionClearDensity
             : center;
@@ -99,11 +119,11 @@ ${crossMullionBody}
           const hollowContrast = frameDensity / Math.max(0.01, mullionTolerantInteriorDensity);`;
 
     if (!source.includes(cleanInstallAnchor)) {
-      throw new Error("Density fallback off-center mullion clean-install anchor not found.");
+      throw new Error("Density fallback off-center horizontal mullion clean-install anchor not found.");
     }
     source = source.replace(cleanInstallAnchor, cleanInstallReplacement);
   }
 
   await fs.writeFile(path, source);
-  console.log("Recovered one-cell off-center vertical mullions while retaining two-half evidence and pane-clearance safeguards.");
+  console.log("Recovered one-cell off-center horizontal mullions while retaining two-half evidence and pane-clearance safeguards.");
 }
