@@ -25,8 +25,8 @@ const requiredFragments = [
   "const verticalBalance = Math.min(leftBand, rightBand) / Math.max(0.01, Math.max(leftBand, rightBand))",
   "const oppositeSideBalance = Math.min(horizontalBalance, verticalBalance)",
   "const frameDensity = (topBand + bottomBand + leftBand + rightBand) / 4",
-  "const horizontalMullionGutter = widthCells >= 9 ? 1 : 0",
-  "const verticalMullionGutter = heightCells >= 10 ? 1 : 0",
+  "const horizontalMullionGutter = widthCells >= 13 ? 2 : widthCells >= 9 ? 1 : 0",
+  "const verticalMullionGutter = heightCells >= 14 ? 2 : heightCells >= 10 ? 1 : 0",
   "horizontalMid - horizontalMullionGutter",
   "horizontalMid + 1 + horizontalMullionGutter",
   "verticalMid - verticalMullionGutter",
@@ -72,6 +72,11 @@ for (const fragment of requiredFragments) {
   if (!source.includes(fragment)) {
     throw new Error(`Density-window fallback regression failed: missing required behavior: ${fragment}`);
   }
+}
+
+if (source.includes("const horizontalMullionGutter = widthCells >= 9 ? 1 : 0") ||
+    source.includes("const verticalMullionGutter = heightCells >= 10 ? 1 : 0")) {
+  throw new Error("Density-window fallback regression failed: extra-thick dividers must receive a wider pane-clearance gutter on large candidates.");
 }
 
 if (source.includes("const widths = [7, 9, 11, 13]")) {
@@ -141,4 +146,4 @@ if (source.includes("score: contrast * 2 + supportedSides")) {
   throw new Error("Density-window fallback regression failed: ranking must reward hollow frames with distributed, corner-connected, balanced edge evidence, not solid texture density.");
 }
 
-console.log("Density-window fallback source smoke passed: recovery includes slim and tall openings, preserves safety gates, and tolerates thick single or intersecting dividers only when every surrounding pane remains hollow.");
+console.log("Density-window fallback source smoke passed: recovery preserves slim and tall openings, safety gates, and scaled gutters for thick single or intersecting dividers while every surrounding pane remains hollow.");
