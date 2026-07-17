@@ -55,5 +55,29 @@ if (!source.includes("if (extremeAspect && sideCoverage.sides < 4) continue;")) 
   throw new Error("Extreme-aspect fallback closure gate was not applied.");
 }
 
+const duplicateAnchor = `      const existing = next[duplicateIndex];
+      const existingArea = existing.box.width * existing.box.height;
+      const fallbackArea = box.width * box.height;
+      if (fallbackArea > existingArea * 1.12 && fallback.score >= 1.2) {`;
+const duplicateGate = `      const existing = next[duplicateIndex];
+      const existingArea = existing.box.width * existing.box.height;
+      const fallbackArea = box.width * box.height;
+      const fallbackAspect = box.width / Math.max(box.height, 0.01);
+      const extremeFallbackAspect = fallbackAspect < 0.35 || fallbackAspect > 3.2;
+      // Long, thin fallbacks may be valid closed fixtures, but they should never
+      // displace a stronger architectural detector result in the same region.
+      if (!extremeFallbackAspect && fallbackArea > existingArea * 1.12 && fallback.score >= 1.2) {`;
+
+if (!source.includes("const extremeFallbackAspect = fallbackAspect < 0.35 || fallbackAspect > 3.2;")) {
+  if (!source.includes(duplicateAnchor)) {
+    throw new Error("Fallback duplicate replacement anchor not found.");
+  }
+  source = source.replace(duplicateAnchor, duplicateGate);
+}
+
+if (!source.includes("if (!extremeFallbackAspect && fallbackArea > existingArea * 1.12 && fallback.score >= 1.2)")) {
+  throw new Error("Extreme-aspect fallback duplicate preservation was not applied.");
+}
+
 await fs.writeFile(path, source);
-console.log("Recovered two-cell horizontal mullions and required complete closure for extreme-aspect fallback masks.");
+console.log("Recovered two-cell horizontal mullions, required extreme-aspect closure, and preserved stronger overlapping masks.");
