@@ -9,8 +9,8 @@ const detectorPath = "src/core/architecturalDetector.ts";
 const edgeDetectPath = "src/edgeDetect.ts";
 const adapterSource = await fs.readFile(adapterPath, "utf8");
 
-if (!adapterSource.includes("perimeterCoverage:")) {
-  throw new Error("Continuous-coverage runtime smoke requires prepared perimeter coverage ranking.");
+if (!adapterSource.includes("perimeterCoverage:") || !adapterSource.includes("perimeterDensity:")) {
+  throw new Error("Continuous-coverage runtime smoke requires prepared perimeter coverage and density ranking.");
 }
 
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-nested-continuous-coverage-"));
@@ -43,11 +43,23 @@ function addClosedFrame(edgePoints, x1, y1, x2, y2, strength = 230) {
   for (let y = y1; y <= y2; y += 1) edgePoints.push({ x: x1, y, strength }, { x: x2, y, strength });
 }
 
-function continuousFrame(id) {
+function frameWithStep(id, step) {
   const points = [];
-  for (let x = 33; x <= 67; x += 1) points.push({ x, y: 33 }, { x, y: 67 });
-  for (let y = 33; y <= 67; y += 1) points.push({ x: 33, y }, { x: 67, y });
+  const addAxis = (start, end, callback) => {
+    for (let value = start; value < end; value += step) callback(Number(value.toFixed(1)));
+    callback(end);
+  };
+  addAxis(33, 67, (x) => points.push({ x, y: 33 }, { x, y: 67 }));
+  addAxis(33, 67, (y) => points.push({ x: 33, y }, { x: 67, y }));
   return { id, box: { x: 33, y: 33, width: 34, height: 34 }, points };
+}
+
+function continuousFrame(id) {
+  return frameWithStep(id, 1);
+}
+
+function looseContinuousFrame(id) {
+  return frameWithStep(id, 1.4);
 }
 
 function sparseSpreadFrame(id) {
@@ -94,7 +106,22 @@ try {
       throw new Error(`Continuous perimeter should receive the bounded repair regardless of input order: ${JSON.stringify(repaired.box)}`);
     }
   }
-  console.log("Nested continuous-coverage runtime smoke passed: sustained perimeter runs outrank equally broad but widely separated samples across input orders.");
+
+  for (const accepted of [
+    [looseContinuousFrame("loose"), continuousFrame("dense")],
+    [continuousFrame("dense"), looseContinuousFrame("loose")]
+  ]) {
+    const result = addFallbackCandidates(accepted, fallbackEdges, bounds);
+    const loose = accepted.find((item) => item.id === "loose");
+    const dense = accepted.find((item) => item.id === "dense");
+    assertUnchanged(candidateById(result, "loose"), loose, `Loosely sampled perimeter received the repair for order ${accepted.map((item) => item.id).join(", ")}`);
+    const repaired = candidateById(result, "dense");
+    if (repaired.box.width <= dense.box.width || repaired.box.height <= dense.box.height) {
+      throw new Error(`Dense continuous perimeter should outrank equal-span loose evidence regardless of input order: ${JSON.stringify(repaired.box)}`);
+    }
+  }
+
+  console.log("Nested continuous-coverage runtime smoke passed: sustained dense perimeter runs outrank widely separated and loosely sampled evidence across input orders.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
