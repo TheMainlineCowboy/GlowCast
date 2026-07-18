@@ -4,9 +4,9 @@ const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
 const oldTolerance = "  const tolerance = Math.max(1.2, Math.min(box.width, box.height) * 0.09);";
-const marker = "const horizontalSideTolerance = Math.min(8, Math.max(1.2, box.height / 240));";
+const marker = "The previous 9% tolerance";
 
-if (source.includes(marker) && source.includes("verticalSideTolerance")) {
+if (source.includes(marker) && !source.includes(oldTolerance)) {
   console.log("Fallback side tolerance scaling already applied.");
   process.exit(0);
 }
@@ -35,7 +35,7 @@ source = source
   .replace("Math.abs(point.x - box.x) <= tolerance", "Math.abs(point.x - box.x) <= verticalSideTolerance")
   .replace("Math.abs(point.x - (box.x + box.width)) <= tolerance", "Math.abs(point.x - (box.x + box.width)) <= verticalSideTolerance");
 
-if (!source.includes(marker) || !source.includes("verticalSideTolerance")) {
+if (!source.includes(marker) || source.includes(oldTolerance)) {
   throw new Error("Fallback side tolerance scaling was not applied.");
 }
 
