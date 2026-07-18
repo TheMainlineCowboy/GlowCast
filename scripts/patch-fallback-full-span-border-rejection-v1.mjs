@@ -9,13 +9,15 @@ const distinctEvidenceMarker = "new Map<number, Set<number>>()";
 const continuousRunMarker = "function hasContinuousPerimeterRun";
 const scaledRunMarker = "const requiredRunLength = Math.min(8, Math.max(3, Math.ceil(sectionSpan / 80)))";
 const scaledAdjacencyMarker = "const maximumAdjacentGap = Math.min(400, Math.max(150, Math.ceil(sectionSpan / 160) * 100))";
+const scaledSideToleranceMarker = "const horizontalSideTolerance = Math.min(8, Math.max(1.2, box.height / 240))";
 if (
   source.includes(marker) &&
   source.includes(helperMarker) &&
   source.includes(distinctEvidenceMarker) &&
   source.includes(continuousRunMarker) &&
   source.includes(scaledRunMarker) &&
-  source.includes(scaledAdjacencyMarker)
+  source.includes(scaledAdjacencyMarker) &&
+  source.includes(scaledSideToleranceMarker)
 ) {
   console.log("Full-span fallback border rejection already applied.");
   process.exit(0);
@@ -50,7 +52,12 @@ const helper = `function hasContinuousPerimeterRun(positions: Set<number>, secti
 }
 
 function hasDistributedFullSpanPerimeter(points: EdgePoint[], box: SimpleBox): boolean {
-  const tolerance = Math.max(1.2, Math.min(box.width, box.height) * 0.09);
+  // Measure distance to horizontal and vertical frame sides independently. The
+  // allowance grows slowly with image resolution but is capped at eight pixels,
+  // preventing broad nearby trim or facade texture from being counted as frame
+  // evidence on large photographs while retaining compact-opening sensitivity.
+  const horizontalSideTolerance = Math.min(8, Math.max(1.2, box.height / 240));
+  const verticalSideTolerance = Math.min(8, Math.max(1.2, box.width / 240));
   const sideBuckets = {
     top: new Map<number, Set<number>>(),
     bottom: new Map<number, Set<number>>(),
@@ -65,16 +72,16 @@ function hasDistributedFullSpanPerimeter(points: EdgePoint[], box: SimpleBox): b
   };
 
   for (const point of points) {
-    if (point.x < box.x - tolerance || point.x > box.x + box.width + tolerance) continue;
-    if (point.y < box.y - tolerance || point.y > box.y + box.height + tolerance) continue;
+    if (point.x < box.x - verticalSideTolerance || point.x > box.x + box.width + verticalSideTolerance) continue;
+    if (point.y < box.y - horizontalSideTolerance || point.y > box.y + box.height + horizontalSideTolerance) continue;
 
     const xBucket = Math.min(2, Math.max(0, Math.floor(((point.x - box.x) / Math.max(box.width, 0.01)) * 3)));
     const yBucket = Math.min(2, Math.max(0, Math.floor(((point.y - box.y) / Math.max(box.height, 0.01)) * 3)));
 
-    if (Math.abs(point.y - box.y) <= tolerance) addEvidence(sideBuckets.top, xBucket, point.x);
-    if (Math.abs(point.y - (box.y + box.height)) <= tolerance) addEvidence(sideBuckets.bottom, xBucket, point.x);
-    if (Math.abs(point.x - box.x) <= tolerance) addEvidence(sideBuckets.left, yBucket, point.y);
-    if (Math.abs(point.x - (box.x + box.width)) <= tolerance) addEvidence(sideBuckets.right, yBucket, point.y);
+    if (Math.abs(point.y - box.y) <= horizontalSideTolerance) addEvidence(sideBuckets.top, xBucket, point.x);
+    if (Math.abs(point.y - (box.y + box.height)) <= horizontalSideTolerance) addEvidence(sideBuckets.bottom, xBucket, point.x);
+    if (Math.abs(point.x - box.x) <= verticalSideTolerance) addEvidence(sideBuckets.left, yBucket, point.y);
+    if (Math.abs(point.x - (box.x + box.width)) <= verticalSideTolerance) addEvidence(sideBuckets.right, yBucket, point.y);
   }
 
   // A perimeter third only counts when it contains a continuous run sized for
@@ -103,7 +110,7 @@ if (!source.includes(helperMarker)) {
     throw new Error("Full-span perimeter helper anchor not found.");
   }
   source = source.replace(helperAnchor, helper);
-} else if (!source.includes(scaledAdjacencyMarker)) {
+} else if (!source.includes(scaledSideToleranceMarker)) {
   const helperPattern = /function hasContinuousPerimeterRun\([\s\S]*?\n\}\n\nfunction hasDistributedFullSpanPerimeter\([\s\S]*?\n\}\n\nfunction buildFallbackComponents/;
   if (!helperPattern.test(source)) {
     throw new Error("Existing full-span perimeter helpers could not be upgraded.");
@@ -143,6 +150,8 @@ if (
   !source.includes(continuousRunMarker) ||
   !source.includes(scaledRunMarker) ||
   !source.includes(scaledAdjacencyMarker) ||
+  !source.includes(scaledSideToleranceMarker) ||
+  !source.includes("verticalSideTolerance") ||
   !source.includes("horizontalSectionSpan") ||
   !source.includes("totalBuckets >= 11") ||
   !source.includes("if (fullSpanBorderFallback) continue;")
@@ -151,4 +160,4 @@ if (
 }
 
 await fs.writeFile(path, source);
-console.log("Rejected weakly distributed full-span border masks using resolution-scaled perimeter runs and adjacency.");
+console.log("Rejected weakly distributed full-span border masks using resolution-scaled perimeter runs, adjacency, and side tolerance.");
