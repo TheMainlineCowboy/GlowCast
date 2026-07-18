@@ -15,6 +15,9 @@ if (!adapterSource.includes("preservesNestedProjectableSurface")) {
 if (!adapterSource.includes("const overlappingCandidates = next")) {
   throw new Error("Nested-frame runtime smoke requires deterministic overlap selection.");
 }
+if (!adapterSource.includes("perimeterSides:")) {
+  throw new Error("Nested-frame runtime smoke requires perimeter-quality overlap selection.");
+}
 
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-nested-frame-selection-"));
 const sourceRoot = path.join(tempDir, "src");
@@ -107,6 +110,32 @@ try {
     throw new Error(`A bounded outer repair should still enlarge the incomplete inner opening: ${JSON.stringify(repairedInner.box)}`);
   }
 
+  const sparseInner = {
+    ...inner,
+    id: "sparse-inner-fragment",
+    points: [{ x: 35, y: 35 }, { x: 50, y: 35 }, { x: 35, y: 50 }]
+  };
+  const completeMiddle = {
+    ...middle,
+    id: "complete-middle-frame",
+    box: { x: 33, y: 33, width: 34, height: 34 },
+    points: [
+      { x: 33, y: 33 }, { x: 67, y: 33 }, { x: 67, y: 67 }, { x: 33, y: 67 }
+    ]
+  };
+  for (const accepted of [[sparseInner, completeMiddle], [completeMiddle, sparseInner]]) {
+    const result = addFallbackCandidates(accepted, modestRepairEdges, bounds);
+    assertUnchanged(
+      candidateById(result, sparseInner.id),
+      sparseInner,
+      `Sparse inner fragment outranked a complete nested frame for order ${accepted.map((item) => item.id).join(", ")}`
+    );
+    const repairedComplete = candidateById(result, completeMiddle.id);
+    if (repairedComplete.box.width <= completeMiddle.box.width || repairedComplete.box.height <= completeMiddle.box.height) {
+      throw new Error(`Complete nested frame should receive the bounded repair regardless of input order: ${JSON.stringify(repairedComplete.box)}`);
+    }
+  }
+
   const oversizedOuterEdges = [];
   addClosedFrame(oversizedOuterEdges, 27, 27, 73, 73);
   for (const accepted of hierarchyOrders) {
@@ -123,7 +152,7 @@ try {
     );
   }
 
-  console.log("Nested fallback selection runtime smoke passed: bounded repairs remain eligible, nested hierarchy selection is deterministic across all candidate orders, and oversized outer frames preserve the smallest established projectable surface.");
+  console.log("Nested fallback selection runtime smoke passed: bounded repairs remain eligible, complete perimeter evidence outranks sparse nested fragments across input orders, and oversized outer frames preserve established projectable surfaces.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
