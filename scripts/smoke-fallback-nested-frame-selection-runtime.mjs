@@ -18,6 +18,9 @@ if (!adapterSource.includes("const overlappingCandidates = next")) {
 if (!adapterSource.includes("perimeterSides:")) {
   throw new Error("Nested-frame runtime smoke requires perimeter-quality overlap selection.");
 }
+if (!adapterSource.includes("perimeterSpread:")) {
+  throw new Error("Nested-frame runtime smoke requires distributed perimeter evidence ranking.");
+}
 
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-nested-frame-selection-"));
 const sourceRoot = path.join(tempDir, "src");
@@ -136,6 +139,30 @@ try {
     }
   }
 
+  const isolatedFourSideTouches = {
+    id: "isolated-four-side-touches",
+    box: { x: 33, y: 33, width: 34, height: 34 },
+    points: [
+      { x: 50, y: 33 }, { x: 50, y: 67 }, { x: 33, y: 50 }, { x: 67, y: 50 }
+    ]
+  };
+  const distributedFourSideFrame = {
+    ...completeMiddle,
+    id: "distributed-four-side-frame"
+  };
+  for (const accepted of [[isolatedFourSideTouches, distributedFourSideFrame], [distributedFourSideFrame, isolatedFourSideTouches]]) {
+    const result = addFallbackCandidates(accepted, modestRepairEdges, bounds);
+    assertUnchanged(
+      candidateById(result, isolatedFourSideTouches.id),
+      isolatedFourSideTouches,
+      `Four isolated side touches outranked distributed perimeter evidence for order ${accepted.map((item) => item.id).join(", ")}`
+    );
+    const repairedDistributed = candidateById(result, distributedFourSideFrame.id);
+    if (repairedDistributed.box.width <= distributedFourSideFrame.box.width || repairedDistributed.box.height <= distributedFourSideFrame.box.height) {
+      throw new Error(`Distributed perimeter evidence should receive the bounded repair regardless of input order: ${JSON.stringify(repairedDistributed.box)}`);
+    }
+  }
+
   const oversizedOuterEdges = [];
   addClosedFrame(oversizedOuterEdges, 27, 27, 73, 73);
   for (const accepted of hierarchyOrders) {
@@ -152,7 +179,7 @@ try {
     );
   }
 
-  console.log("Nested fallback selection runtime smoke passed: bounded repairs remain eligible, complete perimeter evidence outranks sparse nested fragments across input orders, and oversized outer frames preserve established projectable surfaces.");
+  console.log("Nested fallback selection runtime smoke passed: bounded repairs remain eligible, distributed perimeter evidence outranks isolated side touches and sparse fragments across input orders, and oversized outer frames preserve established projectable surfaces.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
