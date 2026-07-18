@@ -7,18 +7,20 @@ const marker = "const fullSpanBorderFallback =";
 const helperMarker = "function hasDistributedFullSpanPerimeter";
 const distinctEvidenceMarker = "new Map<number, Set<number>>()";
 const continuousRunMarker = "function hasContinuousPerimeterRun";
+const scaledRunMarker = "const requiredRunLength = Math.min(8, Math.max(3, Math.ceil(sectionSpan / 80)))";
 if (
   source.includes(marker) &&
   source.includes(helperMarker) &&
   source.includes(distinctEvidenceMarker) &&
-  source.includes(continuousRunMarker)
+  source.includes(continuousRunMarker) &&
+  source.includes(scaledRunMarker)
 ) {
   console.log("Full-span fallback border rejection already applied.");
   process.exit(0);
 }
 
 const helperAnchor = "function buildFallbackComponents(edgePoints: EdgePoint[], bounds: SimpleBox): FallbackComponent[] {";
-const helper = `function hasContinuousPerimeterRun(positions: Set<number>): boolean {
+const helper = `function hasContinuousPerimeterRun(positions: Set<number>, sectionSpan: number): boolean {
   const sorted = [...positions].sort((a, b) => a - b);
   let longestRun = sorted.length > 0 ? 1 : 0;
   let currentRun = longestRun;
@@ -34,7 +36,12 @@ const helper = `function hasContinuousPerimeterRun(positions: Set<number>): bool
     }
   }
 
-  return longestRun >= 3;
+  // Three connected samples are enough for smaller openings, while large or
+  // high-resolution perimeter sections must sustain a longer run. This keeps
+  // tiny noise clusters from qualifying on detailed photographs without making
+  // compact architectural frames impossible to recover.
+  const requiredRunLength = Math.min(8, Math.max(3, Math.ceil(sectionSpan / 80)));
+  return longestRun >= requiredRunLength;
 }
 
 function hasDistributedFullSpanPerimeter(points: EdgePoint[], box: SimpleBox): boolean {
@@ -65,11 +72,17 @@ function hasDistributedFullSpanPerimeter(points: EdgePoint[], box: SimpleBox): b
     if (Math.abs(point.x - (box.x + box.width)) <= tolerance) addEvidence(sideBuckets.right, yBucket, point.y);
   }
 
-  // A perimeter third only counts when it contains a short continuous edge run.
-  // This rejects several scattered-but-distinct points while preserving real frames.
-  const bucketCounts = Object.values(sideBuckets).map(
-    (buckets) => [...buckets.values()].filter(hasContinuousPerimeterRun).length
-  );
+  // A perimeter third only counts when it contains a continuous run sized for
+  // that architectural section. Large high-resolution openings require more
+  // evidence than compact frames, reducing false masks from tiny noise clusters.
+  const horizontalSectionSpan = box.width / 3;
+  const verticalSectionSpan = box.height / 3;
+  const bucketCounts = [
+    [...sideBuckets.top.values()].filter((positions) => hasContinuousPerimeterRun(positions, horizontalSectionSpan)).length,
+    [...sideBuckets.bottom.values()].filter((positions) => hasContinuousPerimeterRun(positions, horizontalSectionSpan)).length,
+    [...sideBuckets.left.values()].filter((positions) => hasContinuousPerimeterRun(positions, verticalSectionSpan)).length,
+    [...sideBuckets.right.values()].filter((positions) => hasContinuousPerimeterRun(positions, verticalSectionSpan)).length
+  ];
   const totalBuckets = bucketCounts.reduce((sum, count) => sum + count, 0);
 
   // A large opening may be locally interrupted by a column, plant, or foreground
@@ -85,10 +98,10 @@ if (!source.includes(helperMarker)) {
     throw new Error("Full-span perimeter helper anchor not found.");
   }
   source = source.replace(helperAnchor, helper);
-} else if (!source.includes(continuousRunMarker)) {
-  const helperPattern = /function hasDistributedFullSpanPerimeter\(points: EdgePoint\[\], box: SimpleBox\): boolean \{[\s\S]*?\n\}\n\nfunction buildFallbackComponents/;
+} else if (!source.includes(scaledRunMarker)) {
+  const helperPattern = /function hasContinuousPerimeterRun\([\s\S]*?\n\}\n\nfunction hasDistributedFullSpanPerimeter\([\s\S]*?\n\}\n\nfunction buildFallbackComponents/;
   if (!helperPattern.test(source)) {
-    throw new Error("Existing full-span perimeter helper could not be upgraded.");
+    throw new Error("Existing full-span perimeter helpers could not be upgraded.");
   }
   source = source.replace(helperPattern, `${helper}\nfunction buildFallbackComponents`);
 }
@@ -123,7 +136,8 @@ if (
   !source.includes(helperMarker) ||
   !source.includes(distinctEvidenceMarker) ||
   !source.includes(continuousRunMarker) ||
-  !source.includes("filter(hasContinuousPerimeterRun)") ||
+  !source.includes(scaledRunMarker) ||
+  !source.includes("horizontalSectionSpan") ||
   !source.includes("totalBuckets >= 11") ||
   !source.includes("if (fullSpanBorderFallback) continue;")
 ) {
@@ -131,4 +145,4 @@ if (
 }
 
 await fs.writeFile(path, source);
-console.log("Rejected weakly distributed full-span border masks using continuous perimeter edge runs.");
+console.log("Rejected weakly distributed full-span border masks using resolution-scaled perimeter edge runs.");

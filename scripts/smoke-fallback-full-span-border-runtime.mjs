@@ -110,6 +110,23 @@ function addScatteredDistinctPerimeterTouches(edgePoints, x1, y1, x2, y2, streng
   }
 }
 
+function addShortRunsPerBucket(edgePoints, x1, y1, x2, y2, runLength, strength = 220) {
+  const xThird = (x2 - x1) / 3;
+  const yThird = (y2 - y1) / 3;
+  for (let bucket = 0; bucket < 3; bucket += 1) {
+    const xStart = Math.round(x1 + bucket * xThird + 3);
+    const yStart = Math.round(y1 + bucket * yThird + 3);
+    for (let offset = 0; offset < runLength; offset += 1) {
+      edgePoints.push(
+        { x: xStart + offset, y: y1, strength },
+        { x: xStart + offset, y: y2, strength },
+        { x: x1, y: yStart + offset, strength },
+        { x: x2, y: yStart + offset, strength }
+      );
+    }
+  }
+}
+
 try {
   const { buildFallbackComponents, hasDistributedFullSpanPerimeter } = await import(pathToFileURL(emittedAdapterPath).href);
   const bounds = { x: 0, y: 0, width: 100, height: 100 };
@@ -147,6 +164,18 @@ try {
     throw new Error("Separated edge points must not imitate continuous architectural perimeter runs.");
   }
 
+  const highResolutionShortRuns = [];
+  addShortRunsPerBucket(highResolutionShortRuns, 100, 50, 900, 950, 3);
+  if (hasDistributedFullSpanPerimeter(highResolutionShortRuns, { x: 100, y: 50, width: 800, height: 900 })) {
+    throw new Error("Three-pixel noise runs must not qualify on high-resolution architectural openings.");
+  }
+
+  const highResolutionSupportedRuns = [];
+  addShortRunsPerBucket(highResolutionSupportedRuns, 100, 50, 900, 950, 5);
+  if (!hasDistributedFullSpanPerimeter(highResolutionSupportedRuns, { x: 100, y: 50, width: 800, height: 900 })) {
+    throw new Error("Scaled continuous perimeter runs should support a high-resolution architectural opening.");
+  }
+
   const cornerConcentratedOpeningEdges = [];
   addCornerConcentratedFrame(cornerConcentratedOpeningEdges, 35, 5, 65, 95);
   const cornerConcentratedOpening = buildFallbackComponents(cornerConcentratedOpeningEdges, bounds);
@@ -162,7 +191,7 @@ try {
   const fullWidthBorder = buildFallbackComponents(fullWidthBorderEdges, bounds);
   if (fullWidthBorder.length !== 0) throw new Error(`Near-full-width narrow border should be rejected, got ${JSON.stringify(fullWidthBorder)}`);
 
-  console.log("Full-span fallback runtime smoke passed: complete and singly occluded openings accepted; scattered, duplicate-pixel, stray-point, corner-concentrated, and narrow border masks rejected.");
+  console.log("Full-span fallback runtime smoke passed: compact, large, and singly occluded openings accepted; high-resolution noise runs, scattered, duplicate-pixel, stray-point, corner-concentrated, and narrow border masks rejected.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
