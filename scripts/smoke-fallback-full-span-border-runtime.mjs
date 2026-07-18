@@ -53,21 +53,28 @@ try {
     throw new Error(`Normal closed doorway should remain eligible, got ${JSON.stringify(normalDoor)}`);
   }
 
+  const largeTallOpeningEdges = [];
+  addClosedFrame(largeTallOpeningEdges, 35, 5, 65, 95);
+  const largeTallOpening = buildFallbackComponents(largeTallOpeningEdges, bounds);
+  if (largeTallOpening.length !== 1) {
+    throw new Error(`Large closed architectural opening should remain eligible, got ${JSON.stringify(largeTallOpening)}`);
+  }
+
   const fullHeightBorderEdges = [];
-  addClosedFrame(fullHeightBorderEdges, 40, 5, 60, 95);
+  addClosedFrame(fullHeightBorderEdges, 45, 5, 55, 95);
   const fullHeightBorder = buildFallbackComponents(fullHeightBorderEdges, bounds);
   if (fullHeightBorder.length !== 0) {
-    throw new Error(`Near-full-height wall border should be rejected, got ${JSON.stringify(fullHeightBorder)}`);
+    throw new Error(`Near-full-height narrow wall border should be rejected, got ${JSON.stringify(fullHeightBorder)}`);
   }
 
   const fullWidthBorderEdges = [];
-  addClosedFrame(fullWidthBorderEdges, 5, 40, 95, 60);
+  addClosedFrame(fullWidthBorderEdges, 5, 45, 95, 55);
   const fullWidthBorder = buildFallbackComponents(fullWidthBorderEdges, bounds);
   if (fullWidthBorder.length !== 0) {
-    throw new Error(`Near-full-width facade border should be rejected, got ${JSON.stringify(fullWidthBorder)}`);
+    throw new Error(`Near-full-width narrow facade border should be rejected, got ${JSON.stringify(fullWidthBorder)}`);
   }
 
-  console.log("Full-span fallback runtime smoke passed: normal doorway accepted; near-full-height and near-full-width border masks rejected.");
+  console.log("Full-span fallback runtime smoke passed: normal and large architectural openings accepted; narrow full-span border masks rejected.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
