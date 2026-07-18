@@ -97,6 +97,19 @@ function addDuplicatedPerimeterTouches(edgePoints, x1, y1, x2, y2, strength = 22
   }
 }
 
+function addScatteredDistinctPerimeterTouches(edgePoints, x1, y1, x2, y2, strength = 220) {
+  const xThird = (x2 - x1) / 3;
+  const yThird = (y2 - y1) / 3;
+  for (let bucket = 0; bucket < 3; bucket += 1) {
+    const xStart = x1 + bucket * xThird;
+    const yStart = y1 + bucket * yThird;
+    const xs = [Math.round(xStart + 1), Math.round(xStart + xThird - 1)];
+    const ys = [Math.round(yStart + 1), Math.round(yStart + yThird - 1)];
+    for (const x of xs) edgePoints.push({ x, y: y1, strength }, { x, y: y2, strength });
+    for (const y of ys) edgePoints.push({ x: x1, y, strength }, { x: x2, y, strength });
+  }
+}
+
 try {
   const { buildFallbackComponents, hasDistributedFullSpanPerimeter } = await import(pathToFileURL(emittedAdapterPath).href);
   const bounds = { x: 0, y: 0, width: 100, height: 100 };
@@ -128,6 +141,12 @@ try {
     throw new Error("Repeated reports of the same pixels must not count as distinct structural evidence.");
   }
 
+  const scatteredDistinctEdges = [];
+  addScatteredDistinctPerimeterTouches(scatteredDistinctEdges, 35, 5, 65, 95);
+  if (hasDistributedFullSpanPerimeter(scatteredDistinctEdges, { x: 35, y: 5, width: 30, height: 90 })) {
+    throw new Error("Separated edge points must not imitate continuous architectural perimeter runs.");
+  }
+
   const cornerConcentratedOpeningEdges = [];
   addCornerConcentratedFrame(cornerConcentratedOpeningEdges, 35, 5, 65, 95);
   const cornerConcentratedOpening = buildFallbackComponents(cornerConcentratedOpeningEdges, bounds);
@@ -143,7 +162,7 @@ try {
   const fullWidthBorder = buildFallbackComponents(fullWidthBorderEdges, bounds);
   if (fullWidthBorder.length !== 0) throw new Error(`Near-full-width narrow border should be rejected, got ${JSON.stringify(fullWidthBorder)}`);
 
-  console.log("Full-span fallback runtime smoke passed: complete and singly occluded openings accepted; duplicate-pixel, stray-point, corner-concentrated, and narrow border masks rejected.");
+  console.log("Full-span fallback runtime smoke passed: complete and singly occluded openings accepted; scattered, duplicate-pixel, stray-point, corner-concentrated, and narrow border masks rejected.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
