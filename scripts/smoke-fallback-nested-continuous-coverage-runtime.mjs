@@ -9,8 +9,8 @@ const detectorPath = "src/core/architecturalDetector.ts";
 const edgeDetectPath = "src/edgeDetect.ts";
 const adapterSource = await fs.readFile(adapterPath, "utf8");
 
-if (!adapterSource.includes("perimeterCoverage:") || !adapterSource.includes("perimeterDensity:")) {
-  throw new Error("Continuous-coverage runtime smoke requires prepared perimeter coverage and density ranking.");
+if (!adapterSource.includes("perimeterCoverage:") || !adapterSource.includes("perimeterDensity:") || !adapterSource.includes("perimeterStrength:")) {
+  throw new Error("Continuous-coverage runtime smoke requires prepared perimeter coverage, density, and edge-strength ranking.");
 }
 
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-nested-continuous-coverage-"));
@@ -43,23 +43,23 @@ function addClosedFrame(edgePoints, x1, y1, x2, y2, strength = 230) {
   for (let y = y1; y <= y2; y += 1) edgePoints.push({ x: x1, y, strength }, { x: x2, y, strength });
 }
 
-function frameWithStep(id, step) {
+function frameWithStep(id, step, strength = 230) {
   const points = [];
   const addAxis = (start, end, callback) => {
     for (let value = start; value < end; value += step) callback(Number(value.toFixed(1)));
     callback(end);
   };
-  addAxis(33, 67, (x) => points.push({ x, y: 33 }, { x, y: 67 }));
-  addAxis(33, 67, (y) => points.push({ x: 33, y }, { x: 67, y }));
+  addAxis(33, 67, (x) => points.push({ x, y: 33, strength }, { x, y: 67, strength }));
+  addAxis(33, 67, (y) => points.push({ x: 33, y, strength }, { x: 67, y, strength }));
   return { id, box: { x: 33, y: 33, width: 34, height: 34 }, points };
 }
 
-function continuousFrame(id) {
-  return frameWithStep(id, 1);
+function continuousFrame(id, strength = 230) {
+  return frameWithStep(id, 1, strength);
 }
 
 function looseContinuousFrame(id) {
-  return frameWithStep(id, 1.4);
+  return frameWithStep(id, 1.4, 230);
 }
 
 function sparseSpreadFrame(id) {
@@ -67,9 +67,9 @@ function sparseSpreadFrame(id) {
     id,
     box: { x: 33, y: 33, width: 34, height: 34 },
     points: [
-      { x: 33, y: 33 }, { x: 50, y: 33 }, { x: 67, y: 33 },
-      { x: 33, y: 67 }, { x: 50, y: 67 }, { x: 67, y: 67 },
-      { x: 33, y: 50 }, { x: 67, y: 50 }
+      { x: 33, y: 33, strength: 230 }, { x: 50, y: 33, strength: 230 }, { x: 67, y: 33, strength: 230 },
+      { x: 33, y: 67, strength: 230 }, { x: 50, y: 67, strength: 230 }, { x: 67, y: 67, strength: 230 },
+      { x: 33, y: 50, strength: 230 }, { x: 67, y: 50, strength: 230 }
     ]
   };
 }
@@ -121,7 +121,21 @@ try {
     }
   }
 
-  console.log("Nested continuous-coverage runtime smoke passed: sustained dense perimeter runs outrank widely separated and loosely sampled evidence across input orders.");
+  for (const accepted of [
+    [continuousFrame("weak", 70), continuousFrame("strong", 235)],
+    [continuousFrame("strong", 235), continuousFrame("weak", 70)]
+  ]) {
+    const result = addFallbackCandidates(accepted, fallbackEdges, bounds);
+    const weak = accepted.find((item) => item.id === "weak");
+    const strong = accepted.find((item) => item.id === "strong");
+    assertUnchanged(candidateById(result, "weak"), weak, `Weak equal-density perimeter received the repair for order ${accepted.map((item) => item.id).join(", ")}`);
+    const repaired = candidateById(result, "strong");
+    if (repaired.box.width <= strong.box.width || repaired.box.height <= strong.box.height) {
+      throw new Error(`Strong architectural perimeter should outrank equally dense weak evidence regardless of input order: ${JSON.stringify(repaired.box)}`);
+    }
+  }
+
+  console.log("Nested continuous-coverage runtime smoke passed: sustained dense, high-strength perimeter runs outrank widely separated, loosely sampled, and weak evidence across input orders.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
