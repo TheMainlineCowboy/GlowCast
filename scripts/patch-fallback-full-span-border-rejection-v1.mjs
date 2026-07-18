@@ -8,12 +8,14 @@ const helperMarker = "function hasDistributedFullSpanPerimeter";
 const distinctEvidenceMarker = "new Map<number, Set<number>>()";
 const continuousRunMarker = "function hasContinuousPerimeterRun";
 const scaledRunMarker = "const requiredRunLength = Math.min(8, Math.max(3, Math.ceil(sectionSpan / 80)))";
+const scaledAdjacencyMarker = "const maximumAdjacentGap = Math.min(400, Math.max(150, Math.ceil(sectionSpan / 160) * 100))";
 if (
   source.includes(marker) &&
   source.includes(helperMarker) &&
   source.includes(distinctEvidenceMarker) &&
   source.includes(continuousRunMarker) &&
-  source.includes(scaledRunMarker)
+  source.includes(scaledRunMarker) &&
+  source.includes(scaledAdjacencyMarker)
 ) {
   console.log("Full-span fallback border rejection already applied.");
   process.exit(0);
@@ -25,10 +27,13 @@ const helper = `function hasContinuousPerimeterRun(positions: Set<number>, secti
   let longestRun = sorted.length > 0 ? 1 : 0;
   let currentRun = longestRun;
 
+  // Positions are stored at 1/100-pixel precision. Compact openings retain the
+  // existing 1.5-pixel adjacency allowance, while larger high-resolution frames
+  // can tolerate proportionally wider detector sampling gaps up to four pixels.
+  // This avoids splitting a real structural edge without joining distant noise.
+  const maximumAdjacentGap = Math.min(400, Math.max(150, Math.ceil(sectionSpan / 160) * 100));
   for (let index = 1; index < sorted.length; index += 1) {
-    // Positions are stored at 1/100-pixel precision. Adjacent detector samples
-    // should remain close; scattered points must not imitate a structural edge.
-    if (sorted[index] - sorted[index - 1] <= 150) {
+    if (sorted[index] - sorted[index - 1] <= maximumAdjacentGap) {
       currentRun += 1;
       longestRun = Math.max(longestRun, currentRun);
     } else {
@@ -74,7 +79,7 @@ function hasDistributedFullSpanPerimeter(points: EdgePoint[], box: SimpleBox): b
 
   // A perimeter third only counts when it contains a continuous run sized for
   // that architectural section. Large high-resolution openings require more
-  // evidence than compact frames, reducing false masks from tiny noise clusters.
+  // evidence while allowing slightly wider detector sampling gaps than compact frames.
   const horizontalSectionSpan = box.width / 3;
   const verticalSectionSpan = box.height / 3;
   const bucketCounts = [
@@ -98,7 +103,7 @@ if (!source.includes(helperMarker)) {
     throw new Error("Full-span perimeter helper anchor not found.");
   }
   source = source.replace(helperAnchor, helper);
-} else if (!source.includes(scaledRunMarker)) {
+} else if (!source.includes(scaledAdjacencyMarker)) {
   const helperPattern = /function hasContinuousPerimeterRun\([\s\S]*?\n\}\n\nfunction hasDistributedFullSpanPerimeter\([\s\S]*?\n\}\n\nfunction buildFallbackComponents/;
   if (!helperPattern.test(source)) {
     throw new Error("Existing full-span perimeter helpers could not be upgraded.");
@@ -137,6 +142,7 @@ if (
   !source.includes(distinctEvidenceMarker) ||
   !source.includes(continuousRunMarker) ||
   !source.includes(scaledRunMarker) ||
+  !source.includes(scaledAdjacencyMarker) ||
   !source.includes("horizontalSectionSpan") ||
   !source.includes("totalBuckets >= 11") ||
   !source.includes("if (fullSpanBorderFallback) continue;")
@@ -145,4 +151,4 @@ if (
 }
 
 await fs.writeFile(path, source);
-console.log("Rejected weakly distributed full-span border masks using resolution-scaled perimeter edge runs.");
+console.log("Rejected weakly distributed full-span border masks using resolution-scaled perimeter runs and adjacency.");

@@ -110,18 +110,19 @@ function addScatteredDistinctPerimeterTouches(edgePoints, x1, y1, x2, y2, streng
   }
 }
 
-function addShortRunsPerBucket(edgePoints, x1, y1, x2, y2, runLength, strength = 220) {
+function addShortRunsPerBucket(edgePoints, x1, y1, x2, y2, runLength, sampleStep = 1, strength = 220) {
   const xThird = (x2 - x1) / 3;
   const yThird = (y2 - y1) / 3;
   for (let bucket = 0; bucket < 3; bucket += 1) {
     const xStart = Math.round(x1 + bucket * xThird + 3);
     const yStart = Math.round(y1 + bucket * yThird + 3);
     for (let offset = 0; offset < runLength; offset += 1) {
+      const distance = offset * sampleStep;
       edgePoints.push(
-        { x: xStart + offset, y: y1, strength },
-        { x: xStart + offset, y: y2, strength },
-        { x: x1, y: yStart + offset, strength },
-        { x: x2, y: yStart + offset, strength }
+        { x: xStart + distance, y: y1, strength },
+        { x: xStart + distance, y: y2, strength },
+        { x: x1, y: yStart + distance, strength },
+        { x: x2, y: yStart + distance, strength }
       );
     }
   }
@@ -176,6 +177,18 @@ try {
     throw new Error("Scaled continuous perimeter runs should support a high-resolution architectural opening.");
   }
 
+  const highResolutionSampledRuns = [];
+  addShortRunsPerBucket(highResolutionSampledRuns, 100, 50, 900, 950, 5, 2);
+  if (!hasDistributedFullSpanPerimeter(highResolutionSampledRuns, { x: 100, y: 50, width: 800, height: 900 })) {
+    throw new Error("Legitimate high-resolution frames sampled every two pixels should remain continuous.");
+  }
+
+  const highResolutionDistantNoise = [];
+  addShortRunsPerBucket(highResolutionDistantNoise, 100, 50, 900, 950, 5, 5);
+  if (hasDistributedFullSpanPerimeter(highResolutionDistantNoise, { x: 100, y: 50, width: 800, height: 900 })) {
+    throw new Error("Five-pixel-spaced noise must not be joined into a continuous architectural frame.");
+  }
+
   const cornerConcentratedOpeningEdges = [];
   addCornerConcentratedFrame(cornerConcentratedOpeningEdges, 35, 5, 65, 95);
   const cornerConcentratedOpening = buildFallbackComponents(cornerConcentratedOpeningEdges, bounds);
@@ -191,7 +204,7 @@ try {
   const fullWidthBorder = buildFallbackComponents(fullWidthBorderEdges, bounds);
   if (fullWidthBorder.length !== 0) throw new Error(`Near-full-width narrow border should be rejected, got ${JSON.stringify(fullWidthBorder)}`);
 
-  console.log("Full-span fallback runtime smoke passed: compact, large, and singly occluded openings accepted; high-resolution noise runs, scattered, duplicate-pixel, stray-point, corner-concentrated, and narrow border masks rejected.");
+  console.log("Full-span fallback runtime smoke passed: compact, large, sampled, and singly occluded openings accepted; distant high-resolution noise, short runs, scattered, duplicate-pixel, stray-point, corner-concentrated, and narrow border masks rejected.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
