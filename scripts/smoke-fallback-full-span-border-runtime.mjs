@@ -189,6 +189,18 @@ try {
     throw new Error("Five-pixel-spaced noise must not be joined into a continuous architectural frame.");
   }
 
+  const exactHighResolutionPerimeter = [];
+  addShortRunsPerBucket(exactHighResolutionPerimeter, 100, 50, 900, 950, 5, 2);
+  if (!hasDistributedFullSpanPerimeter(exactHighResolutionPerimeter, { x: 100, y: 50, width: 800, height: 900 })) {
+    throw new Error("Evidence on the actual high-resolution opening perimeter should be accepted.");
+  }
+
+  const parallelNearbyTrim = [];
+  addShortRunsPerBucket(parallelNearbyTrim, 109, 59, 891, 941, 5, 2);
+  if (hasDistributedFullSpanPerimeter(parallelNearbyTrim, { x: 100, y: 50, width: 800, height: 900 })) {
+    throw new Error("Continuous trim lines running beside an opening must not count as its structural perimeter.");
+  }
+
   const cornerConcentratedOpeningEdges = [];
   addCornerConcentratedFrame(cornerConcentratedOpeningEdges, 35, 5, 65, 95);
   const cornerConcentratedOpening = buildFallbackComponents(cornerConcentratedOpeningEdges, bounds);
@@ -204,7 +216,7 @@ try {
   const fullWidthBorder = buildFallbackComponents(fullWidthBorderEdges, bounds);
   if (fullWidthBorder.length !== 0) throw new Error(`Near-full-width narrow border should be rejected, got ${JSON.stringify(fullWidthBorder)}`);
 
-  console.log("Full-span fallback runtime smoke passed: compact, large, sampled, and singly occluded openings accepted; distant high-resolution noise, short runs, scattered, duplicate-pixel, stray-point, corner-concentrated, and narrow border masks rejected.");
+  console.log("Full-span fallback runtime smoke passed: compact, large, sampled, and singly occluded openings accepted; nearby parallel trim, distant high-resolution noise, short runs, scattered, duplicate-pixel, stray-point, corner-concentrated, and narrow border masks rejected.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
