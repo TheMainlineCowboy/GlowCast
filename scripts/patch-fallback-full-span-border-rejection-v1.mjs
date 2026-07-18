@@ -6,13 +6,38 @@ let source = await fs.readFile(path, "utf8");
 const marker = "const fullSpanBorderFallback =";
 const helperMarker = "function hasDistributedFullSpanPerimeter";
 const distinctEvidenceMarker = "new Map<number, Set<number>>()";
-if (source.includes(marker) && source.includes(helperMarker) && source.includes(distinctEvidenceMarker)) {
+const continuousRunMarker = "function hasContinuousPerimeterRun";
+if (
+  source.includes(marker) &&
+  source.includes(helperMarker) &&
+  source.includes(distinctEvidenceMarker) &&
+  source.includes(continuousRunMarker)
+) {
   console.log("Full-span fallback border rejection already applied.");
   process.exit(0);
 }
 
 const helperAnchor = "function buildFallbackComponents(edgePoints: EdgePoint[], bounds: SimpleBox): FallbackComponent[] {";
-const helper = `function hasDistributedFullSpanPerimeter(points: EdgePoint[], box: SimpleBox): boolean {
+const helper = `function hasContinuousPerimeterRun(positions: Set<number>): boolean {
+  const sorted = [...positions].sort((a, b) => a - b);
+  let longestRun = sorted.length > 0 ? 1 : 0;
+  let currentRun = longestRun;
+
+  for (let index = 1; index < sorted.length; index += 1) {
+    // Positions are stored at 1/100-pixel precision. Adjacent detector samples
+    // should remain close; scattered points must not imitate a structural edge.
+    if (sorted[index] - sorted[index - 1] <= 150) {
+      currentRun += 1;
+      longestRun = Math.max(longestRun, currentRun);
+    } else {
+      currentRun = 1;
+    }
+  }
+
+  return longestRun >= 3;
+}
+
+function hasDistributedFullSpanPerimeter(points: EdgePoint[], box: SimpleBox): boolean {
   const tolerance = Math.max(1.2, Math.min(box.width, box.height) * 0.09);
   const sideBuckets = {
     top: new Map<number, Set<number>>(),
@@ -40,10 +65,10 @@ const helper = `function hasDistributedFullSpanPerimeter(points: EdgePoint[], bo
     if (Math.abs(point.x - (box.x + box.width)) <= tolerance) addEvidence(sideBuckets.right, yBucket, point.y);
   }
 
-  // Repeated reports of the exact same pixel are not independent structural evidence.
-  // Each supported perimeter third must contain at least two distinct positions.
+  // A perimeter third only counts when it contains a short continuous edge run.
+  // This rejects several scattered-but-distinct points while preserving real frames.
   const bucketCounts = Object.values(sideBuckets).map(
-    (buckets) => [...buckets.values()].filter((positions) => positions.size >= 2).length
+    (buckets) => [...buckets.values()].filter(hasContinuousPerimeterRun).length
   );
   const totalBuckets = bucketCounts.reduce((sum, count) => sum + count, 0);
 
@@ -60,7 +85,7 @@ if (!source.includes(helperMarker)) {
     throw new Error("Full-span perimeter helper anchor not found.");
   }
   source = source.replace(helperAnchor, helper);
-} else if (!source.includes(distinctEvidenceMarker)) {
+} else if (!source.includes(continuousRunMarker)) {
   const helperPattern = /function hasDistributedFullSpanPerimeter\(points: EdgePoint\[\], box: SimpleBox\): boolean \{[\s\S]*?\n\}\n\nfunction buildFallbackComponents/;
   if (!helperPattern.test(source)) {
     throw new Error("Existing full-span perimeter helper could not be upgraded.");
@@ -97,7 +122,8 @@ if (
   !source.includes(marker) ||
   !source.includes(helperMarker) ||
   !source.includes(distinctEvidenceMarker) ||
-  !source.includes("positions.size >= 2") ||
+  !source.includes(continuousRunMarker) ||
+  !source.includes("filter(hasContinuousPerimeterRun)") ||
   !source.includes("totalBuckets >= 11") ||
   !source.includes("if (fullSpanBorderFallback) continue;")
 ) {
@@ -105,4 +131,4 @@ if (
 }
 
 await fs.writeFile(path, source);
-console.log("Rejected weakly distributed full-span border masks using distinct perimeter evidence.");
+console.log("Rejected weakly distributed full-span border masks using continuous perimeter edge runs.");
