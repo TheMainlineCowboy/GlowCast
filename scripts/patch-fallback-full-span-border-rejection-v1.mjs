@@ -34,7 +34,13 @@ if (!source.includes(helperMarker)) {
     if (Math.abs(point.x - (box.x + box.width)) <= tolerance) sideBuckets.right.add(yBucket);
   }
 
-  return Object.values(sideBuckets).every((buckets) => buckets.size === 3);
+  const bucketCounts = Object.values(sideBuckets).map((buckets) => buckets.size);
+  const totalBuckets = bucketCounts.reduce((sum, count) => sum + count, 0);
+
+  // A large opening may be locally interrupted by a column, plant, or foreground
+  // object. Permit one missing perimeter third, but require every side to retain
+  // broad evidence so corner-only facade outlines and crop borders still fail.
+  return totalBuckets >= 11 && bucketCounts.every((count) => count >= 2);
 }
 
 ${helperAnchor}`;
@@ -48,9 +54,9 @@ ${helperAnchor}`;
 const anchor = `    if (boundaryTouchingFallback && sideCoverage.sides < 4) continue;`;
 const replacement = `    if (boundaryTouchingFallback && sideCoverage.sides < 4) continue;
     // Components that span almost an entire photo dimension are only accepted when
-    // their perimeter evidence is distributed across every third of every side.
-    // This preserves strongly enclosed doors/storefronts while rejecting crop borders
-    // and facade outlines whose edge evidence is concentrated near corners or seams.
+    // their perimeter evidence is distributed across nearly every third of every side.
+    // One locally interrupted segment is allowed for real-world occlusion, while crop
+    // borders and facade outlines concentrated near corners or seams remain rejected.
     const widthSpanRatio = box.width / Math.max(bounds.width, 0.01);
     const heightSpanRatio = box.height / Math.max(bounds.height, 0.01);
     const nearFullSpanFallback = widthSpanRatio >= 0.9 || heightSpanRatio >= 0.9;
@@ -73,10 +79,11 @@ if (!source.includes(marker)) {
 if (
   !source.includes(marker) ||
   !source.includes(helperMarker) ||
+  !source.includes("totalBuckets >= 11") ||
   !source.includes("if (fullSpanBorderFallback) continue;")
 ) {
   throw new Error("Full-span fallback border rejection was not applied.");
 }
 
 await fs.writeFile(path, source);
-console.log("Rejected weakly distributed full-span border masks while preserving strongly enclosed openings.");
+console.log("Rejected weakly distributed full-span border masks while allowing one supported perimeter interruption.");

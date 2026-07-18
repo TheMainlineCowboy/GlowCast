@@ -42,6 +42,18 @@ function addClosedFrame(edgePoints, x1, y1, x2, y2, strength = 220) {
   }
 }
 
+function addOccludedTopFrame(edgePoints, x1, y1, x2, y2, strength = 220) {
+  const gapStart = x1 + Math.floor((x2 - x1) * 0.42);
+  const gapEnd = x1 + Math.ceil((x2 - x1) * 0.58);
+  for (let x = x1; x <= x2; x += 1) {
+    if (x < gapStart || x > gapEnd) edgePoints.push({ x, y: y1, strength });
+    edgePoints.push({ x, y: y2, strength });
+  }
+  for (let y = y1; y <= y2; y += 1) {
+    edgePoints.push({ x: x1, y, strength }, { x: x2, y, strength });
+  }
+}
+
 function addCornerConcentratedFrame(edgePoints, x1, y1, x2, y2, strength = 220) {
   for (let y = y1; y <= y2; y += 1) {
     edgePoints.push({ x: x1, y, strength }, { x: x2, y, strength });
@@ -74,6 +86,13 @@ try {
     throw new Error(`Large closed architectural opening with distributed perimeter evidence should remain eligible, got ${JSON.stringify(largeTallOpening)}`);
   }
 
+  const occludedLargeOpeningEdges = [];
+  addOccludedTopFrame(occludedLargeOpeningEdges, 35, 5, 65, 95);
+  const occludedLargeOpening = buildFallbackComponents(occludedLargeOpeningEdges, bounds);
+  if (occludedLargeOpening.length !== 1) {
+    throw new Error(`Large opening with one locally occluded perimeter segment should remain eligible, got ${JSON.stringify(occludedLargeOpening)}`);
+  }
+
   const cornerConcentratedOpeningEdges = [];
   addCornerConcentratedFrame(cornerConcentratedOpeningEdges, 35, 5, 65, 95);
   const cornerConcentratedOpening = buildFallbackComponents(cornerConcentratedOpeningEdges, bounds);
@@ -95,7 +114,7 @@ try {
     throw new Error(`Near-full-width narrow facade border should be rejected, got ${JSON.stringify(fullWidthBorder)}`);
   }
 
-  console.log("Full-span fallback runtime smoke passed: distributed large openings accepted; corner-concentrated and narrow border masks rejected.");
+  console.log("Full-span fallback runtime smoke passed: complete and singly occluded large openings accepted; corner-concentrated and narrow border masks rejected.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
