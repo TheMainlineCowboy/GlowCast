@@ -9,14 +9,17 @@ const requiredSnippets = [
   "perimeterSides: sideMetrics.filter((metrics) => metrics.coverage > 0).length",
   "perimeterCoverage: sideMetrics.reduce((sum, metrics) => sum + Math.min(metrics.coverage, 1), 0)",
   "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0)",
+  "perimeterStrength: sideMetrics.reduce((sum, metrics) => sum + metrics.strength, 0)",
   "perimeterSpread: sideSpreads.reduce((sum, spread) => sum + Math.min(spread, 1), 0)",
-  "const continuousMetrics = (positions: number[], dimension: number) =>",
+  "const continuousMetrics = (samples: Array<{ position: number; strength: number }>, dimension: number) =>",
   "const maxGap = Math.max(1.5, Math.min(4, dimension * 0.025));",
   "density: Math.min(1, bestRun.length / Math.max(span + 1, 1))",
+  "strength: bestRun.reduce((sum, sample) => sum + Math.max(0, Math.min(sample.strength, 255)), 0) / Math.max(bestRun.length * 255, 1)",
   ".filter((candidate) => candidate.overlap > 0.58)",
   "b.perimeterSides - a.perimeterSides",
   "b.perimeterCoverage - a.perimeterCoverage",
   "b.perimeterDensity - a.perimeterDensity",
+  "b.perimeterStrength - a.perimeterStrength",
   "b.perimeterSpread - a.perimeterSpread",
   "a.area - b.area",
   "const duplicateIndex = overlappingCandidates[0]?.index ?? -1;",
@@ -44,7 +47,7 @@ const requiredSnippets = [
 
 const missingFromSource = requiredSnippets.filter((snippet) => !adapter.includes(snippet));
 if (missingFromSource.length) {
-  console.error("Fallback source smoke failed. Checked-in adapter source lacks density-aware continuous perimeter duplicate ranking, center and shape consistency, extreme-aspect preservation, or off-center horizontal mullion behavior.");
+  console.error("Fallback source smoke failed. Checked-in adapter source lacks strength-aware continuous perimeter duplicate ranking, center and shape consistency, extreme-aspect preservation, or off-center horizontal mullion behavior.");
   console.error(JSON.stringify(missingFromSource, null, 2));
   process.exit(1);
 }
@@ -74,6 +77,11 @@ if (adapter.includes("perimeterSides: sideCoverage.filter((coverage) => coverage
   process.exit(1);
 }
 
+if (!adapter.includes("b.perimeterStrength - a.perimeterStrength ||")) {
+  console.error("Fallback duplicate source smoke failed. Equally dense weak evidence can still tie strong architectural edges.");
+  process.exit(1);
+}
+
 if (adapter.includes(".sort((a, b) => b.overlap - a.overlap || a.area - b.area || a.index - b.index)")) {
   console.error("Fallback duplicate source smoke failed. Nested selection still ignores perimeter completeness and continuity.");
   process.exit(1);
@@ -94,4 +102,4 @@ if (adapter.includes("const horizontalMullionInteriorDensity = horizontalMullion
   process.exit(1);
 }
 
-console.log("Fallback source smoke passed: overlaps are ranked by overlap, perimeter completeness, continuous coverage, edge density, and distributed spread before size; only centered shape-consistent repairs may replace fragments; displaced, distorted, extreme-aspect, isolated-touch, sparse-run, loose-density, or order-dependent duplicates preserve stronger masks.");
+console.log("Fallback source smoke passed: overlaps are ranked by overlap, perimeter completeness, continuous coverage, edge density, normalized edge strength, and distributed spread before size; weak, displaced, distorted, extreme-aspect, isolated-touch, sparse-run, loose-density, or order-dependent duplicates preserve stronger masks.");
