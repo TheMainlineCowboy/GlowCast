@@ -9,8 +9,8 @@ const detectorPath = "src/core/architecturalDetector.ts";
 const edgeDetectPath = "src/edgeDetect.ts";
 const adapterSource = await fs.readFile(adapterPath, "utf8");
 
-if (!adapterSource.includes("perimeterCoverage:") || !adapterSource.includes("perimeterDensity:") || !adapterSource.includes("perimeterStrength:")) {
-  throw new Error("Continuous-coverage runtime smoke requires prepared perimeter coverage, density, and edge-strength ranking.");
+if (!adapterSource.includes("perimeterCoverage:") || !adapterSource.includes("perimeterDensity:") || !adapterSource.includes("perimeterStrength:") || !adapterSource.includes("const robustStrength =")) {
+  throw new Error("Continuous-coverage runtime smoke requires prepared perimeter coverage, density, and robust edge-strength ranking.");
 }
 
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-nested-continuous-coverage-"));
@@ -60,6 +60,15 @@ function continuousFrame(id, strength = 230) {
 
 function looseContinuousFrame(id) {
   return frameWithStep(id, 1.4, 230);
+}
+
+function spikyContinuousFrame(id) {
+  const frame = continuousFrame(id, 80);
+  frame.points = frame.points.map((point, index) => ({
+    ...point,
+    strength: index % 10 === 0 ? 255 : 80
+  }));
+  return frame;
 }
 
 function sparseSpreadFrame(id) {
@@ -135,7 +144,21 @@ try {
     }
   }
 
-  console.log("Nested continuous-coverage runtime smoke passed: sustained dense, high-strength perimeter runs outrank widely separated, loosely sampled, and weak evidence across input orders.");
+  for (const accepted of [
+    [spikyContinuousFrame("spiky"), continuousFrame("steady", 95)],
+    [continuousFrame("steady", 95), spikyContinuousFrame("spiky")]
+  ]) {
+    const result = addFallbackCandidates(accepted, fallbackEdges, bounds);
+    const spiky = accepted.find((item) => item.id === "spiky");
+    const steady = accepted.find((item) => item.id === "steady");
+    assertUnchanged(candidateById(result, "spiky"), spiky, `Isolated high-intensity noise inflated a weak perimeter for order ${accepted.map((item) => item.id).join(", ")}`);
+    const repaired = candidateById(result, "steady");
+    if (repaired.box.width <= steady.box.width || repaired.box.height <= steady.box.height) {
+      throw new Error(`Consistently strong perimeter should outrank a weak edge with isolated spikes regardless of input order: ${JSON.stringify(repaired.box)}`);
+    }
+  }
+
+  console.log("Nested continuous-coverage runtime smoke passed: sustained dense, consistently strong perimeter runs outrank widely separated, loosely sampled, weak, and isolated-spike evidence across input orders.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }

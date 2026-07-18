@@ -45,10 +45,13 @@ source = source
   .replaceAll("if (position - run[run.length - 1] > maxGap) run = [position];", "if (position.position - run[run.length - 1].position > maxGap) run = [position];")
   .replaceAll("run[run.length - 1] - run[0] > bestRun[bestRun.length - 1] - bestRun[0]", "run[run.length - 1].position - run[0].position > bestRun[bestRun.length - 1].position - bestRun[0].position")
   .replaceAll("run[run.length - 1] - run[0] === bestRun[bestRun.length - 1] - bestRun[0]", "run[run.length - 1].position - run[0].position === bestRun[bestRun.length - 1].position - bestRun[0].position")
-  .replace("const span = bestRun[bestRun.length - 1] - bestRun[0];", "const span = bestRun[bestRun.length - 1].position - bestRun[0].position;")
+  .replace(
+    "const span = bestRun[bestRun.length - 1] - bestRun[0];",
+    "const span = bestRun[bestRun.length - 1].position - bestRun[0].position;\n          const strengths = bestRun\n            .map((sample) => Math.max(0, Math.min(sample.strength, 255)))\n            .sort((a, b) => a - b);\n          const trimCount = strengths.length >= 10 ? Math.max(1, Math.floor(strengths.length * 0.1)) : 0;\n          const robustStrengths = strengths.slice(trimCount, strengths.length - trimCount || strengths.length);\n          const robustStrength = robustStrengths.reduce((sum, strength) => sum + strength, 0) / Math.max(robustStrengths.length * 255, 1);"
+  )
   .replace(
     "density: Math.min(1, bestRun.length / Math.max(span + 1, 1))",
-    "density: Math.min(1, bestRun.length / Math.max(span + 1, 1)),\n            strength: bestRun.reduce((sum, sample) => sum + Math.max(0, Math.min(sample.strength, 255)), 0) / Math.max(bestRun.length * 255, 1)"
+    "density: Math.min(1, bestRun.length / Math.max(span + 1, 1)),\n            strength: robustStrength"
   )
   .replace(
     "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0),",
@@ -59,9 +62,13 @@ source = source
     "b.perimeterDensity - a.perimeterDensity ||\n        b.perimeterStrength - a.perimeterStrength ||"
   );
 
-if (!source.includes(marker) || !source.includes("b.perimeterStrength - a.perimeterStrength ||")) {
-  throw new Error("Strength-aware nested fallback ranking was not applied.");
+if (
+  !source.includes(marker) ||
+  !source.includes("b.perimeterStrength - a.perimeterStrength ||") ||
+  !source.includes("const robustStrength =")
+) {
+  throw new Error("Robust strength-aware nested fallback ranking was not applied.");
 }
 
 await fs.writeFile(path, source);
-console.log("Ranked equally complete nested perimeter evidence by normalized edge strength before spread and size.");
+console.log("Ranked equally complete nested perimeter evidence by trimmed normalized edge strength before spread and size.");
