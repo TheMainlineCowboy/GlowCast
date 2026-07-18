@@ -82,6 +82,21 @@ function addWeakPerimeterTouches(edgePoints, x1, y1, x2, y2, strength = 220) {
   }
 }
 
+function addDuplicatedPerimeterTouches(edgePoints, x1, y1, x2, y2, strength = 220) {
+  const xs = [x1 + 3, Math.round((x1 + x2) / 2), x2 - 3];
+  const ys = [y1 + 3, Math.round((y1 + y2) / 2), y2 - 3];
+  for (const x of xs) {
+    for (let repeat = 0; repeat < 4; repeat += 1) {
+      edgePoints.push({ x, y: y1, strength }, { x, y: y2, strength });
+    }
+  }
+  for (const y of ys) {
+    for (let repeat = 0; repeat < 4; repeat += 1) {
+      edgePoints.push({ x: x1, y, strength }, { x: x2, y, strength });
+    }
+  }
+}
+
 try {
   const { buildFallbackComponents, hasDistributedFullSpanPerimeter } = await import(pathToFileURL(emittedAdapterPath).href);
   const bounds = { x: 0, y: 0, width: 100, height: 100 };
@@ -89,56 +104,46 @@ try {
   const normalDoorEdges = [];
   addClosedFrame(normalDoorEdges, 40, 15, 60, 82);
   const normalDoor = buildFallbackComponents(normalDoorEdges, bounds);
-  if (normalDoor.length !== 1) {
-    throw new Error(`Normal closed doorway should remain eligible, got ${JSON.stringify(normalDoor)}`);
-  }
+  if (normalDoor.length !== 1) throw new Error(`Normal closed doorway should remain eligible, got ${JSON.stringify(normalDoor)}`);
 
   const largeTallOpeningEdges = [];
   addClosedFrame(largeTallOpeningEdges, 35, 5, 65, 95);
   const largeTallOpening = buildFallbackComponents(largeTallOpeningEdges, bounds);
-  if (largeTallOpening.length !== 1) {
-    throw new Error(`Large closed architectural opening with distributed perimeter evidence should remain eligible, got ${JSON.stringify(largeTallOpening)}`);
-  }
+  if (largeTallOpening.length !== 1) throw new Error(`Large closed architectural opening should remain eligible, got ${JSON.stringify(largeTallOpening)}`);
 
   const occludedLargeOpeningEdges = [];
   addOccludedTopFrame(occludedLargeOpeningEdges, 35, 5, 65, 95);
   const occludedLargeOpening = buildFallbackComponents(occludedLargeOpeningEdges, bounds);
-  if (occludedLargeOpening.length !== 1) {
-    throw new Error(`Large opening with one locally occluded perimeter segment should remain eligible, got ${JSON.stringify(occludedLargeOpening)}`);
-  }
+  if (occludedLargeOpening.length !== 1) throw new Error(`Singly occluded opening should remain eligible, got ${JSON.stringify(occludedLargeOpening)}`);
 
   const weakPerimeterEdges = [];
   addWeakPerimeterTouches(weakPerimeterEdges, 35, 5, 65, 95);
-  const weakPerimeterSupported = hasDistributedFullSpanPerimeter(
-    weakPerimeterEdges,
-    { x: 35, y: 5, width: 30, height: 90 }
-  );
-  if (weakPerimeterSupported) {
-    throw new Error("Single stray edge points must not count as supported full-span perimeter thirds.");
+  if (hasDistributedFullSpanPerimeter(weakPerimeterEdges, { x: 35, y: 5, width: 30, height: 90 })) {
+    throw new Error("Single stray edge points must not count as supported perimeter thirds.");
+  }
+
+  const duplicatedPerimeterEdges = [];
+  addDuplicatedPerimeterTouches(duplicatedPerimeterEdges, 35, 5, 65, 95);
+  if (hasDistributedFullSpanPerimeter(duplicatedPerimeterEdges, { x: 35, y: 5, width: 30, height: 90 })) {
+    throw new Error("Repeated reports of the same pixels must not count as distinct structural evidence.");
   }
 
   const cornerConcentratedOpeningEdges = [];
   addCornerConcentratedFrame(cornerConcentratedOpeningEdges, 35, 5, 65, 95);
   const cornerConcentratedOpening = buildFallbackComponents(cornerConcentratedOpeningEdges, bounds);
-  if (cornerConcentratedOpening.length !== 0) {
-    throw new Error(`Full-span outline with perimeter evidence concentrated near corners should be rejected, got ${JSON.stringify(cornerConcentratedOpening)}`);
-  }
+  if (cornerConcentratedOpening.length !== 0) throw new Error(`Corner-concentrated outline should be rejected, got ${JSON.stringify(cornerConcentratedOpening)}`);
 
   const fullHeightBorderEdges = [];
   addClosedFrame(fullHeightBorderEdges, 45, 5, 55, 95);
   const fullHeightBorder = buildFallbackComponents(fullHeightBorderEdges, bounds);
-  if (fullHeightBorder.length !== 0) {
-    throw new Error(`Near-full-height narrow wall border should be rejected, got ${JSON.stringify(fullHeightBorder)}`);
-  }
+  if (fullHeightBorder.length !== 0) throw new Error(`Near-full-height narrow border should be rejected, got ${JSON.stringify(fullHeightBorder)}`);
 
   const fullWidthBorderEdges = [];
   addClosedFrame(fullWidthBorderEdges, 5, 45, 95, 55);
   const fullWidthBorder = buildFallbackComponents(fullWidthBorderEdges, bounds);
-  if (fullWidthBorder.length !== 0) {
-    throw new Error(`Near-full-width narrow facade border should be rejected, got ${JSON.stringify(fullWidthBorder)}`);
-  }
+  if (fullWidthBorder.length !== 0) throw new Error(`Near-full-width narrow border should be rejected, got ${JSON.stringify(fullWidthBorder)}`);
 
-  console.log("Full-span fallback runtime smoke passed: complete and singly occluded large openings accepted; stray-point, corner-concentrated, and narrow border masks rejected.");
+  console.log("Full-span fallback runtime smoke passed: complete and singly occluded openings accepted; duplicate-pixel, stray-point, corner-concentrated, and narrow border masks rejected.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
