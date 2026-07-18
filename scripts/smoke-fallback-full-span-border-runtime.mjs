@@ -16,7 +16,10 @@ const sourcePath = path.join(coreDir, "maskCandidateAdapter.ts");
 
 await fs.mkdir(coreDir, { recursive: true });
 await fs.writeFile(path.join(tempDir, "package.json"), '{"type":"module"}\n');
-await fs.writeFile(sourcePath, adapterSource.replace("function buildFallbackComponents", "export function buildFallbackComponents"));
+const testableAdapterSource = adapterSource
+  .replace("function hasDistributedFullSpanPerimeter", "export function hasDistributedFullSpanPerimeter")
+  .replace("function buildFallbackComponents", "export function buildFallbackComponents");
+await fs.writeFile(sourcePath, testableAdapterSource);
 await fs.copyFile(detectorPath, path.join(coreDir, "architecturalDetector.ts"));
 await fs.copyFile(edgeDetectPath, path.join(sourceRoot, "edgeDetect.ts"));
 
@@ -68,8 +71,19 @@ function addCornerConcentratedFrame(edgePoints, x1, y1, x2, y2, strength = 220) 
   }
 }
 
+function addWeakPerimeterTouches(edgePoints, x1, y1, x2, y2, strength = 220) {
+  const xs = [x1 + 3, Math.round((x1 + x2) / 2), x2 - 3];
+  const ys = [y1 + 3, Math.round((y1 + y2) / 2), y2 - 3];
+  for (const x of xs) {
+    edgePoints.push({ x, y: y1, strength }, { x, y: y2, strength });
+  }
+  for (const y of ys) {
+    edgePoints.push({ x: x1, y, strength }, { x: x2, y, strength });
+  }
+}
+
 try {
-  const { buildFallbackComponents } = await import(pathToFileURL(emittedAdapterPath).href);
+  const { buildFallbackComponents, hasDistributedFullSpanPerimeter } = await import(pathToFileURL(emittedAdapterPath).href);
   const bounds = { x: 0, y: 0, width: 100, height: 100 };
 
   const normalDoorEdges = [];
@@ -93,6 +107,16 @@ try {
     throw new Error(`Large opening with one locally occluded perimeter segment should remain eligible, got ${JSON.stringify(occludedLargeOpening)}`);
   }
 
+  const weakPerimeterEdges = [];
+  addWeakPerimeterTouches(weakPerimeterEdges, 35, 5, 65, 95);
+  const weakPerimeterSupported = hasDistributedFullSpanPerimeter(
+    weakPerimeterEdges,
+    { x: 35, y: 5, width: 30, height: 90 }
+  );
+  if (weakPerimeterSupported) {
+    throw new Error("Single stray edge points must not count as supported full-span perimeter thirds.");
+  }
+
   const cornerConcentratedOpeningEdges = [];
   addCornerConcentratedFrame(cornerConcentratedOpeningEdges, 35, 5, 65, 95);
   const cornerConcentratedOpening = buildFallbackComponents(cornerConcentratedOpeningEdges, bounds);
@@ -114,7 +138,7 @@ try {
     throw new Error(`Near-full-width narrow facade border should be rejected, got ${JSON.stringify(fullWidthBorder)}`);
   }
 
-  console.log("Full-span fallback runtime smoke passed: complete and singly occluded large openings accepted; corner-concentrated and narrow border masks rejected.");
+  console.log("Full-span fallback runtime smoke passed: complete and singly occluded large openings accepted; stray-point, corner-concentrated, and narrow border masks rejected.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
