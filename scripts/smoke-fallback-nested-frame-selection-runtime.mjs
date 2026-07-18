@@ -12,6 +12,9 @@ const adapterSource = await fs.readFile(adapterPath, "utf8");
 if (!adapterSource.includes("preservesNestedProjectableSurface")) {
   throw new Error("Nested-frame runtime smoke requires the prepared nested fallback selection gate.");
 }
+if (!adapterSource.includes("const overlappingCandidates = next")) {
+  throw new Error("Nested-frame runtime smoke requires deterministic overlap selection.");
+}
 
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-nested-frame-selection-"));
 const sourceRoot = path.join(tempDir, "src");
@@ -57,6 +60,13 @@ const inner = {
     { x: 35, y: 35 }, { x: 65, y: 35 }, { x: 65, y: 65 }, { x: 35, y: 65 }
   ]
 };
+const middle = {
+  id: "middle-inset-frame",
+  box: { x: 31, y: 31, width: 38, height: 38 },
+  points: [
+    { x: 31, y: 31 }, { x: 69, y: 31 }, { x: 69, y: 69 }, { x: 31, y: 69 }
+  ]
+};
 const decoy = {
   id: "separate-opening",
   box: { x: 5, y: 5, width: 12, height: 18 },
@@ -72,6 +82,20 @@ function candidateById(candidates, id) {
   return candidate;
 }
 
+function assertUnchanged(candidate, expected, context) {
+  if (
+    candidate.box.x !== expected.box.x || candidate.box.y !== expected.box.y ||
+    candidate.box.width !== expected.box.width || candidate.box.height !== expected.box.height
+  ) {
+    throw new Error(`${context}: expected ${JSON.stringify(expected.box)}, got ${JSON.stringify(candidate.box)}`);
+  }
+}
+
+const hierarchyOrders = [
+  [inner, middle, decoy], [inner, decoy, middle], [middle, inner, decoy],
+  [middle, decoy, inner], [decoy, inner, middle], [decoy, middle, inner]
+];
+
 try {
   const { addFallbackCandidates } = await import(pathToFileURL(emittedAdapterPath).href);
 
@@ -85,18 +109,21 @@ try {
 
   const oversizedOuterEdges = [];
   addClosedFrame(oversizedOuterEdges, 27, 27, 73, 73);
-  for (const accepted of [[inner, decoy], [decoy, inner]]) {
+  for (const accepted of hierarchyOrders) {
     const result = addFallbackCandidates(accepted, oversizedOuterEdges, bounds);
-    const preservedInner = candidateById(result, inner.id);
-    if (
-      preservedInner.box.x !== inner.box.x || preservedInner.box.y !== inner.box.y ||
-      preservedInner.box.width !== inner.box.width || preservedInner.box.height !== inner.box.height
-    ) {
-      throw new Error(`Oversized outer trim replaced the inner projectable surface when candidate order was ${accepted.map((item) => item.id).join(", ")}: ${JSON.stringify(preservedInner.box)}`);
-    }
+    assertUnchanged(
+      candidateById(result, inner.id),
+      inner,
+      `Oversized outer trim replaced the inner projectable surface for order ${accepted.map((item) => item.id).join(", ")}`
+    );
+    assertUnchanged(
+      candidateById(result, middle.id),
+      middle,
+      `Oversized outer trim mutated the competing middle frame for order ${accepted.map((item) => item.id).join(", ")}`
+    );
   }
 
-  console.log("Nested fallback selection runtime smoke passed: bounded repairs remain eligible, oversized outer frames preserve the inner projectable surface, and candidate ordering does not change the result.");
+  console.log("Nested fallback selection runtime smoke passed: bounded repairs remain eligible, nested hierarchy selection is deterministic across all candidate orders, and oversized outer frames preserve the smallest established projectable surface.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
