@@ -34,8 +34,8 @@ jobs:
       - name: Install dependencies
         run: npm install --progress=false
 
-      - name: Prepare source
-        run: npm run prep
+      - name: Prepare source exactly once
+        run: npm run prep && node scripts/patch-fallback-edge-strength-v1.mjs
 
       - name: Detector connectivity smoke
         run: node scripts/smoke-detector-connectivity.mjs
@@ -54,6 +54,9 @@ jobs:
 
       - name: Mask adapter smoke
         run: node scripts/smoke-mask-adapter.mjs
+
+      - name: Strength-aware nested perimeter smoke
+        run: node scripts/smoke-fallback-nested-continuous-coverage-runtime.mjs
 
       - name: Fallback adapter replacement smoke
         run: node scripts/smoke-fallback-adapter-replacement.mjs
