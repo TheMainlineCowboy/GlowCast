@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
-const marker = "const nestedFrameGrowthBound = fallbackGrowthRatio <= 1.35;";
+const marker = "const nestedFrameGrowthBound = fallbackGrowthRatio <= 1.6;";
 if (source.includes(marker)) {
   console.log("Nested fallback frame selection already applied.");
   process.exit(0);
@@ -13,10 +13,11 @@ const anchor = `      const balancedFallbackExpansion = horizontalExpansionImbal
       if (`;
 const replacement = `      const balancedFallbackExpansion = horizontalExpansionImbalance <= maxExpansionImbalance && verticalExpansionImbalance <= maxExpansionImbalance;
       // When a fallback tightly surrounds an established architectural candidate, prefer
-      // the existing inner opening unless the repair is modest. This keeps inset window
-      // panes and door openings from being replaced by a larger outer trim frame.
+      // the existing inner opening unless the repair is still within the proven bounded
+      // fragment-recovery range. This keeps inset window panes and door openings from
+      // being replaced by a much larger outer trim frame.
       const fallbackContainsExisting = existingFootprintRetention >= 0.98;
-      const nestedFrameGrowthBound = fallbackGrowthRatio <= 1.35;
+      const nestedFrameGrowthBound = fallbackGrowthRatio <= 1.6;
       const preservesNestedProjectableSurface = !fallbackContainsExisting || nestedFrameGrowthBound;
       if (`;
 
