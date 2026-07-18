@@ -9,6 +9,7 @@ const requiredSnippets = [
   "perimeterSides: sideMetrics.filter((metrics) => metrics.coverage > 0).length",
   "perimeterCoverage: sideMetrics.reduce((sum, metrics) => sum + Math.min(metrics.coverage, 1), 0)",
   "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0)",
+  "perimeterStrengthBalance: Math.min(...sideMetrics.map((metrics) => metrics.strength))",
   "perimeterStrength: sideMetrics.reduce((sum, metrics) => sum + metrics.strength, 0)",
   "perimeterSpread: sideSpreads.reduce((sum, spread) => sum + Math.min(spread, 1), 0)",
   "const continuousMetrics = (samples: Array<{ position: number; strength: number }>, dimension: number) =>",
@@ -22,6 +23,7 @@ const requiredSnippets = [
   "b.perimeterSides - a.perimeterSides",
   "b.perimeterCoverage - a.perimeterCoverage",
   "b.perimeterDensity - a.perimeterDensity",
+  "b.perimeterStrengthBalance - a.perimeterStrengthBalance",
   "b.perimeterStrength - a.perimeterStrength",
   "b.perimeterSpread - a.perimeterSpread",
   "a.area - b.area",
@@ -50,7 +52,7 @@ const requiredSnippets = [
 
 const missingFromSource = requiredSnippets.filter((snippet) => !adapter.includes(snippet));
 if (missingFromSource.length) {
-  console.error("Fallback source smoke failed. Checked-in adapter source lacks robust strength-aware continuous perimeter duplicate ranking, center and shape consistency, extreme-aspect preservation, or off-center horizontal mullion behavior.");
+  console.error("Fallback source smoke failed. Checked-in adapter source lacks side-balanced robust strength-aware continuous perimeter duplicate ranking, center and shape consistency, extreme-aspect preservation, or off-center horizontal mullion behavior.");
   console.error(JSON.stringify(missingFromSource, null, 2));
   process.exit(1);
 }
@@ -80,8 +82,8 @@ if (adapter.includes("perimeterSides: sideCoverage.filter((coverage) => coverage
   process.exit(1);
 }
 
-if (!adapter.includes("b.perimeterStrength - a.perimeterStrength ||")) {
-  console.error("Fallback duplicate source smoke failed. Equally dense weak evidence can still tie strong architectural edges.");
+if (!adapter.includes("b.perimeterStrengthBalance - a.perimeterStrengthBalance ||")) {
+  console.error("Fallback duplicate source smoke failed. A single strong side can still hide weak architectural support on the remaining perimeter.");
   process.exit(1);
 }
 
@@ -110,4 +112,4 @@ if (adapter.includes("const horizontalMullionInteriorDensity = horizontalMullion
   process.exit(1);
 }
 
-console.log("Fallback source smoke passed: overlaps are ranked by overlap, perimeter completeness, continuous coverage, edge density, trimmed normalized edge strength, and distributed spread before size; isolated spikes, weak, displaced, distorted, extreme-aspect, isolated-touch, sparse-run, loose-density, or order-dependent duplicates preserve stronger masks.");
+console.log("Fallback source smoke passed: overlaps are ranked by overlap, perimeter completeness, continuous coverage, edge density, weakest-side trimmed strength, total trimmed strength, and distributed spread before size; one-sided strength, isolated spikes, weak, displaced, distorted, extreme-aspect, isolated-touch, sparse-run, loose-density, or order-dependent duplicates preserve stronger masks.");
