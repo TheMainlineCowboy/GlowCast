@@ -26,6 +26,7 @@ await runPatch("./patch-ui-auto-detect-safety-copy-v1.mjs", { required: true });
 await runPatch("./patch-ui-friendly-detection-summary-v1.mjs", { required: true });
 await runPatch("./patch-fallback-closed-shape-gate-v1.mjs");
 await runPatch("./patch-fallback-three-side-gate-v1.mjs");
+await runPatch("./patch-fallback-boundary-closure-v1.mjs", { required: true });
 await runPatch("./patch-adapter-diagnostics-v1.mjs");
 await runPatch("./patch-adapter-aligned-satellites-v1.mjs", { required: true });
 await runPatch("./patch-adapter-bounded-satellite-span-v1.mjs", { required: true });
