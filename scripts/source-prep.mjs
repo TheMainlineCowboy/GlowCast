@@ -28,6 +28,8 @@ await runPatch("./patch-fallback-closed-shape-gate-v1.mjs");
 await runPatch("./patch-fallback-three-side-gate-v1.mjs");
 await runPatch("./patch-fallback-boundary-closure-v1.mjs", { required: true });
 await runPatch("./patch-fallback-full-span-border-rejection-v1.mjs", { required: true });
+await runPatch("./patch-fallback-side-tolerance-scaling-v1.mjs", { required: true });
+await runPatch("./smoke-fallback-side-tolerance-runtime.mjs", { required: true });
 await runPatch("./patch-adapter-diagnostics-v1.mjs");
 await runPatch("./patch-adapter-aligned-satellites-v1.mjs", { required: true });
 await runPatch("./patch-adapter-bounded-satellite-span-v1.mjs", { required: true });
