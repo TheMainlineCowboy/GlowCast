@@ -15,10 +15,14 @@ if (!source.includes(helperMarker)) {
   const helper = `function hasDistributedFullSpanPerimeter(points: EdgePoint[], box: SimpleBox): boolean {
   const tolerance = Math.max(1.2, Math.min(box.width, box.height) * 0.09);
   const sideBuckets = {
-    top: new Set<number>(),
-    bottom: new Set<number>(),
-    left: new Set<number>(),
-    right: new Set<number>()
+    top: new Map<number, number>(),
+    bottom: new Map<number, number>(),
+    left: new Map<number, number>(),
+    right: new Map<number, number>()
+  };
+
+  const addEvidence = (buckets: Map<number, number>, bucket: number) => {
+    buckets.set(bucket, (buckets.get(bucket) ?? 0) + 1);
   };
 
   for (const point of points) {
@@ -28,13 +32,18 @@ if (!source.includes(helperMarker)) {
     const xBucket = Math.min(2, Math.max(0, Math.floor(((point.x - box.x) / Math.max(box.width, 0.01)) * 3)));
     const yBucket = Math.min(2, Math.max(0, Math.floor(((point.y - box.y) / Math.max(box.height, 0.01)) * 3)));
 
-    if (Math.abs(point.y - box.y) <= tolerance) sideBuckets.top.add(xBucket);
-    if (Math.abs(point.y - (box.y + box.height)) <= tolerance) sideBuckets.bottom.add(xBucket);
-    if (Math.abs(point.x - box.x) <= tolerance) sideBuckets.left.add(yBucket);
-    if (Math.abs(point.x - (box.x + box.width)) <= tolerance) sideBuckets.right.add(yBucket);
+    if (Math.abs(point.y - box.y) <= tolerance) addEvidence(sideBuckets.top, xBucket);
+    if (Math.abs(point.y - (box.y + box.height)) <= tolerance) addEvidence(sideBuckets.bottom, xBucket);
+    if (Math.abs(point.x - box.x) <= tolerance) addEvidence(sideBuckets.left, yBucket);
+    if (Math.abs(point.x - (box.x + box.width)) <= tolerance) addEvidence(sideBuckets.right, yBucket);
   }
 
-  const bucketCounts = Object.values(sideBuckets).map((buckets) => buckets.size);
+  // A single stray edge point should not make a weak perimeter third look supported.
+  // Requiring repeated evidence keeps genuine frames and occlusions eligible while
+  // rejecting fragmented facade outlines that only touch missing thirds incidentally.
+  const bucketCounts = Object.values(sideBuckets).map(
+    (buckets) => [...buckets.values()].filter((count) => count >= 2).length
+  );
   const totalBuckets = bucketCounts.reduce((sum, count) => sum + count, 0);
 
   // A large opening may be locally interrupted by a column, plant, or foreground
@@ -79,6 +88,7 @@ if (!source.includes(marker)) {
 if (
   !source.includes(marker) ||
   !source.includes(helperMarker) ||
+  !source.includes("filter((count) => count >= 2)") ||
   !source.includes("totalBuckets >= 11") ||
   !source.includes("if (fullSpanBorderFallback) continue;")
 ) {
