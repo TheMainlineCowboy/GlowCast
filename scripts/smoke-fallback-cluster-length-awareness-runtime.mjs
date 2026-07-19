@@ -10,8 +10,9 @@ const required = [
   "const secondaryGapValues = secondaryGapIndices.map((index) => orderedGaps[index])",
   "const secondaryGapDirectionalConsistency = secondaryGapDeltas.length",
   "const secondaryGapDeltaMagnitudeVariance = secondaryGapDeltas.length >= 3",
-  "const secondaryGapGradientScaleAllowance = secondaryGapDeltas.length >= 3",
-  "Math.min(2.5, Math.max(0.5, dimension * 0.004))",
+  "const secondaryGapGradientSamplingAllowance = dominantGapCandidate",
+  "dominantGapCandidate.lowerMedian * 0.12",
+  "dimension * 0.003 + secondaryGapGradientSamplingAllowance",
   "const secondaryGapGradientJitterAllowance = secondaryGapDeltas.length >= 3",
   "const secondaryGapGradientResidualDeviation = secondaryGapDeltas.length >= 3",
   "Math.pow(secondaryGapGradientJitterAllowance, 2)",
@@ -22,13 +23,13 @@ const required = [
   "Math.sqrt(secondaryClusterDistribution * secondaryClusterLengthSupport) *"
 ];
 const missing = required.filter((snippet) => !adapterSource.includes(snippet));
-if (missing.length) throw new Error(`Scale-aware jitter-tolerant perspective resistance is incomplete: ${JSON.stringify(missing)}`);
+if (missing.length) throw new Error(`Sampling-aware jitter-tolerant perspective resistance is incomplete: ${JSON.stringify(missing)}`);
 
 function lengthSupport(dimension, span) {
   return Math.min(1, span / Math.max(dimension * 0.35, 1));
 }
 
-function patternPenalty(indices, gapValues, dimension) {
+function patternPenalty(indices, gapValues, dimension, lowerMedian) {
   const indexGaps = indices.slice(1).map((index, gapIndex) => index - indices[gapIndex]);
   const mean = indexGaps.length ? indexGaps.reduce((sum, gap) => sum + gap, 0) / indexGaps.length : 0;
   const variance = indexGaps.length >= 3
@@ -46,8 +47,9 @@ function patternPenalty(indices, gapValues, dimension) {
   const deltaMagnitudeVariance = gapDeltas.length >= 3
     ? gapDeltas.reduce((sum, delta) => sum + Math.pow(Math.abs(delta) - deltaMagnitudeMean, 2), 0) / gapDeltas.length
     : 0;
+  const samplingAllowance = Math.min(1.25, Math.max(0, lowerMedian * 0.12));
   const scaleAllowance = gapDeltas.length >= 3
-    ? Math.min(2.5, Math.max(0.5, dimension * 0.004))
+    ? Math.min(2.5, Math.max(0.5, dimension * 0.003 + samplingAllowance))
     : 0;
   const gradientJitterAllowance = gapDeltas.length >= 3
     ? Math.min(
@@ -72,9 +74,9 @@ function patternPenalty(indices, gapValues, dimension) {
   return 1 - 0.4 * adjustedRegularity;
 }
 
-function authority({ lowerCount, upperCount, distribution, dimension, span, indices, gapValues }) {
+function authority({ lowerCount, upperCount, distribution, dimension, span, indices, gapValues, lowerMedian = 4 }) {
   const sampleSupport = Math.min(1, upperCount / Math.max(lowerCount, 1));
-  return sampleSupport * Math.sqrt(distribution * lengthSupport(dimension, span)) * patternPenalty(indices, gapValues, dimension);
+  return sampleSupport * Math.sqrt(distribution * lengthSupport(dimension, span)) * patternPenalty(indices, gapValues, dimension, lowerMedian);
 }
 
 const shared = { lowerCount: 6, upperCount: 4, distribution: 0.8 };
@@ -86,9 +88,10 @@ const perspectiveCompressedArchitecture = authority({ ...shared, dimension: 320,
 const naturallyJitteredPerspective = authority({ ...shared, dimension: 320, span: 128, indices: [0, 2, 4, 6], gapValues: [16, 13, 11, 7] });
 const steppedDecorativePattern = authority({ ...shared, dimension: 320, span: 128, indices: [0, 2, 4, 6], gapValues: [16, 15, 14, 7] });
 const irregularArchitecturalEvidence = authority({ ...shared, dimension: 320, span: 128, indices: [0, 1, 3, 6], gapValues: [12, 9, 13, 10] });
-const lowResolutionJitter = authority({ ...shared, dimension: 96, span: 40, indices: [0, 2, 4, 6], gapValues: [10, 8, 7, 4] });
-const highResolutionEquivalentJitter = authority({ ...shared, dimension: 640, span: 268, indices: [0, 2, 4, 6], gapValues: [40, 32, 27, 16] });
-const highResolutionSevereStep = authority({ ...shared, dimension: 640, span: 268, indices: [0, 2, 4, 6], gapValues: [40, 39, 38, 16] });
+const lowResolutionJitter = authority({ ...shared, dimension: 96, span: 40, indices: [0, 2, 4, 6], gapValues: [10, 8, 7, 4], lowerMedian: 2 });
+const crispHighResolutionJitter = authority({ ...shared, dimension: 640, span: 268, indices: [0, 2, 4, 6], gapValues: [40, 32, 27, 16], lowerMedian: 2 });
+const sparseHighResolutionJitter = authority({ ...shared, dimension: 640, span: 268, indices: [0, 2, 4, 6], gapValues: [40, 32, 27, 16], lowerMedian: 8 });
+const highResolutionSevereStep = authority({ ...shared, dimension: 640, span: 268, indices: [0, 2, 4, 6], gapValues: [40, 39, 38, 16], lowerMedian: 8 });
 
 if (!(shortOpening > shortDecorativeRegionOnLargeOpening)) throw new Error(`The same sparse span must carry less authority on a larger architectural side: short=${shortOpening}, large=${shortDecorativeRegionOnLargeOpening}`);
 if (!(broadlyRepresentedLargeOpening > shortDecorativeRegionOnLargeOpening)) throw new Error(`Broadly represented sparse evidence must outrank a short decorative region: broad=${broadlyRepresentedLargeOpening}, decorative=${shortDecorativeRegionOnLargeOpening}`);
@@ -100,7 +103,8 @@ if (!(perspectiveCompressedArchitecture > steppedDecorativePattern)) throw new E
 if (!(steppedDecorativePattern <= irregularArchitecturalEvidence)) throw new Error(`Abrupt stepped repetition must not outrank irregular architectural evidence: stepped=${steppedDecorativePattern}, irregular=${irregularArchitecturalEvidence}`);
 if (!(perspectiveCompressedArchitecture <= irregularArchitecturalEvidence)) throw new Error(`Perspective relief must remain bounded below irregular architectural evidence: perspective=${perspectiveCompressedArchitecture}, irregular=${irregularArchitecturalEvidence}`);
 if (!(lowResolutionJitter >= periodicDecorativePattern * 0.8)) throw new Error(`Low-resolution natural jitter lost too much support: low=${lowResolutionJitter}, periodic=${periodicDecorativePattern}`);
-if (!(highResolutionEquivalentJitter > highResolutionSevereStep)) throw new Error(`High-resolution scaled jitter must outrank a severe stepped pattern: scaled=${highResolutionEquivalentJitter}, severe=${highResolutionSevereStep}`);
-if (!(broadlyRepresentedLargeOpening <= 1 && periodicDecorativePattern >= 0)) throw new Error("Scale-aware jitter-tolerant smooth perspective authority must remain normalized.");
+if (!(sparseHighResolutionJitter >= crispHighResolutionJitter)) throw new Error(`Sparsely sampled high-resolution edges must receive at least as much bounded jitter support as crisp edges: sparse=${sparseHighResolutionJitter}, crisp=${crispHighResolutionJitter}`);
+if (!(sparseHighResolutionJitter > highResolutionSevereStep)) throw new Error(`Sampling-aware high-resolution jitter must still outrank a severe stepped pattern: sampled=${sparseHighResolutionJitter}, severe=${highResolutionSevereStep}`);
+if (!(broadlyRepresentedLargeOpening <= 1 && periodicDecorativePattern >= 0)) throw new Error("Sampling-aware jitter-tolerant smooth perspective authority must remain normalized.");
 
-console.log("Cluster authority smoke passed: perspective jitter scales with architectural side size while abrupt stepped patterns remain suppressed.");
+console.log("Cluster authority smoke passed: bounded perspective jitter adapts to local sampling density while abrupt stepped patterns remain suppressed.");
