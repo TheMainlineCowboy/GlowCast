@@ -3,9 +3,9 @@ import fs from "node:fs/promises";
 const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
-const marker = "const secondaryPerspectiveGradientSupport = secondaryGapValues.length >= 4";
+const marker = "const secondaryGapGradientSmoothness = secondaryGapDeltas.length >= 3";
 if (source.includes(marker)) {
-  console.log("Length-aware, perspective-aware periodic-pattern resistance already applied.");
+  console.log("Length-aware, smooth-perspective-aware periodic-pattern resistance already applied.");
   process.exit(0);
 }
 
@@ -14,7 +14,7 @@ const anchor = `          const secondaryClusterAuthority = dominantGapCandidate
             : 0;`;
 
 if (!source.includes(anchor)) {
-  throw new Error("Perspective-aware pattern-resistance anchor missing after edge-strength preparation.");
+  throw new Error("Smooth perspective pattern-resistance anchor missing after edge-strength preparation.");
 }
 
 const replacement = `          const secondaryClusterSpan = dominantGapCandidate && secondaryGapIndices.length > 1
@@ -50,12 +50,31 @@ const replacement = `          const secondaryClusterSpan = dominantGapCandidate
           const secondaryGapDirectionalConsistency = secondaryGapDeltas.length
             ? Math.abs(secondaryGapDirection) / secondaryGapDeltas.length
             : 0;
+          const secondaryGapDeltaMagnitudeMean = secondaryGapDeltas.length
+            ? secondaryGapDeltas.reduce((sum, delta) => sum + Math.abs(delta), 0) / secondaryGapDeltas.length
+            : 0;
+          const secondaryGapDeltaMagnitudeVariance = secondaryGapDeltas.length >= 3
+            ? secondaryGapDeltas.reduce(
+                (sum, delta) => sum + Math.pow(Math.abs(delta) - secondaryGapDeltaMagnitudeMean, 2),
+                0
+              ) / secondaryGapDeltas.length
+            : 0;
+          const secondaryGapGradientSmoothness = secondaryGapDeltas.length >= 3
+            ? Math.max(
+                0,
+                1 - Math.sqrt(secondaryGapDeltaMagnitudeVariance) /
+                  Math.max(secondaryGapDeltaMagnitudeMean * 0.75, 0.5)
+              )
+            : 0;
           const secondaryGapRangeRatio = secondaryGapValues.length
             ? (Math.max(...secondaryGapValues) - Math.min(...secondaryGapValues)) /
               Math.max(secondaryGapValues.reduce((sum, gap) => sum + gap, 0) / secondaryGapValues.length, 1)
             : 0;
           const secondaryPerspectiveGradientSupport = secondaryGapValues.length >= 4
-            ? Math.min(1, secondaryGapDirectionalConsistency * secondaryGapRangeRatio * 2.5)
+            ? Math.min(
+                1,
+                secondaryGapDirectionalConsistency * secondaryGapGradientSmoothness * secondaryGapRangeRatio * 2.5
+              )
             : 0;
           const adjustedSecondaryPatternRegularity = secondaryPatternRegularity *
             (1 - 0.65 * secondaryPerspectiveGradientSupport);
@@ -72,14 +91,13 @@ source = source.replace(anchor, replacement);
 
 if (
   !source.includes(marker) ||
-  !source.includes("const secondaryGapValues = secondaryGapIndices.map((index) => orderedGaps[index])") ||
-  !source.includes("const secondaryGapDirectionalConsistency = secondaryGapDeltas.length") ||
-  !source.includes("const adjustedSecondaryPatternRegularity = secondaryPatternRegularity *") ||
+  !source.includes("const secondaryGapDeltaMagnitudeVariance = secondaryGapDeltas.length >= 3") ||
+  !source.includes("secondaryGapDirectionalConsistency * secondaryGapGradientSmoothness * secondaryGapRangeRatio * 2.5") ||
   !source.includes("1 - 0.65 * secondaryPerspectiveGradientSupport") ||
   !source.includes("1 - 0.4 * adjustedSecondaryPatternRegularity")
 ) {
-  throw new Error("Perspective-aware periodic-pattern resistance was not applied.");
+  throw new Error("Smooth perspective-aware periodic-pattern resistance was not applied.");
 }
 
 await fs.writeFile(path, source);
-console.log("Suppressed globally periodic decorative patterns while preserving perspective-compressed architectural spacing gradients.");
+console.log("Suppressed stepped decorative patterns while preserving smoothly perspective-compressed architectural spacing gradients.");
