@@ -5,7 +5,7 @@ let source = await fs.readFile(path, "utf8");
 
 const marker = "perimeterStrengthConsistency:";
 if (source.includes(marker)) {
-  console.log("Resolution-aware confidence strength ranking already applied.");
+  console.log("Usable-span-aware confidence strength ranking already applied.");
   process.exit(0);
 }
 
@@ -47,7 +47,7 @@ source = source
   .replaceAll("run[run.length - 1] - run[0] === bestRun[bestRun.length - 1] - bestRun[0]", "run[run.length - 1].position - run[0].position === bestRun[bestRun.length - 1].position - bestRun[0].position")
   .replace(
     "const span = bestRun[bestRun.length - 1] - bestRun[0];",
-    "const span = bestRun[bestRun.length - 1].position - bestRun[0].position;\n          const strengths = bestRun\n            .map((sample) => Math.max(0, Math.min(sample.strength, 255)))\n            .sort((a, b) => a - b);\n          const trimCount = strengths.length >= 10 ? Math.max(1, Math.floor(strengths.length * 0.1)) : 0;\n          const robustStrengths = strengths.slice(trimCount, strengths.length - trimCount || strengths.length);\n          const robustStrength = robustStrengths.reduce((sum, strength) => sum + strength, 0) / Math.max(robustStrengths.length * 255, 1);\n          const requiredSamples = Math.max(6, Math.min(24, Math.ceil(dimension / 12)));"
+    "const span = bestRun[bestRun.length - 1].position - bestRun[0].position;\n          const strengths = bestRun\n            .map((sample) => Math.max(0, Math.min(sample.strength, 255)))\n            .sort((a, b) => a - b);\n          const trimCount = strengths.length >= 10 ? Math.max(1, Math.floor(strengths.length * 0.1)) : 0;\n          const robustStrengths = strengths.slice(trimCount, strengths.length - trimCount || strengths.length);\n          const robustStrength = robustStrengths.reduce((sum, strength) => sum + strength, 0) / Math.max(robustStrengths.length * 255, 1);\n          const usableSpan = Math.min(dimension, Math.max(span + 1, 1));\n          const requiredSamples = Math.max(6, Math.min(24, Math.ceil(usableSpan / 12)));"
   )
   .replace(
     "density: Math.min(1, bestRun.length / Math.max(span + 1, 1))",
@@ -64,7 +64,8 @@ source = source
 
 if (
   !source.includes(marker) ||
-  !source.includes("const requiredSamples = Math.max(6, Math.min(24, Math.ceil(dimension / 12)));") ||
+  !source.includes("const usableSpan = Math.min(dimension, Math.max(span + 1, 1));") ||
+  !source.includes("const requiredSamples = Math.max(6, Math.min(24, Math.ceil(usableSpan / 12)));") ||
   !source.includes("confidence: Math.min(1, bestRun.length / requiredSamples)") ||
   !source.includes("const confidence = Math.min(...sideMetrics.map((metrics) => metrics.confidence));") ||
   !source.includes("b.perimeterStrengthBalance - a.perimeterStrengthBalance ||") ||
@@ -73,8 +74,8 @@ if (
   !source.includes("b.perimeterStrength - a.perimeterStrength ||") ||
   !source.includes("const robustStrength =")
 ) {
-  throw new Error("Resolution-aware confidence strength ranking was not applied.");
+  throw new Error("Usable-span-aware confidence strength ranking was not applied.");
 }
 
 await fs.writeFile(path, source);
-console.log("Ranked nested perimeter strength consistency using side confidence scaled to architectural edge length.");
+console.log("Ranked nested perimeter strength consistency using confidence scaled to the strongest usable continuous span.");
