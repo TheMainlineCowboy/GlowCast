@@ -10,7 +10,9 @@ const required = [
   "const secondaryGapValues = secondaryGapIndices.map((index) => orderedGaps[index])",
   "const secondaryGapDirectionalConsistency = secondaryGapDeltas.length",
   "const secondaryGapDeltaMagnitudeVariance = secondaryGapDeltas.length >= 3",
-  "const secondaryGapGradientSmoothness = secondaryGapDeltas.length >= 3",
+  "const secondaryGapGradientJitterAllowance = secondaryGapDeltas.length >= 3",
+  "const secondaryGapGradientResidualDeviation = secondaryGapDeltas.length >= 3",
+  "Math.pow(secondaryGapGradientJitterAllowance, 2)",
   "secondaryGapDirectionalConsistency * secondaryGapGradientSmoothness * secondaryGapRangeRatio * 2.5",
   "const adjustedSecondaryPatternRegularity = secondaryPatternRegularity *",
   "1 - 0.65 * secondaryPerspectiveGradientSupport",
@@ -18,7 +20,7 @@ const required = [
   "Math.sqrt(secondaryClusterDistribution * secondaryClusterLengthSupport) *"
 ];
 const missing = required.filter((snippet) => !adapterSource.includes(snippet));
-if (missing.length) throw new Error(`Smooth perspective-aware periodic-pattern resistance is incomplete: ${JSON.stringify(missing)}`);
+if (missing.length) throw new Error(`Jitter-tolerant smooth perspective-aware periodic-pattern resistance is incomplete: ${JSON.stringify(missing)}`);
 
 function lengthSupport(dimension, span) {
   return Math.min(1, span / Math.max(dimension * 0.35, 1));
@@ -42,8 +44,14 @@ function patternPenalty(indices, gapValues) {
   const deltaMagnitudeVariance = gapDeltas.length >= 3
     ? gapDeltas.reduce((sum, delta) => sum + Math.pow(Math.abs(delta) - deltaMagnitudeMean, 2), 0) / gapDeltas.length
     : 0;
+  const gradientJitterAllowance = gapDeltas.length >= 3
+    ? Math.max(0.75, deltaMagnitudeMean * 0.2)
+    : 0;
+  const gradientResidualDeviation = gapDeltas.length >= 3
+    ? Math.sqrt(Math.max(0, deltaMagnitudeVariance - Math.pow(gradientJitterAllowance, 2)))
+    : 0;
   const gradientSmoothness = gapDeltas.length >= 3
-    ? Math.max(0, 1 - Math.sqrt(deltaMagnitudeVariance) / Math.max(deltaMagnitudeMean * 0.75, 0.5))
+    ? Math.max(0, 1 - gradientResidualDeviation / Math.max(deltaMagnitudeMean * 0.75, 0.5))
     : 0;
   const rangeRatio = gapValues.length
     ? (Math.max(...gapValues) - Math.min(...gapValues)) /
@@ -67,6 +75,7 @@ const shortDecorativeRegionOnLargeOpening = authority({ ...shared, dimension: 32
 const broadlyRepresentedLargeOpening = authority({ ...shared, dimension: 320, span: 128, indices: [0, 1, 3, 6], gapValues: [12, 9, 13, 10] });
 const periodicDecorativePattern = authority({ ...shared, dimension: 320, span: 128, indices: [0, 2, 4, 6], gapValues: [12, 12, 12, 12] });
 const perspectiveCompressedArchitecture = authority({ ...shared, dimension: 320, span: 128, indices: [0, 2, 4, 6], gapValues: [16, 13, 10, 7] });
+const naturallyJitteredPerspective = authority({ ...shared, dimension: 320, span: 128, indices: [0, 2, 4, 6], gapValues: [16, 13, 11, 7] });
 const steppedDecorativePattern = authority({ ...shared, dimension: 320, span: 128, indices: [0, 2, 4, 6], gapValues: [16, 15, 14, 7] });
 const irregularArchitecturalEvidence = authority({ ...shared, dimension: 320, span: 128, indices: [0, 1, 3, 6], gapValues: [12, 9, 13, 10] });
 
@@ -82,6 +91,12 @@ if (!(irregularArchitecturalEvidence > periodicDecorativePattern)) {
 if (!(perspectiveCompressedArchitecture > periodicDecorativePattern)) {
   throw new Error(`Smooth perspective-compressed architectural repetition must retain more authority than globally uniform decorative cadence: perspective=${perspectiveCompressedArchitecture}, periodic=${periodicDecorativePattern}`);
 }
+if (!(naturallyJitteredPerspective > steppedDecorativePattern)) {
+  throw new Error(`A naturally jittered perspective gradient must outrank an abrupt stepped pattern: jittered=${naturallyJitteredPerspective}, stepped=${steppedDecorativePattern}`);
+}
+if (!(naturallyJitteredPerspective >= periodicDecorativePattern)) {
+  throw new Error(`Natural measurement jitter must not erase perspective support: jittered=${naturallyJitteredPerspective}, periodic=${periodicDecorativePattern}`);
+}
 if (!(perspectiveCompressedArchitecture > steppedDecorativePattern)) {
   throw new Error(`A gradual perspective gradient must outrank a monotonic pattern with one abrupt step: smooth=${perspectiveCompressedArchitecture}, stepped=${steppedDecorativePattern}`);
 }
@@ -92,7 +107,7 @@ if (!(perspectiveCompressedArchitecture <= irregularArchitecturalEvidence)) {
   throw new Error(`Perspective relief must remain bounded below irregular architectural evidence: perspective=${perspectiveCompressedArchitecture}, irregular=${irregularArchitecturalEvidence}`);
 }
 if (!(broadlyRepresentedLargeOpening <= 1 && periodicDecorativePattern >= 0)) {
-  throw new Error("Smooth perspective-aware pattern authority must remain normalized.");
+  throw new Error("Jitter-tolerant smooth perspective-aware pattern authority must remain normalized.");
 }
 
-console.log("Cluster authority smoke passed: periodic and abruptly stepped decorative patterns are suppressed while smooth perspective compression retains confidence.");
+console.log("Cluster authority smoke passed: natural perspective jitter is preserved while periodic and abruptly stepped decorative patterns remain suppressed.");
