@@ -11,7 +11,7 @@ const required = [
   "const secondaryGapDirectionalConsistency = secondaryGapDeltas.length",
   "const secondaryGapDeltaMagnitudeVariance = secondaryGapDeltas.length >= 3",
   "const secondaryGapGradientSamplingAllowance = dominantGapCandidate",
-  "dominantGapCandidate.lowerMedian * 0.12",
+  "denseMedianSpacing * 0.12",
   "dimension * 0.003 + secondaryGapGradientSamplingAllowance",
   "const secondaryGapGradientJitterAllowance = secondaryGapDeltas.length >= 3",
   "const secondaryGapGradientResidualDeviation = secondaryGapDeltas.length >= 3",
@@ -29,7 +29,7 @@ function lengthSupport(dimension, span) {
   return Math.min(1, span / Math.max(dimension * 0.35, 1));
 }
 
-function patternPenalty(indices, gapValues, dimension, lowerMedian) {
+function patternPenalty(indices, gapValues, dimension, denseMedianSpacing) {
   const indexGaps = indices.slice(1).map((index, gapIndex) => index - indices[gapIndex]);
   const mean = indexGaps.length ? indexGaps.reduce((sum, gap) => sum + gap, 0) / indexGaps.length : 0;
   const variance = indexGaps.length >= 3
@@ -47,7 +47,7 @@ function patternPenalty(indices, gapValues, dimension, lowerMedian) {
   const deltaMagnitudeVariance = gapDeltas.length >= 3
     ? gapDeltas.reduce((sum, delta) => sum + Math.pow(Math.abs(delta) - deltaMagnitudeMean, 2), 0) / gapDeltas.length
     : 0;
-  const samplingAllowance = Math.min(1.25, Math.max(0, lowerMedian * 0.12));
+  const samplingAllowance = Math.min(1.25, Math.max(0, denseMedianSpacing * 0.12));
   const scaleAllowance = gapDeltas.length >= 3
     ? Math.min(2.5, Math.max(0.5, dimension * 0.003 + samplingAllowance))
     : 0;
@@ -74,9 +74,9 @@ function patternPenalty(indices, gapValues, dimension, lowerMedian) {
   return 1 - 0.4 * adjustedRegularity;
 }
 
-function authority({ lowerCount, upperCount, distribution, dimension, span, indices, gapValues, lowerMedian = 4 }) {
+function authority({ lowerCount, upperCount, distribution, dimension, span, indices, gapValues, denseMedianSpacing = 4 }) {
   const sampleSupport = Math.min(1, upperCount / Math.max(lowerCount, 1));
-  return sampleSupport * Math.sqrt(distribution * lengthSupport(dimension, span)) * patternPenalty(indices, gapValues, dimension, lowerMedian);
+  return sampleSupport * Math.sqrt(distribution * lengthSupport(dimension, span)) * patternPenalty(indices, gapValues, dimension, denseMedianSpacing);
 }
 
 const shared = { lowerCount: 6, upperCount: 4, distribution: 0.8 };
@@ -88,10 +88,10 @@ const perspectiveCompressedArchitecture = authority({ ...shared, dimension: 320,
 const naturallyJitteredPerspective = authority({ ...shared, dimension: 320, span: 128, indices: [0, 2, 4, 6], gapValues: [16, 13, 11, 7] });
 const steppedDecorativePattern = authority({ ...shared, dimension: 320, span: 128, indices: [0, 2, 4, 6], gapValues: [16, 15, 14, 7] });
 const irregularArchitecturalEvidence = authority({ ...shared, dimension: 320, span: 128, indices: [0, 1, 3, 6], gapValues: [12, 9, 13, 10] });
-const lowResolutionJitter = authority({ ...shared, dimension: 96, span: 40, indices: [0, 2, 4, 6], gapValues: [10, 8, 7, 4], lowerMedian: 2 });
-const crispHighResolutionJitter = authority({ ...shared, dimension: 640, span: 268, indices: [0, 2, 4, 6], gapValues: [40, 32, 27, 16], lowerMedian: 2 });
-const sparseHighResolutionJitter = authority({ ...shared, dimension: 640, span: 268, indices: [0, 2, 4, 6], gapValues: [40, 32, 27, 16], lowerMedian: 8 });
-const highResolutionSevereStep = authority({ ...shared, dimension: 640, span: 268, indices: [0, 2, 4, 6], gapValues: [40, 39, 38, 16], lowerMedian: 8 });
+const lowResolutionJitter = authority({ ...shared, dimension: 96, span: 40, indices: [0, 2, 4, 6], gapValues: [10, 8, 7, 4], denseMedianSpacing: 2 });
+const crispHighResolutionJitter = authority({ ...shared, dimension: 640, span: 268, indices: [0, 2, 4, 6], gapValues: [40, 32, 27, 16], denseMedianSpacing: 2 });
+const sparseHighResolutionJitter = authority({ ...shared, dimension: 640, span: 268, indices: [0, 2, 4, 6], gapValues: [40, 32, 27, 16], denseMedianSpacing: 8 });
+const highResolutionSevereStep = authority({ ...shared, dimension: 640, span: 268, indices: [0, 2, 4, 6], gapValues: [40, 39, 38, 16], denseMedianSpacing: 8 });
 
 if (!(shortOpening > shortDecorativeRegionOnLargeOpening)) throw new Error(`The same sparse span must carry less authority on a larger architectural side: short=${shortOpening}, large=${shortDecorativeRegionOnLargeOpening}`);
 if (!(broadlyRepresentedLargeOpening > shortDecorativeRegionOnLargeOpening)) throw new Error(`Broadly represented sparse evidence must outrank a short decorative region: broad=${broadlyRepresentedLargeOpening}, decorative=${shortDecorativeRegionOnLargeOpening}`);
