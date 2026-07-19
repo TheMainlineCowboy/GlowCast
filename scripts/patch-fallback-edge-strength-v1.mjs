@@ -3,9 +3,9 @@ import fs from "node:fs/promises";
 const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
-const marker = "perimeterStrengthVariance:";
+const marker = "perimeterStrengthConsistency:";
 if (source.includes(marker)) {
-  console.log("Strength-consistent nested fallback ranking already applied.");
+  console.log("Confidence-aware strength-consistent nested fallback ranking already applied.");
   process.exit(0);
 }
 
@@ -39,7 +39,7 @@ source = source
   )
   .replace(
     "const continuousMetrics = (positions: number[], dimension: number) => {\n          const unique = [...new Set(positions.map((position) => Math.round(position * 10) / 10))].sort((a, b) => a - b);\n          if (unique.length < 2) return { coverage: 0, density: 0 };",
-    "const continuousMetrics = (samples: Array<{ position: number; strength: number }>, dimension: number) => {\n          const unique = [...new Map(samples.map((sample) => {\n            const position = Math.round(sample.position * 10) / 10;\n            return [position, { position, strength: sample.strength }] as const;\n          }).sort((a, b) => b[1].strength - a[1].strength)).values()].sort((a, b) => a.position - b.position);\n          if (unique.length < 2) return { coverage: 0, density: 0, strength: 0 };"
+    "const continuousMetrics = (samples: Array<{ position: number; strength: number }>, dimension: number) => {\n          const unique = [...new Map(samples.map((sample) => {\n            const position = Math.round(sample.position * 10) / 10;\n            return [position, { position, strength: sample.strength }] as const;\n          }).sort((a, b) => b[1].strength - a[1].strength)).values()].sort((a, b) => a.position - b.position);\n          if (unique.length < 2) return { coverage: 0, density: 0, strength: 0, sampleCount: 0 };"
   )
   .replaceAll("let bestRun = [unique[0]];", "let bestRun = [unique[0]];")
   .replaceAll("if (position - run[run.length - 1] > maxGap) run = [position];", "if (position.position - run[run.length - 1].position > maxGap) run = [position];")
@@ -51,26 +51,27 @@ source = source
   )
   .replace(
     "density: Math.min(1, bestRun.length / Math.max(span + 1, 1))",
-    "density: Math.min(1, bestRun.length / Math.max(span + 1, 1)),\n            strength: robustStrength"
+    "density: Math.min(1, bestRun.length / Math.max(span + 1, 1)),\n            strength: robustStrength,\n            sampleCount: bestRun.length"
   )
   .replace(
     "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0),",
-    "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0),\n          perimeterStrengthBalance: Math.min(...sideMetrics.map((metrics) => metrics.strength)),\n          perimeterStrengthVariance: (() => {\n            const strengths = sideMetrics.map((metrics) => metrics.strength);\n            const mean = strengths.reduce((sum, strength) => sum + strength, 0) / Math.max(strengths.length, 1);\n            return strengths.reduce((sum, strength) => sum + (strength - mean) ** 2, 0) / Math.max(strengths.length, 1);\n          })(),\n          perimeterStrength: sideMetrics.reduce((sum, metrics) => sum + metrics.strength, 0),"
+    "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0),\n          perimeterStrengthBalance: Math.min(...sideMetrics.map((metrics) => metrics.strength)),\n          perimeterStrengthConsistency: (() => {\n            const strengths = sideMetrics.map((metrics) => metrics.strength);\n            const mean = strengths.reduce((sum, strength) => sum + strength, 0) / Math.max(strengths.length, 1);\n            const variance = strengths.reduce((sum, strength) => sum + (strength - mean) ** 2, 0) / Math.max(strengths.length, 1);\n            const confidence = Math.min(...sideMetrics.map((metrics) => Math.min(1, metrics.sampleCount / 12)));\n            return confidence * (1 - Math.min(variance * 4, 1));\n          })(),\n          perimeterStrength: sideMetrics.reduce((sum, metrics) => sum + metrics.strength, 0),"
   )
   .replace(
     "b.perimeterDensity - a.perimeterDensity ||",
-    "b.perimeterDensity - a.perimeterDensity ||\n        b.perimeterStrengthBalance - a.perimeterStrengthBalance ||\n        a.perimeterStrengthVariance - b.perimeterStrengthVariance ||\n        b.perimeterStrength - a.perimeterStrength ||"
+    "b.perimeterDensity - a.perimeterDensity ||\n        b.perimeterStrengthBalance - a.perimeterStrengthBalance ||\n        b.perimeterStrengthConsistency - a.perimeterStrengthConsistency ||\n        b.perimeterStrength - a.perimeterStrength ||"
   );
 
 if (
   !source.includes(marker) ||
+  !source.includes("sampleCount: bestRun.length") ||
   !source.includes("b.perimeterStrengthBalance - a.perimeterStrengthBalance ||") ||
-  !source.includes("a.perimeterStrengthVariance - b.perimeterStrengthVariance ||") ||
+  !source.includes("b.perimeterStrengthConsistency - a.perimeterStrengthConsistency ||") ||
   !source.includes("b.perimeterStrength - a.perimeterStrength ||") ||
   !source.includes("const robustStrength =")
 ) {
-  throw new Error("Strength-consistent robust nested fallback ranking was not applied.");
+  throw new Error("Confidence-aware strength-consistent robust nested fallback ranking was not applied.");
 }
 
 await fs.writeFile(path, source);
-console.log("Ranked equally complete nested perimeter evidence by weakest-side strength, then four-side strength consistency, before total trimmed strength, spread, and size.");
+console.log("Ranked equally complete nested perimeter evidence by weakest-side strength, then confidence-weighted four-side consistency, before total trimmed strength, spread, and size.");
