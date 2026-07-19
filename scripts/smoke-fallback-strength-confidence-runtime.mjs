@@ -2,8 +2,10 @@ import fs from "node:fs/promises";
 
 const adapterSource = await fs.readFile("src/core/maskCandidateAdapter.ts", "utf8");
 const required = [
-  "const dominantGapCutoff = gaps.findIndex((gap, index) => index > 0 && gap / Math.max(gaps[index - 1], 0.5) >= 1.8);",
-  "const stableGaps = dominantGapCutoff >= Math.max(2, Math.ceil(gaps.length * 0.4)) ? gaps.slice(0, dominantGapCutoff) : gaps;",
+  "const clusterSpread = (cluster: number[]) => {",
+  "const gapClusterCandidates = gaps.slice(1).map((gap, index) => {",
+  "candidate.consistent && candidate.separation >= 1.8",
+  "const stableGaps = dominantGapCutoff > 0 ? gaps.slice(0, dominantGapCutoff) : gaps;",
   "const localSpacing = stableGaps[Math.floor(stableGaps.length / 2)] ?? 1;",
   "Math.max(dimension * 0.04, localSpacing * 2.5)",
   "const boundedContinuation = (distance: number) => Math.max(0, 1 - distance / cornerTolerance);",
@@ -18,13 +20,32 @@ const required = [
 
 const missing = required.filter((snippet) => !adapterSource.includes(snippet));
 if (missing.length) {
-  throw new Error(`Adaptive-cluster corner-pair ranking is incomplete: ${JSON.stringify(missing)}`);
+  throw new Error(`Consistency-aware corner-pair ranking is incomplete: ${JSON.stringify(missing)}`);
+}
+
+function clusterSpread(cluster) {
+  const median = cluster[Math.floor(cluster.length / 2)] ?? 1;
+  return (Math.max(...cluster) - Math.min(...cluster)) / Math.max(median, 0.5);
 }
 
 function stableGapCluster(samplePositions) {
   const gaps = samplePositions.slice(1).map((position, index) => position - samplePositions[index]).sort((a, b) => a - b);
-  const dominantGapCutoff = gaps.findIndex((gap, index) => index > 0 && gap / Math.max(gaps[index - 1], 0.5) >= 1.8);
-  return dominantGapCutoff >= Math.max(2, Math.ceil(gaps.length * 0.4)) ? gaps.slice(0, dominantGapCutoff) : gaps;
+  const candidates = gaps.slice(1).map((gap, index) => {
+    const cutoff = index + 1;
+    const lower = gaps.slice(0, cutoff);
+    const upper = gaps.slice(cutoff);
+    const separation = gap / Math.max(gaps[index], 0.5);
+    const consistent =
+      lower.length >= Math.max(2, Math.ceil(gaps.length * 0.4)) &&
+      upper.length >= 2 &&
+      clusterSpread(lower) <= 0.45 &&
+      clusterSpread(upper) <= 0.45;
+    return { cutoff, separation, consistent };
+  });
+  const cutoff = candidates
+    .filter((candidate) => candidate.consistent && candidate.separation >= 1.8)
+    .sort((a, b) => b.separation - a.separation || a.cutoff - b.cutoff)[0]?.cutoff ?? -1;
+  return cutoff > 0 ? gaps.slice(0, cutoff) : gaps;
 }
 
 function cornerTolerance(dimension, samplePositions) {
@@ -53,10 +74,12 @@ const densePositions = [4, 6, 8, 10, 12, 14];
 const uniformPerspectivePositions = [4, 8, 12, 16, 20, 24];
 const mildlyVariablePositions = [4, 7, 11, 15, 20, 25];
 const bimodalPositions = [4, 6, 8, 10, 22, 36];
+const accidentalJumpPositions = [4, 6, 8, 12, 17, 26];
 const denseNearGap = boundedContinuation(4, dimension, densePositions);
 const perspectiveNearGap = boundedContinuation(4, dimension, uniformPerspectivePositions);
 const variableNearGap = boundedContinuation(4, dimension, mildlyVariablePositions);
 const bimodalNearGap = boundedContinuation(4, dimension, bimodalPositions);
+const accidentalNearGap = boundedContinuation(4, dimension, accidentalJumpPositions);
 const distantGap = boundedContinuation(24, dimension, uniformPerspectivePositions);
 
 if (stableGapCluster(uniformPerspectivePositions).length !== uniformPerspectivePositions.length - 1) {
@@ -66,13 +89,16 @@ if (stableGapCluster(mildlyVariablePositions).length !== mildlyVariablePositions
   throw new Error("Mild natural spacing variation must not be mistaken for a separate noise cluster.");
 }
 if (stableGapCluster(bimodalPositions).length !== 3) {
-  throw new Error(`Bimodal spacing should isolate the dominant dense cluster: ${JSON.stringify(stableGapCluster(bimodalPositions))}`);
+  throw new Error(`Bimodal spacing should isolate the internally consistent dense cluster: ${JSON.stringify(stableGapCluster(bimodalPositions))}`);
 }
-if (!(perspectiveNearGap >= denseNearGap && variableNearGap >= denseNearGap && perspectiveNearGap > 0)) {
-  throw new Error(`Uniform or mildly variable perspective spacing should retain useful support: dense=${denseNearGap}, perspective=${perspectiveNearGap}, variable=${variableNearGap}`);
+if (stableGapCluster(accidentalJumpPositions).length !== accidentalJumpPositions.length - 1) {
+  throw new Error(`One ratio jump with an inconsistent upper group must preserve the smooth gradient: ${JSON.stringify(stableGapCluster(accidentalJumpPositions))}`);
+}
+if (!(perspectiveNearGap >= denseNearGap && variableNearGap >= denseNearGap && accidentalNearGap >= denseNearGap && perspectiveNearGap > 0)) {
+  throw new Error(`Uniform, mildly variable, or smooth-gradient perspective spacing should retain useful support: dense=${denseNearGap}, perspective=${perspectiveNearGap}, variable=${variableNearGap}, accidental=${accidentalNearGap}`);
 }
 if (!(bimodalNearGap === denseNearGap && bimodalNearGap < perspectiveNearGap)) {
-  throw new Error(`Sparse secondary gaps must not inflate tolerance above the dominant dense cluster: bimodal=${bimodalNearGap}, dense=${denseNearGap}, perspective=${perspectiveNearGap}`);
+  throw new Error(`A consistent sparse secondary cluster must not inflate tolerance above the dominant dense cluster: bimodal=${bimodalNearGap}, dense=${denseNearGap}, perspective=${perspectiveNearGap}`);
 }
 if (distantGap !== 0) {
   throw new Error(`A distant unrelated edge must receive zero continuation: ${distantGap}`);
@@ -107,4 +133,4 @@ if (!(exactCorner > nearCorner && nearCorner > bimodalCorner && bimodalCorner > 
   throw new Error(`Exact, uniform-perspective, bimodal, and disconnected corners must rank in geometric order: ${exactCorner}, ${nearCorner}, ${bimodalCorner}, ${disconnectedEdges}`);
 }
 
-console.log("Strength-confidence smoke passed: adaptive spacing clustering preserves uniform perspective evidence, tolerates mild variation, and isolates sparse secondary gaps.");
+console.log("Strength-confidence smoke passed: consistency-aware spacing clustering preserves smooth perspective gradients and isolates genuinely compact sparse outlier clusters.");
