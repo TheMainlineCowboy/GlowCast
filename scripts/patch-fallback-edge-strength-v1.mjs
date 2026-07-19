@@ -3,9 +3,9 @@ import fs from "node:fs/promises";
 const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
-const marker = "perimeterStrengthConsistency:";
+const marker = "perimeterCornerPairSupport:";
 if (source.includes(marker)) {
-  console.log("Edge-continuation-aware confidence strength ranking already applied.");
+  console.log("Corner-pair-aware confidence strength ranking already applied.");
   process.exit(0);
 }
 
@@ -39,7 +39,7 @@ source = source
   )
   .replace(
     "const continuousMetrics = (positions: number[], dimension: number) => {\n          const unique = [...new Set(positions.map((position) => Math.round(position * 10) / 10))].sort((a, b) => a - b);\n          if (unique.length < 2) return { coverage: 0, density: 0 };",
-    "const continuousMetrics = (samples: Array<{ position: number; strength: number }>, dimension: number) => {\n          const unique = [...new Map(samples.map((sample) => {\n            const position = Math.round(sample.position * 10) / 10;\n            return [position, { position, strength: sample.strength }] as const;\n          }).sort((a, b) => b[1].strength - a[1].strength)).values()].sort((a, b) => a.position - b.position);\n          if (unique.length < 2) return { coverage: 0, density: 0, strength: 0, sampleCount: 0, confidence: 0 };"
+    "const continuousMetrics = (samples: Array<{ position: number; strength: number }>, dimension: number) => {\n          const unique = [...new Map(samples.map((sample) => {\n            const position = Math.round(sample.position * 10) / 10;\n            return [position, { position, strength: sample.strength }] as const;\n          }).sort((a, b) => b[1].strength - a[1].strength)).values()].sort((a, b) => a.position - b.position);\n          if (unique.length < 2) return { coverage: 0, density: 0, strength: 0, sampleCount: 0, confidence: 0, startContinuation: 0, endContinuation: 0 };"
   )
   .replaceAll("let bestRun = [unique[0]];", "let bestRun = [unique[0]];")
   .replaceAll("if (position - run[run.length - 1] > maxGap) run = [position];", "if (position.position - run[run.length - 1].position > maxGap) run = [position];")
@@ -47,39 +47,35 @@ source = source
   .replaceAll("run[run.length - 1] - run[0] === bestRun[bestRun.length - 1] - bestRun[0]", "run[run.length - 1].position - run[0].position === bestRun[bestRun.length - 1].position - bestRun[0].position")
   .replace(
     "const span = bestRun[bestRun.length - 1] - bestRun[0];",
-    "const span = bestRun[bestRun.length - 1].position - bestRun[0].position;\n          const strengths = bestRun\n            .map((sample) => Math.max(0, Math.min(sample.strength, 255)))\n            .sort((a, b) => a - b);\n          const trimCount = strengths.length >= 10 ? Math.max(1, Math.floor(strengths.length * 0.1)) : 0;\n          const robustStrengths = strengths.slice(trimCount, strengths.length - trimCount || strengths.length);\n          const robustStrength = robustStrengths.reduce((sum, strength) => sum + strength, 0) / Math.max(robustStrengths.length * 255, 1);\n          const usableSpan = Math.min(dimension, Math.max(span + 1, 1));\n          const requiredSamples = Math.max(6, Math.min(24, Math.ceil(usableSpan / 12)));\n          const representedProportion = Math.min(1, usableSpan / Math.max(dimension, 1));\n          const spanConfidence = 0.45 + 0.55 * Math.sqrt(representedProportion);\n          const endpointContinuation = Math.max(\n            1 - bestRun[0].position / Math.max(dimension, 1),\n            bestRun[bestRun.length - 1].position / Math.max(dimension, 1)\n          );\n          const continuationConfidence = 0.7 + 0.3 * Math.sqrt(Math.max(0, Math.min(endpointContinuation, 1)));"
+    "const span = bestRun[bestRun.length - 1].position - bestRun[0].position;\n          const strengths = bestRun\n            .map((sample) => Math.max(0, Math.min(sample.strength, 255)))\n            .sort((a, b) => a - b);\n          const trimCount = strengths.length >= 10 ? Math.max(1, Math.floor(strengths.length * 0.1)) : 0;\n          const robustStrengths = strengths.slice(trimCount, strengths.length - trimCount || strengths.length);\n          const robustStrength = robustStrengths.reduce((sum, strength) => sum + strength, 0) / Math.max(robustStrengths.length * 255, 1);\n          const usableSpan = Math.min(dimension, Math.max(span + 1, 1));\n          const requiredSamples = Math.max(6, Math.min(24, Math.ceil(usableSpan / 12)));\n          const representedProportion = Math.min(1, usableSpan / Math.max(dimension, 1));\n          const spanConfidence = 0.45 + 0.55 * Math.sqrt(representedProportion);\n          const startContinuation = Math.max(0, Math.min(1, 1 - bestRun[0].position / Math.max(dimension, 1)));\n          const endContinuation = Math.max(0, Math.min(1, bestRun[bestRun.length - 1].position / Math.max(dimension, 1)));\n          const endpointContinuation = Math.max(startContinuation, endContinuation);\n          const continuationConfidence = 0.7 + 0.3 * Math.sqrt(endpointContinuation);"
   )
   .replace(
     "density: Math.min(1, bestRun.length / Math.max(span + 1, 1))",
-    "density: Math.min(1, bestRun.length / Math.max(span + 1, 1)),\n            strength: robustStrength,\n            sampleCount: bestRun.length,\n            confidence: Math.min(1, bestRun.length / requiredSamples) * spanConfidence * continuationConfidence"
+    "density: Math.min(1, bestRun.length / Math.max(span + 1, 1)),\n            strength: robustStrength,\n            sampleCount: bestRun.length,\n            confidence: Math.min(1, bestRun.length / requiredSamples) * spanConfidence * continuationConfidence,\n            startContinuation,\n            endContinuation"
   )
   .replace(
     "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0),",
-    "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0),\n          perimeterStrengthBalance: Math.min(...sideMetrics.map((metrics) => metrics.strength)),\n          perimeterStrengthVariance: (() => {\n            const strengths = sideMetrics.map((metrics) => metrics.strength);\n            const mean = strengths.reduce((sum, strength) => sum + strength, 0) / Math.max(strengths.length, 1);\n            return strengths.reduce((sum, strength) => sum + (strength - mean) ** 2, 0) / Math.max(strengths.length, 1);\n          })(),\n          perimeterStrengthConsistency: (() => {\n            const strengths = sideMetrics.map((metrics) => metrics.strength);\n            const mean = strengths.reduce((sum, strength) => sum + strength, 0) / Math.max(strengths.length, 1);\n            const variance = strengths.reduce((sum, strength) => sum + (strength - mean) ** 2, 0) / Math.max(strengths.length, 1);\n            const confidence = Math.min(...sideMetrics.map((metrics) => metrics.confidence));\n            return confidence * (1 - Math.min(variance * 4, 1));\n          })(),\n          perimeterStrength: sideMetrics.reduce((sum, metrics) => sum + metrics.strength, 0),"
+    "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0),\n          perimeterCornerPairSupport: (() => {\n            const [top, bottom, left, right] = sideMetrics;\n            return (\n              Math.min(top.startContinuation, left.startContinuation) +\n              Math.min(top.endContinuation, right.startContinuation) +\n              Math.min(bottom.startContinuation, left.endContinuation) +\n              Math.min(bottom.endContinuation, right.endContinuation)\n            );\n          })(),\n          perimeterStrengthBalance: Math.min(...sideMetrics.map((metrics) => metrics.strength)),\n          perimeterStrengthVariance: (() => {\n            const strengths = sideMetrics.map((metrics) => metrics.strength);\n            const mean = strengths.reduce((sum, strength) => sum + strength, 0) / Math.max(strengths.length, 1);\n            return strengths.reduce((sum, strength) => sum + (strength - mean) ** 2, 0) / Math.max(strengths.length, 1);\n          })(),\n          perimeterStrengthConsistency: (() => {\n            const strengths = sideMetrics.map((metrics) => metrics.strength);\n            const mean = strengths.reduce((sum, strength) => sum + strength, 0) / Math.max(strengths.length, 1);\n            const variance = strengths.reduce((sum, strength) => sum + (strength - mean) ** 2, 0) / Math.max(strengths.length, 1);\n            const confidence = Math.min(...sideMetrics.map((metrics) => metrics.confidence));\n            return confidence * (1 - Math.min(variance * 4, 1));\n          })(),\n          perimeterStrength: sideMetrics.reduce((sum, metrics) => sum + metrics.strength, 0),"
   )
   .replace(
     "b.perimeterDensity - a.perimeterDensity ||",
-    "b.perimeterDensity - a.perimeterDensity ||\n        b.perimeterStrengthBalance - a.perimeterStrengthBalance ||\n        b.perimeterStrengthConsistency - a.perimeterStrengthConsistency ||\n        a.perimeterStrengthVariance - b.perimeterStrengthVariance ||\n        b.perimeterStrength - a.perimeterStrength ||"
+    "b.perimeterDensity - a.perimeterDensity ||\n        b.perimeterCornerPairSupport - a.perimeterCornerPairSupport ||\n        b.perimeterStrengthBalance - a.perimeterStrengthBalance ||\n        b.perimeterStrengthConsistency - a.perimeterStrengthConsistency ||\n        a.perimeterStrengthVariance - b.perimeterStrengthVariance ||\n        b.perimeterStrength - a.perimeterStrength ||"
   );
 
 if (
   !source.includes(marker) ||
-  !source.includes("const usableSpan = Math.min(dimension, Math.max(span + 1, 1));") ||
-  !source.includes("const requiredSamples = Math.max(6, Math.min(24, Math.ceil(usableSpan / 12)));") ||
-  !source.includes("const representedProportion = Math.min(1, usableSpan / Math.max(dimension, 1));") ||
-  !source.includes("const spanConfidence = 0.45 + 0.55 * Math.sqrt(representedProportion);") ||
-  !source.includes("const endpointContinuation = Math.max(") ||
-  !source.includes("const continuationConfidence = 0.7 + 0.3 * Math.sqrt") ||
-  !source.includes("confidence: Math.min(1, bestRun.length / requiredSamples) * spanConfidence * continuationConfidence") ||
+  !source.includes("startContinuation:") ||
+  !source.includes("endContinuation:") ||
+  !source.includes("Math.min(top.startContinuation, left.startContinuation)") ||
+  !source.includes("Math.min(top.endContinuation, right.startContinuation)") ||
+  !source.includes("Math.min(bottom.startContinuation, left.endContinuation)") ||
+  !source.includes("Math.min(bottom.endContinuation, right.endContinuation)") ||
+  !source.includes("b.perimeterCornerPairSupport - a.perimeterCornerPairSupport ||") ||
   !source.includes("const confidence = Math.min(...sideMetrics.map((metrics) => metrics.confidence));") ||
-  !source.includes("b.perimeterStrengthBalance - a.perimeterStrengthBalance ||") ||
-  !source.includes("b.perimeterStrengthConsistency - a.perimeterStrengthConsistency ||") ||
-  !source.includes("a.perimeterStrengthVariance - b.perimeterStrengthVariance ||") ||
-  !source.includes("b.perimeterStrength - a.perimeterStrength ||") ||
   !source.includes("const robustStrength =")
 ) {
-  throw new Error("Edge-continuation-aware confidence strength ranking was not applied.");
+  throw new Error("Corner-pair-aware confidence strength ranking was not applied.");
 }
 
 await fs.writeFile(path, source);
-console.log("Ranked nested perimeter strength consistency using usable span, represented proportion, and architectural endpoint continuation.");
+console.log("Ranked nested perimeter confidence using compatible adjoining corner evidence before strength tie-breakers.");
