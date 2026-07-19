@@ -5,7 +5,7 @@ let source = await fs.readFile(path, "utf8");
 
 const marker = "perimeterStrengthConsistency:";
 if (source.includes(marker)) {
-  console.log("Usable-span-aware confidence strength ranking already applied.");
+  console.log("Edge-continuation-aware confidence strength ranking already applied.");
   process.exit(0);
 }
 
@@ -47,11 +47,11 @@ source = source
   .replaceAll("run[run.length - 1] - run[0] === bestRun[bestRun.length - 1] - bestRun[0]", "run[run.length - 1].position - run[0].position === bestRun[bestRun.length - 1].position - bestRun[0].position")
   .replace(
     "const span = bestRun[bestRun.length - 1] - bestRun[0];",
-    "const span = bestRun[bestRun.length - 1].position - bestRun[0].position;\n          const strengths = bestRun\n            .map((sample) => Math.max(0, Math.min(sample.strength, 255)))\n            .sort((a, b) => a - b);\n          const trimCount = strengths.length >= 10 ? Math.max(1, Math.floor(strengths.length * 0.1)) : 0;\n          const robustStrengths = strengths.slice(trimCount, strengths.length - trimCount || strengths.length);\n          const robustStrength = robustStrengths.reduce((sum, strength) => sum + strength, 0) / Math.max(robustStrengths.length * 255, 1);\n          const usableSpan = Math.min(dimension, Math.max(span + 1, 1));\n          const requiredSamples = Math.max(6, Math.min(24, Math.ceil(usableSpan / 12)));\n          const representedProportion = Math.min(1, usableSpan / Math.max(dimension, 1));\n          const spanConfidence = 0.45 + 0.55 * Math.sqrt(representedProportion);"
+    "const span = bestRun[bestRun.length - 1].position - bestRun[0].position;\n          const strengths = bestRun\n            .map((sample) => Math.max(0, Math.min(sample.strength, 255)))\n            .sort((a, b) => a - b);\n          const trimCount = strengths.length >= 10 ? Math.max(1, Math.floor(strengths.length * 0.1)) : 0;\n          const robustStrengths = strengths.slice(trimCount, strengths.length - trimCount || strengths.length);\n          const robustStrength = robustStrengths.reduce((sum, strength) => sum + strength, 0) / Math.max(robustStrengths.length * 255, 1);\n          const usableSpan = Math.min(dimension, Math.max(span + 1, 1));\n          const requiredSamples = Math.max(6, Math.min(24, Math.ceil(usableSpan / 12)));\n          const representedProportion = Math.min(1, usableSpan / Math.max(dimension, 1));\n          const spanConfidence = 0.45 + 0.55 * Math.sqrt(representedProportion);\n          const endpointContinuation = Math.max(\n            1 - bestRun[0].position / Math.max(dimension, 1),\n            bestRun[bestRun.length - 1].position / Math.max(dimension, 1)\n          );\n          const continuationConfidence = 0.7 + 0.3 * Math.sqrt(Math.max(0, Math.min(endpointContinuation, 1)));"
   )
   .replace(
     "density: Math.min(1, bestRun.length / Math.max(span + 1, 1))",
-    "density: Math.min(1, bestRun.length / Math.max(span + 1, 1)),\n            strength: robustStrength,\n            sampleCount: bestRun.length,\n            confidence: Math.min(1, bestRun.length / requiredSamples) * spanConfidence"
+    "density: Math.min(1, bestRun.length / Math.max(span + 1, 1)),\n            strength: robustStrength,\n            sampleCount: bestRun.length,\n            confidence: Math.min(1, bestRun.length / requiredSamples) * spanConfidence * continuationConfidence"
   )
   .replace(
     "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0),",
@@ -68,7 +68,9 @@ if (
   !source.includes("const requiredSamples = Math.max(6, Math.min(24, Math.ceil(usableSpan / 12)));") ||
   !source.includes("const representedProportion = Math.min(1, usableSpan / Math.max(dimension, 1));") ||
   !source.includes("const spanConfidence = 0.45 + 0.55 * Math.sqrt(representedProportion);") ||
-  !source.includes("confidence: Math.min(1, bestRun.length / requiredSamples) * spanConfidence") ||
+  !source.includes("const endpointContinuation = Math.max(") ||
+  !source.includes("const continuationConfidence = 0.7 + 0.3 * Math.sqrt") ||
+  !source.includes("confidence: Math.min(1, bestRun.length / requiredSamples) * spanConfidence * continuationConfidence") ||
   !source.includes("const confidence = Math.min(...sideMetrics.map((metrics) => metrics.confidence));") ||
   !source.includes("b.perimeterStrengthBalance - a.perimeterStrengthBalance ||") ||
   !source.includes("b.perimeterStrengthConsistency - a.perimeterStrengthConsistency ||") ||
@@ -76,8 +78,8 @@ if (
   !source.includes("b.perimeterStrength - a.perimeterStrength ||") ||
   !source.includes("const robustStrength =")
 ) {
-  throw new Error("Span-proportion-aware confidence strength ranking was not applied.");
+  throw new Error("Edge-continuation-aware confidence strength ranking was not applied.");
 }
 
 await fs.writeFile(path, source);
-console.log("Ranked nested perimeter strength consistency using confidence scaled to usable span and represented side proportion.");
+console.log("Ranked nested perimeter strength consistency using usable span, represented proportion, and architectural endpoint continuation.");
