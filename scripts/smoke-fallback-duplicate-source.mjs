@@ -10,6 +10,8 @@ const requiredSnippets = [
   "perimeterCoverage: sideMetrics.reduce((sum, metrics) => sum + Math.min(metrics.coverage, 1), 0)",
   "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0)",
   "perimeterStrengthBalance: Math.min(...sideMetrics.map((metrics) => metrics.strength))",
+  "perimeterStrengthVariance: (() => {",
+  "return strengths.reduce((sum, strength) => sum + (strength - mean) ** 2, 0) / Math.max(strengths.length, 1);",
   "perimeterStrength: sideMetrics.reduce((sum, metrics) => sum + metrics.strength, 0)",
   "perimeterSpread: sideSpreads.reduce((sum, spread) => sum + Math.min(spread, 1), 0)",
   "const continuousMetrics = (samples: Array<{ position: number; strength: number }>, dimension: number) =>",
@@ -24,6 +26,7 @@ const requiredSnippets = [
   "b.perimeterCoverage - a.perimeterCoverage",
   "b.perimeterDensity - a.perimeterDensity",
   "b.perimeterStrengthBalance - a.perimeterStrengthBalance",
+  "a.perimeterStrengthVariance - b.perimeterStrengthVariance",
   "b.perimeterStrength - a.perimeterStrength",
   "b.perimeterSpread - a.perimeterSpread",
   "a.area - b.area",
@@ -52,7 +55,7 @@ const requiredSnippets = [
 
 const missingFromSource = requiredSnippets.filter((snippet) => !adapter.includes(snippet));
 if (missingFromSource.length) {
-  console.error("Fallback source smoke failed. Checked-in adapter source lacks side-balanced robust strength-aware continuous perimeter duplicate ranking, center and shape consistency, extreme-aspect preservation, or off-center horizontal mullion behavior.");
+  console.error("Fallback source smoke failed. Checked-in adapter source lacks strength-consistent, side-balanced robust continuous perimeter duplicate ranking, center and shape consistency, extreme-aspect preservation, or off-center horizontal mullion behavior.");
   console.error(JSON.stringify(missingFromSource, null, 2));
   process.exit(1);
 }
@@ -87,6 +90,11 @@ if (!adapter.includes("b.perimeterStrengthBalance - a.perimeterStrengthBalance |
   process.exit(1);
 }
 
+if (!adapter.includes("a.perimeterStrengthVariance - b.perimeterStrengthVariance ||")) {
+  console.error("Fallback duplicate source smoke failed. Uneven four-side strength can still outrank a consistently supported architectural perimeter.");
+  process.exit(1);
+}
+
 if (adapter.includes("strength: bestRun.reduce((sum, sample) => sum + Math.max(0, Math.min(sample.strength, 255)), 0) / Math.max(bestRun.length * 255, 1)")) {
   console.error("Fallback duplicate source smoke failed. Isolated high-intensity samples can still inflate average perimeter strength.");
   process.exit(1);
@@ -112,4 +120,4 @@ if (adapter.includes("const horizontalMullionInteriorDensity = horizontalMullion
   process.exit(1);
 }
 
-console.log("Fallback source smoke passed: overlaps are ranked by overlap, perimeter completeness, continuous coverage, edge density, weakest-side trimmed strength, total trimmed strength, and distributed spread before size; one-sided strength, isolated spikes, weak, displaced, distorted, extreme-aspect, isolated-touch, sparse-run, loose-density, or order-dependent duplicates preserve stronger masks.");
+console.log("Fallback source smoke passed: overlaps are ranked by overlap, perimeter completeness, continuous coverage, edge density, weakest-side trimmed strength, four-side strength consistency, total trimmed strength, and distributed spread before size; uneven strength, one-sided strength, isolated spikes, weak, displaced, distorted, extreme-aspect, isolated-touch, sparse-run, loose-density, or order-dependent duplicates preserve stronger masks.");
