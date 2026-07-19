@@ -2,12 +2,13 @@ import fs from "node:fs/promises";
 
 const adapterSource = await fs.readFile("src/core/maskCandidateAdapter.ts", "utf8");
 const required = [
+  "const orderedGaps = bestRun.slice(1)",
+  "const secondaryGapIndices = orderedGaps",
+  "const secondaryClusterDistribution = dominantGapCandidate",
+  "Math.sqrt(secondaryClusterDistribution)",
   "const minimumSecondarySamples = Math.max(3, Math.ceil(gaps.length * 0.3));",
-  "return { cutoff, separation, consistent, lowerCount: lower.length, upperCount: upper.length };",
   "const secondaryClusterAuthority = dominantGapCandidate",
-  "dominantGapCandidate.upperCount / Math.max(dominantGapCandidate.lowerCount, 1)",
   "const unsplitSpacing = gaps[Math.floor(gaps.length * 0.75)]",
-  "unsplitSpacing * (1 - secondaryClusterAuthority) + denseMedianSpacing * secondaryClusterAuthority",
   "Math.max(dimension * 0.04, localSpacing * 2.5)",
   "perimeterCornerPairSupport:",
   "b.perimeterCornerPairSupport - a.perimeterCornerPairSupport ||",
@@ -15,7 +16,7 @@ const required = [
 ];
 
 const missing = required.filter((snippet) => !adapterSource.includes(snippet));
-if (missing.length) throw new Error(`Sample-weighted corner-pair ranking is incomplete: ${JSON.stringify(missing)}`);
+if (missing.length) throw new Error(`Spatially distributed cluster-weighted corner-pair ranking is incomplete: ${JSON.stringify(missing)}`);
 
 function clusterSpread(cluster) {
   const median = cluster[Math.floor(cluster.length / 2)] ?? 1;
@@ -23,7 +24,8 @@ function clusterSpread(cluster) {
 }
 
 function spacingMetrics(samplePositions) {
-  const gaps = samplePositions.slice(1).map((position, index) => position - samplePositions[index]).sort((a, b) => a - b);
+  const orderedGaps = samplePositions.slice(1).map((position, index) => position - samplePositions[index]);
+  const gaps = [...orderedGaps].sort((a, b) => a - b);
   const minimumSecondarySamples = Math.max(3, Math.ceil(gaps.length * 0.3));
   const candidates = gaps.slice(1).map((gap, index) => {
     const cutoff = index + 1;
@@ -37,8 +39,13 @@ function spacingMetrics(samplePositions) {
   const denseGaps = dominant ? gaps.slice(0, dominant.cutoff) : gaps;
   const unsplitSpacing = gaps[Math.floor(gaps.length * 0.75)] ?? gaps[Math.floor(gaps.length / 2)] ?? 1;
   const denseMedianSpacing = denseGaps[Math.floor(denseGaps.length / 2)] ?? unsplitSpacing;
-  const authority = dominant ? Math.min(1, dominant.upperCount / Math.max(dominant.lowerCount, 1)) : 0;
-  return { gaps, dominant, authority, localSpacing: unsplitSpacing * (1 - authority) + denseMedianSpacing * authority };
+  const secondaryGapThreshold = dominant ? gaps[dominant.cutoff] ?? Infinity : Infinity;
+  const secondaryGapIndices = orderedGaps.map((gap, index) => ({ gap, index })).filter((sample) => sample.gap >= secondaryGapThreshold).map((sample) => sample.index);
+  const distribution = dominant && secondaryGapIndices.length > 1
+    ? Math.min(1, (secondaryGapIndices[secondaryGapIndices.length - 1] - secondaryGapIndices[0] + 1) / Math.max(orderedGaps.length, 1))
+    : 0;
+  const authority = dominant ? Math.min(1, dominant.upperCount / Math.max(dominant.lowerCount, 1)) * Math.sqrt(distribution) : 0;
+  return { dominant, distribution, authority, localSpacing: unsplitSpacing * (1 - authority) + denseMedianSpacing * authority };
 }
 
 function cornerTolerance(dimension, samplePositions) {
@@ -49,34 +56,35 @@ function boundedContinuation(distance, dimension, samplePositions) {
   return Math.max(0, 1 - distance / cornerTolerance(dimension, samplePositions));
 }
 
-const dimension = 160;
-const densePositions = [4, 6, 8, 10, 12, 14];
-const uniformPerspectivePositions = [4, 8, 12, 16, 20, 24];
-const barelySupportedBimodalPositions = [4, 6, 8, 10, 12, 24, 38, 52];
-const stronglySupportedBimodalPositions = [4, 6, 8, 10, 24, 38, 52, 66];
+const dimension = 200;
+const concentratedSparsePositions = [4, 6, 8, 10, 24, 38, 52, 54, 56];
+const distributedSparsePositions = [4, 18, 20, 34, 36, 50, 52, 66, 68];
 const twoOutlierPositions = [4, 6, 8, 10, 12, 24, 38];
+const uniformPerspectivePositions = [4, 8, 12, 16, 20, 24];
 
-const barely = spacingMetrics(barelySupportedBimodalPositions);
-const strong = spacingMetrics(stronglySupportedBimodalPositions);
+const concentrated = spacingMetrics(concentratedSparsePositions);
+const distributed = spacingMetrics(distributedSparsePositions);
 const twoOutlier = spacingMetrics(twoOutlierPositions);
 
-if (!barely.dominant || !strong.dominant) throw new Error("Supported bimodal runs must identify a secondary spacing cluster.");
-if (!(strong.authority > barely.authority && barely.authority > 0)) {
-  throw new Error(`Cluster authority must scale with relative sample support: barely=${barely.authority}, strong=${strong.authority}`);
+if (!concentrated.dominant || !distributed.dominant) throw new Error("Supported bimodal runs must identify a secondary spacing cluster.");
+if (!(distributed.distribution > concentrated.distribution && concentrated.distribution > 0)) {
+  throw new Error(`Spatially distributed sparse gaps must receive broader distribution support: concentrated=${concentrated.distribution}, distributed=${distributed.distribution}`);
 }
-if (!(strong.localSpacing < barely.localSpacing)) {
-  throw new Error(`A strongly supported sparse cluster must pull spacing farther toward the dense cluster: strong=${strong.localSpacing}, barely=${barely.localSpacing}`);
+if (!(distributed.authority > concentrated.authority && concentrated.authority > 0)) {
+  throw new Error(`Cluster authority must include spatial distribution, not sample count alone: concentrated=${concentrated.authority}, distributed=${distributed.authority}`);
 }
-if (twoOutlier.dominant) throw new Error(`Two detached samples must not establish an authoritative secondary cluster: ${JSON.stringify(twoOutlier)}`);
+if (!(distributed.localSpacing < concentrated.localSpacing)) {
+  throw new Error(`Distributed sparse evidence must pull tolerance farther toward dense spacing: distributed=${distributed.localSpacing}, concentrated=${concentrated.localSpacing}`);
+}
+if (twoOutlier.dominant) throw new Error(`Two detached samples must remain non-authoritative: ${JSON.stringify(twoOutlier)}`);
 
-const denseNearGap = boundedContinuation(4, dimension, densePositions);
-const barelyNearGap = boundedContinuation(4, dimension, barelySupportedBimodalPositions);
-const strongNearGap = boundedContinuation(4, dimension, stronglySupportedBimodalPositions);
+const concentratedNearGap = boundedContinuation(4, dimension, concentratedSparsePositions);
+const distributedNearGap = boundedContinuation(4, dimension, distributedSparsePositions);
 const distantGap = boundedContinuation(24, dimension, uniformPerspectivePositions);
 
-if (!(barelyNearGap > strongNearGap && strongNearGap >= denseNearGap)) {
-  throw new Error(`Continuation must decrease as secondary-cluster authority increases: barely=${barelyNearGap}, strong=${strongNearGap}, dense=${denseNearGap}`);
+if (!(concentratedNearGap > distributedNearGap && distributedNearGap > 0)) {
+  throw new Error(`Concentrated decorative spacing must influence corner continuation less than distributed evidence: concentrated=${concentratedNearGap}, distributed=${distributedNearGap}`);
 }
 if (distantGap !== 0) throw new Error(`A distant unrelated edge must receive zero continuation: ${distantGap}`);
 
-console.log("Strength-confidence smoke passed: secondary spacing clusters influence corner tolerance in proportion to sample support, while two-point noise remains non-authoritative.");
+console.log("Strength-confidence smoke passed: repeated sparse spacing influences corner tolerance only in proportion to both sample support and distribution across the architectural side.");
