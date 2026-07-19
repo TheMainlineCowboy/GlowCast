@@ -4,9 +4,9 @@ const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
 const marker = "perimeterCornerPairSupport:";
-const adaptiveSpacingMarker = "const dominantGapCutoff = gaps.findIndex((gap, index) => index > 0 && gap / Math.max(gaps[index - 1], 0.5) >= 1.8);";
-if (source.includes(marker) && source.includes(adaptiveSpacingMarker)) {
-  console.log("Adaptive-cluster corner-pair confidence ranking already applied.");
+const consistentSpacingMarker = "const gapClusterCandidates = gaps.slice(1).map((gap, index) => {";
+if (source.includes(marker) && source.includes(consistentSpacingMarker)) {
+  console.log("Consistency-aware corner-pair confidence ranking already applied.");
   process.exit(0);
 }
 
@@ -47,7 +47,7 @@ source = source
   .replaceAll("run[run.length - 1] - run[0] === bestRun[bestRun.length - 1] - bestRun[0]", "run[run.length - 1].position - run[0].position === bestRun[bestRun.length - 1].position - bestRun[0].position")
   .replace(
     "const span = bestRun[bestRun.length - 1] - bestRun[0];",
-    "const span = bestRun[bestRun.length - 1].position - bestRun[0].position;\n          const strengths = bestRun\n            .map((sample) => Math.max(0, Math.min(sample.strength, 255)))\n            .sort((a, b) => a - b);\n          const trimCount = strengths.length >= 10 ? Math.max(1, Math.floor(strengths.length * 0.1)) : 0;\n          const robustStrengths = strengths.slice(trimCount, strengths.length - trimCount || strengths.length);\n          const robustStrength = robustStrengths.reduce((sum, strength) => sum + strength, 0) / Math.max(robustStrengths.length * 255, 1);\n          const usableSpan = Math.min(dimension, Math.max(span + 1, 1));\n          const requiredSamples = Math.max(6, Math.min(24, Math.ceil(usableSpan / 12)));\n          const representedProportion = Math.min(1, usableSpan / Math.max(dimension, 1));\n          const spanConfidence = 0.45 + 0.55 * Math.sqrt(representedProportion);\n          const gaps = bestRun.slice(1).map((sample, index) => sample.position - bestRun[index].position).sort((a, b) => a - b);\n          const dominantGapCutoff = gaps.findIndex((gap, index) => index > 0 && gap / Math.max(gaps[index - 1], 0.5) >= 1.8);\n          const stableGaps = dominantGapCutoff >= Math.max(2, Math.ceil(gaps.length * 0.4)) ? gaps.slice(0, dominantGapCutoff) : gaps;\n          const localSpacing = stableGaps[Math.floor(stableGaps.length / 2)] ?? 1;\n          const cornerTolerance = Math.max(3, Math.min(18, Math.max(dimension * 0.04, localSpacing * 2.5)));\n          const boundedContinuation = (distance: number) => Math.max(0, 1 - distance / cornerTolerance);\n          const startContinuation = boundedContinuation(bestRun[0].position);\n          const endContinuation = boundedContinuation(Math.max(0, dimension - bestRun[bestRun.length - 1].position));\n          const endpointContinuation = Math.max(startContinuation, endContinuation);\n          const continuationConfidence = 0.7 + 0.3 * Math.sqrt(endpointContinuation);"
+    "const span = bestRun[bestRun.length - 1].position - bestRun[0].position;\n          const strengths = bestRun\n            .map((sample) => Math.max(0, Math.min(sample.strength, 255)))\n            .sort((a, b) => a - b);\n          const trimCount = strengths.length >= 10 ? Math.max(1, Math.floor(strengths.length * 0.1)) : 0;\n          const robustStrengths = strengths.slice(trimCount, strengths.length - trimCount || strengths.length);\n          const robustStrength = robustStrengths.reduce((sum, strength) => sum + strength, 0) / Math.max(robustStrengths.length * 255, 1);\n          const usableSpan = Math.min(dimension, Math.max(span + 1, 1));\n          const requiredSamples = Math.max(6, Math.min(24, Math.ceil(usableSpan / 12)));\n          const representedProportion = Math.min(1, usableSpan / Math.max(dimension, 1));\n          const spanConfidence = 0.45 + 0.55 * Math.sqrt(representedProportion);\n          const gaps = bestRun.slice(1).map((sample, index) => sample.position - bestRun[index].position).sort((a, b) => a - b);\n          const clusterSpread = (cluster: number[]) => {\n            const median = cluster[Math.floor(cluster.length / 2)] ?? 1;\n            return (Math.max(...cluster) - Math.min(...cluster)) / Math.max(median, 0.5);\n          };\n          const gapClusterCandidates = gaps.slice(1).map((gap, index) => {\n            const cutoff = index + 1;\n            const lower = gaps.slice(0, cutoff);\n            const upper = gaps.slice(cutoff);\n            const separation = gap / Math.max(gaps[index], 0.5);\n            const consistent = lower.length >= Math.max(2, Math.ceil(gaps.length * 0.4)) && upper.length >= 2 && clusterSpread(lower) <= 0.45 && clusterSpread(upper) <= 0.45;\n            return { cutoff, separation, consistent };\n          });\n          const dominantGapCutoff = gapClusterCandidates\n            .filter((candidate) => candidate.consistent && candidate.separation >= 1.8)\n            .sort((a, b) => b.separation - a.separation || a.cutoff - b.cutoff)[0]?.cutoff ?? -1;\n          const stableGaps = dominantGapCutoff > 0 ? gaps.slice(0, dominantGapCutoff) : gaps;\n          const localSpacing = stableGaps[Math.floor(stableGaps.length / 2)] ?? 1;\n          const cornerTolerance = Math.max(3, Math.min(18, Math.max(dimension * 0.04, localSpacing * 2.5)));\n          const boundedContinuation = (distance: number) => Math.max(0, 1 - distance / cornerTolerance);\n          const startContinuation = boundedContinuation(bestRun[0].position);\n          const endContinuation = boundedContinuation(Math.max(0, dimension - bestRun[bestRun.length - 1].position));\n          const endpointContinuation = Math.max(startContinuation, endContinuation);\n          const continuationConfidence = 0.7 + 0.3 * Math.sqrt(endpointContinuation);"
   )
   .replace(
     "density: Math.min(1, bestRun.length / Math.max(span + 1, 1))",
@@ -64,8 +64,10 @@ source = source
 
 if (
   !source.includes(marker) ||
-  !source.includes(adaptiveSpacingMarker) ||
-  !source.includes("const stableGaps = dominantGapCutoff >= Math.max(2, Math.ceil(gaps.length * 0.4)) ? gaps.slice(0, dominantGapCutoff) : gaps;") ||
+  !source.includes(consistentSpacingMarker) ||
+  !source.includes("const clusterSpread = (cluster: number[]) => {") ||
+  !source.includes("candidate.consistent && candidate.separation >= 1.8") ||
+  !source.includes("const stableGaps = dominantGapCutoff > 0 ? gaps.slice(0, dominantGapCutoff) : gaps;") ||
   !source.includes("const localSpacing = stableGaps[Math.floor(stableGaps.length / 2)] ?? 1;") ||
   !source.includes("Math.max(dimension * 0.04, localSpacing * 2.5)") ||
   !source.includes("Math.min(top.startContinuation, left.startContinuation)") ||
@@ -76,8 +78,8 @@ if (
   !source.includes("const confidence = Math.min(...sideMetrics.map((metrics) => metrics.confidence));") ||
   !source.includes("const robustStrength =")
 ) {
-  throw new Error("Adaptive-cluster corner-pair confidence strength ranking was not applied.");
+  throw new Error("Consistency-aware corner-pair confidence strength ranking was not applied.");
 }
 
 await fs.writeFile(path, source);
-console.log("Ranked nested perimeter confidence using corner tolerances derived from adaptive dominant local edge-spacing clusters and image scale.");
+console.log("Ranked nested perimeter confidence using corner tolerances derived from internally consistent local edge-spacing clusters and image scale.");
