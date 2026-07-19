@@ -3,9 +3,9 @@ import fs from "node:fs/promises";
 const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
-const marker = "perimeterStrengthBalance:";
+const marker = "perimeterStrengthVariance:";
 if (source.includes(marker)) {
-  console.log("Side-balanced strength-aware nested fallback ranking already applied.");
+  console.log("Strength-consistent nested fallback ranking already applied.");
   process.exit(0);
 }
 
@@ -55,21 +55,22 @@ source = source
   )
   .replace(
     "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0),",
-    "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0),\n          perimeterStrengthBalance: Math.min(...sideMetrics.map((metrics) => metrics.strength)),\n          perimeterStrength: sideMetrics.reduce((sum, metrics) => sum + metrics.strength, 0),"
+    "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0),\n          perimeterStrengthBalance: Math.min(...sideMetrics.map((metrics) => metrics.strength)),\n          perimeterStrengthVariance: (() => {\n            const strengths = sideMetrics.map((metrics) => metrics.strength);\n            const mean = strengths.reduce((sum, strength) => sum + strength, 0) / Math.max(strengths.length, 1);\n            return strengths.reduce((sum, strength) => sum + (strength - mean) ** 2, 0) / Math.max(strengths.length, 1);\n          })(),\n          perimeterStrength: sideMetrics.reduce((sum, metrics) => sum + metrics.strength, 0),"
   )
   .replace(
     "b.perimeterDensity - a.perimeterDensity ||",
-    "b.perimeterDensity - a.perimeterDensity ||\n        b.perimeterStrengthBalance - a.perimeterStrengthBalance ||\n        b.perimeterStrength - a.perimeterStrength ||"
+    "b.perimeterDensity - a.perimeterDensity ||\n        b.perimeterStrengthBalance - a.perimeterStrengthBalance ||\n        a.perimeterStrengthVariance - b.perimeterStrengthVariance ||\n        b.perimeterStrength - a.perimeterStrength ||"
   );
 
 if (
   !source.includes(marker) ||
   !source.includes("b.perimeterStrengthBalance - a.perimeterStrengthBalance ||") ||
+  !source.includes("a.perimeterStrengthVariance - b.perimeterStrengthVariance ||") ||
   !source.includes("b.perimeterStrength - a.perimeterStrength ||") ||
   !source.includes("const robustStrength =")
 ) {
-  throw new Error("Side-balanced robust strength-aware nested fallback ranking was not applied.");
+  throw new Error("Strength-consistent robust nested fallback ranking was not applied.");
 }
 
 await fs.writeFile(path, source);
-console.log("Ranked equally complete nested perimeter evidence by weakest-side strength before total trimmed strength, spread, and size.");
+console.log("Ranked equally complete nested perimeter evidence by weakest-side strength, then four-side strength consistency, before total trimmed strength, spread, and size.");

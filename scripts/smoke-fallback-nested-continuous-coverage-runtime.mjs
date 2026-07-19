@@ -9,8 +9,8 @@ const detectorPath = "src/core/architecturalDetector.ts";
 const edgeDetectPath = "src/edgeDetect.ts";
 const adapterSource = await fs.readFile(adapterPath, "utf8");
 
-if (!adapterSource.includes("perimeterCoverage:") || !adapterSource.includes("perimeterDensity:") || !adapterSource.includes("perimeterStrength:") || !adapterSource.includes("perimeterStrengthBalance:") || !adapterSource.includes("const robustStrength =")) {
-  throw new Error("Continuous-coverage runtime smoke requires prepared perimeter coverage, density, robust edge strength, and weakest-side balance ranking.");
+if (!adapterSource.includes("perimeterCoverage:") || !adapterSource.includes("perimeterDensity:") || !adapterSource.includes("perimeterStrength:") || !adapterSource.includes("perimeterStrengthBalance:") || !adapterSource.includes("perimeterStrengthVariance:") || !adapterSource.includes("const robustStrength =")) {
+  throw new Error("Continuous-coverage runtime smoke requires prepared perimeter coverage, density, robust edge strength, weakest-side balance, and four-side strength consistency ranking.");
 }
 
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-nested-continuous-coverage-"));
@@ -65,6 +65,17 @@ function imbalancedContinuousFrame(id) {
   }
   for (let y = 33; y <= 67; y += 1) {
     points.push({ x: 33, y, strength: 60 }, { x: 67, y, strength: 60 });
+  }
+  return { id, box: { x: 33, y: 33, width: 34, height: 34 }, points };
+}
+
+function unevenEqualFloorFrame(id) {
+  const points = [];
+  for (let x = 33; x <= 67; x += 1) {
+    points.push({ x, y: 33, strength: 220 }, { x, y: 67, strength: 100 });
+  }
+  for (let y = 33; y <= 67; y += 1) {
+    points.push({ x: 33, y, strength: 100 }, { x: 67, y, strength: 100 });
   }
   return { id, box: { x: 33, y: 33, width: 34, height: 34 }, points };
 }
@@ -183,7 +194,21 @@ try {
     }
   }
 
-  console.log("Nested continuous-coverage runtime smoke passed: sustained dense, consistently strong, four-side-balanced perimeter runs outrank widely separated, loosely sampled, weak, isolated-spike, and one-sided evidence across input orders.");
+  for (const accepted of [
+    [unevenEqualFloorFrame("uneven"), continuousFrame("consistent", 100)],
+    [continuousFrame("consistent", 100), unevenEqualFloorFrame("uneven")]
+  ]) {
+    const result = addFallbackCandidates(accepted, fallbackEdges, bounds);
+    const uneven = accepted.find((item) => item.id === "uneven");
+    const consistent = accepted.find((item) => item.id === "consistent");
+    assertUnchanged(candidateById(result, "uneven"), uneven, `Uneven side strengths outranked an equal-floor consistent perimeter for order ${accepted.map((item) => item.id).join(", ")}`);
+    const repaired = candidateById(result, "consistent");
+    if (repaired.box.width <= consistent.box.width || repaired.box.height <= consistent.box.height) {
+      throw new Error(`Consistent four-side strength should outrank a higher-total perimeter with the same weakest side regardless of input order: ${JSON.stringify(repaired.box)}`);
+    }
+  }
+
+  console.log("Nested continuous-coverage runtime smoke passed: sustained dense, consistently strong, four-side-balanced and low-variance perimeter runs outrank widely separated, loosely sampled, weak, isolated-spike, one-sided, and uneven-strength evidence across input orders.");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
