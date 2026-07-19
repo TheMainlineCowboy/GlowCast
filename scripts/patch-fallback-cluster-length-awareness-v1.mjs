@@ -64,7 +64,7 @@ const oldScaleAwareJitterBlock = `          const secondaryGapGradientScaleAllow
             : 0;`;
 
 const samplingAwareJitterBlock = `          const secondaryGapGradientSamplingAllowance = dominantGapCandidate
-            ? Math.min(1.25, Math.max(0, dominantGapCandidate.lowerMedian * 0.12))
+            ? Math.min(1.25, Math.max(0, denseMedianSpacing * 0.12))
             : 0;
           const secondaryGapGradientScaleAllowance = secondaryGapDeltas.length >= 3
             ? Math.min(
@@ -179,7 +179,7 @@ ${samplingAwareJitterBlock}
 
 if (
   !source.includes(marker) ||
-  !source.includes("dominantGapCandidate.lowerMedian * 0.12") ||
+  !source.includes("denseMedianSpacing * 0.12") ||
   !source.includes("dimension * 0.003 + secondaryGapGradientSamplingAllowance") ||
   !source.includes("Math.min(2.5") ||
   !source.includes("Math.pow(secondaryGapGradientJitterAllowance, 2)") ||
