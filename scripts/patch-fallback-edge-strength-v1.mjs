@@ -5,7 +5,7 @@ let source = await fs.readFile(path, "utf8");
 
 const marker = "perimeterCornerPairSupport:";
 if (source.includes(marker)) {
-  console.log("Gap-tolerant corner-pair confidence ranking already applied.");
+  console.log("Locally scaled corner-pair confidence ranking already applied.");
   process.exit(0);
 }
 
@@ -46,7 +46,7 @@ source = source
   .replaceAll("run[run.length - 1] - run[0] === bestRun[bestRun.length - 1] - bestRun[0]", "run[run.length - 1].position - run[0].position === bestRun[bestRun.length - 1].position - bestRun[0].position")
   .replace(
     "const span = bestRun[bestRun.length - 1] - bestRun[0];",
-    "const span = bestRun[bestRun.length - 1].position - bestRun[0].position;\n          const strengths = bestRun\n            .map((sample) => Math.max(0, Math.min(sample.strength, 255)))\n            .sort((a, b) => a - b);\n          const trimCount = strengths.length >= 10 ? Math.max(1, Math.floor(strengths.length * 0.1)) : 0;\n          const robustStrengths = strengths.slice(trimCount, strengths.length - trimCount || strengths.length);\n          const robustStrength = robustStrengths.reduce((sum, strength) => sum + strength, 0) / Math.max(robustStrengths.length * 255, 1);\n          const usableSpan = Math.min(dimension, Math.max(span + 1, 1));\n          const requiredSamples = Math.max(6, Math.min(24, Math.ceil(usableSpan / 12)));\n          const representedProportion = Math.min(1, usableSpan / Math.max(dimension, 1));\n          const spanConfidence = 0.45 + 0.55 * Math.sqrt(representedProportion);\n          const cornerTolerance = Math.max(3, Math.min(18, dimension * 0.08));\n          const boundedContinuation = (distance: number) => Math.max(0, 1 - distance / cornerTolerance);\n          const startContinuation = boundedContinuation(bestRun[0].position);\n          const endContinuation = boundedContinuation(Math.max(0, dimension - bestRun[bestRun.length - 1].position));\n          const endpointContinuation = Math.max(startContinuation, endContinuation);\n          const continuationConfidence = 0.7 + 0.3 * Math.sqrt(endpointContinuation);"
+    "const span = bestRun[bestRun.length - 1].position - bestRun[0].position;\n          const strengths = bestRun\n            .map((sample) => Math.max(0, Math.min(sample.strength, 255)))\n            .sort((a, b) => a - b);\n          const trimCount = strengths.length >= 10 ? Math.max(1, Math.floor(strengths.length * 0.1)) : 0;\n          const robustStrengths = strengths.slice(trimCount, strengths.length - trimCount || strengths.length);\n          const robustStrength = robustStrengths.reduce((sum, strength) => sum + strength, 0) / Math.max(robustStrengths.length * 255, 1);\n          const usableSpan = Math.min(dimension, Math.max(span + 1, 1));\n          const requiredSamples = Math.max(6, Math.min(24, Math.ceil(usableSpan / 12)));\n          const representedProportion = Math.min(1, usableSpan / Math.max(dimension, 1));\n          const spanConfidence = 0.45 + 0.55 * Math.sqrt(representedProportion);\n          const gaps = bestRun.slice(1).map((sample, index) => sample.position - bestRun[index].position).sort((a, b) => a - b);\n          const localSpacing = gaps[Math.floor(gaps.length / 2)] ?? 1;\n          const cornerTolerance = Math.max(3, Math.min(18, Math.max(dimension * 0.04, localSpacing * 2.5)));\n          const boundedContinuation = (distance: number) => Math.max(0, 1 - distance / cornerTolerance);\n          const startContinuation = boundedContinuation(bestRun[0].position);\n          const endContinuation = boundedContinuation(Math.max(0, dimension - bestRun[bestRun.length - 1].position));\n          const endpointContinuation = Math.max(startContinuation, endContinuation);\n          const continuationConfidence = 0.7 + 0.3 * Math.sqrt(endpointContinuation);"
   )
   .replace(
     "density: Math.min(1, bestRun.length / Math.max(span + 1, 1))",
@@ -63,8 +63,8 @@ source = source
 
 if (
   !source.includes(marker) ||
-  !source.includes("const cornerTolerance = Math.max(3, Math.min(18, dimension * 0.08));") ||
-  !source.includes("const boundedContinuation = (distance: number) => Math.max(0, 1 - distance / cornerTolerance);") ||
+  !source.includes("const localSpacing = gaps[Math.floor(gaps.length / 2)] ?? 1;") ||
+  !source.includes("Math.max(dimension * 0.04, localSpacing * 2.5)") ||
   !source.includes("Math.min(top.startContinuation, left.startContinuation)") ||
   !source.includes("Math.min(top.endContinuation, right.startContinuation)") ||
   !source.includes("Math.min(bottom.startContinuation, left.endContinuation)") ||
@@ -73,8 +73,8 @@ if (
   !source.includes("const confidence = Math.min(...sideMetrics.map((metrics) => metrics.confidence));") ||
   !source.includes("const robustStrength =")
 ) {
-  throw new Error("Gap-tolerant corner-pair confidence strength ranking was not applied.");
+  throw new Error("Locally scaled corner-pair confidence strength ranking was not applied.");
 }
 
 await fs.writeFile(path, source);
-console.log("Ranked nested perimeter confidence using near-corner continuation bounded to a resolution-aware pixel tolerance.");
+console.log("Ranked nested perimeter confidence using corner tolerances adapted to local edge spacing and image scale.");
