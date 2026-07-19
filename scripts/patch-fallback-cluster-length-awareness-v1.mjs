@@ -3,80 +3,21 @@ import fs from "node:fs/promises";
 const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
-const marker = "const secondaryGapGradientScaleAllowance = secondaryGapDeltas.length >= 3";
+const marker = "const secondaryGapGradientSamplingAllowance = dominantGapCandidate";
 if (source.includes(marker)) {
-  console.log("Length-aware, scale-aware jitter-tolerant smooth-perspective periodic-pattern resistance already applied.");
+  console.log("Sampling-aware perspective resistance already applied.");
   process.exit(0);
 }
 
-const oldSmoothnessBlock = `          const secondaryGapGradientSmoothness = secondaryGapDeltas.length >= 3
-            ? Math.max(
-                0,
-                1 - Math.sqrt(secondaryGapDeltaMagnitudeVariance) /
-                  Math.max(secondaryGapDeltaMagnitudeMean * 0.75, 0.5)
-              )
-            : 0;`;
-
-const oldJitterBlock = `          const secondaryGapGradientJitterAllowance = secondaryGapDeltas.length >= 3
-            ? Math.max(0.75, secondaryGapDeltaMagnitudeMean * 0.2)
-            : 0;
-          const secondaryGapGradientResidualDeviation = secondaryGapDeltas.length >= 3
-            ? Math.sqrt(
-                Math.max(
-                  0,
-                  secondaryGapDeltaMagnitudeVariance -
-                    Math.pow(secondaryGapGradientJitterAllowance, 2)
-                )
-              )
-            : 0;
-          const secondaryGapGradientSmoothness = secondaryGapDeltas.length >= 3
-            ? Math.max(
-                0,
-                1 - secondaryGapGradientResidualDeviation /
-                  Math.max(secondaryGapDeltaMagnitudeMean * 0.75, 0.5)
-              )
-            : 0;`;
-
-const scaleAwareJitterBlock = `          const secondaryGapGradientScaleAllowance = secondaryGapDeltas.length >= 3
-            ? Math.min(2.5, Math.max(0.5, dimension * 0.004))
-            : 0;
-          const secondaryGapGradientJitterAllowance = secondaryGapDeltas.length >= 3
-            ? Math.min(
-                Math.max(secondaryGapGradientScaleAllowance, secondaryGapDeltaMagnitudeMean * 0.2),
-                Math.max(secondaryGapGradientScaleAllowance, secondaryGapDeltaMagnitudeMean * 0.35)
-              )
-            : 0;
-          const secondaryGapGradientResidualDeviation = secondaryGapDeltas.length >= 3
-            ? Math.sqrt(
-                Math.max(
-                  0,
-                  secondaryGapDeltaMagnitudeVariance -
-                    Math.pow(secondaryGapGradientJitterAllowance, 2)
-                )
-              )
-            : 0;
-          const secondaryGapGradientSmoothness = secondaryGapDeltas.length >= 3
-            ? Math.max(
-                0,
-                1 - secondaryGapGradientResidualDeviation /
-                  Math.max(secondaryGapDeltaMagnitudeMean * 0.75, 0.5)
-              )
-            : 0;`;
-
-if (source.includes(oldJitterBlock)) {
-  source = source.replace(oldJitterBlock, scaleAwareJitterBlock);
-} else if (source.includes(oldSmoothnessBlock)) {
-  source = source.replace(oldSmoothnessBlock, scaleAwareJitterBlock);
-} else {
-  const anchor = `          const secondaryClusterAuthority = dominantGapCandidate
+const anchor = `          const secondaryClusterAuthority = dominantGapCandidate
             ? Math.min(1, dominantGapCandidate.upperCount / Math.max(dominantGapCandidate.lowerCount, 1)) * Math.sqrt(secondaryClusterDistribution)
             : 0;`;
 
-  if (!source.includes(anchor)) {
-    throw new Error("Scale-aware jitter-tolerant perspective pattern-resistance anchor missing after edge-strength preparation.");
-  }
+if (!source.includes(anchor)) {
+  throw new Error("Sampling-aware perspective anchor missing after edge-strength preparation.");
+}
 
-  const replacement = `          const secondaryClusterSpan = dominantGapCandidate && secondaryGapIndices.length > 1
+const replacement = `          const secondaryClusterSpan = dominantGapCandidate && secondaryGapIndices.length > 1
             ? Math.max(
                 0,
                 bestRun[secondaryGapIndices[secondaryGapIndices.length - 1] + 1].position -
@@ -118,7 +59,37 @@ if (source.includes(oldJitterBlock)) {
                 0
               ) / secondaryGapDeltas.length
             : 0;
-${scaleAwareJitterBlock}
+          const secondaryGapGradientSamplingAllowance = dominantGapCandidate
+            ? Math.min(1.25, Math.max(0, denseMedianSpacing * 0.12))
+            : 0;
+          const secondaryGapGradientScaleAllowance = secondaryGapDeltas.length >= 3
+            ? Math.min(
+                2.5,
+                Math.max(0.5, dimension * 0.003 + secondaryGapGradientSamplingAllowance)
+              )
+            : 0;
+          const secondaryGapGradientJitterAllowance = secondaryGapDeltas.length >= 3
+            ? Math.min(
+                Math.max(secondaryGapGradientScaleAllowance, secondaryGapDeltaMagnitudeMean * 0.2),
+                Math.max(secondaryGapGradientScaleAllowance, secondaryGapDeltaMagnitudeMean * 0.35)
+              )
+            : 0;
+          const secondaryGapGradientResidualDeviation = secondaryGapDeltas.length >= 3
+            ? Math.sqrt(
+                Math.max(
+                  0,
+                  secondaryGapDeltaMagnitudeVariance -
+                    Math.pow(secondaryGapGradientJitterAllowance, 2)
+                )
+              )
+            : 0;
+          const secondaryGapGradientSmoothness = secondaryGapDeltas.length >= 3
+            ? Math.max(
+                0,
+                1 - secondaryGapGradientResidualDeviation /
+                  Math.max(secondaryGapDeltaMagnitudeMean * 0.75, 0.5)
+              )
+            : 0;
           const secondaryGapRangeRatio = secondaryGapValues.length
             ? (Math.max(...secondaryGapValues) - Math.min(...secondaryGapValues)) /
               Math.max(secondaryGapValues.reduce((sum, gap) => sum + gap, 0) / secondaryGapValues.length, 1)
@@ -140,18 +111,11 @@ ${scaleAwareJitterBlock}
               secondaryClusterPatternPenalty
             : 0;`;
 
-  source = source.replace(anchor, replacement);
-}
+source = source.replace(anchor, replacement);
 
-if (
-  !source.includes(marker) ||
-  !source.includes("Math.min(2.5, Math.max(0.5, dimension * 0.004))") ||
-  !source.includes("Math.max(secondaryGapGradientScaleAllowance, secondaryGapDeltaMagnitudeMean * 0.35)") ||
-  !source.includes("Math.pow(secondaryGapGradientJitterAllowance, 2)") ||
-  !source.includes("secondaryGapDirectionalConsistency * secondaryGapGradientSmoothness * secondaryGapRangeRatio * 2.5")
-) {
-  throw new Error("Scale-aware jitter-tolerant perspective resistance was not applied.");
+if (!source.includes(marker) || !source.includes("denseMedianSpacing * 0.12")) {
+  throw new Error("Sampling-aware perspective resistance was not applied.");
 }
 
 await fs.writeFile(path, source);
-console.log("Scaled natural perspective-jitter tolerance to architectural side size while preserving strict bounds.");
+console.log("Adjusted bounded perspective-jitter tolerance using local edge sampling density.");
