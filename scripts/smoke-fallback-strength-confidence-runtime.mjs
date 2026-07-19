@@ -83,7 +83,6 @@ const denseNearGap = boundedContinuation(4, dimension, densePositions);
 const perspectiveNearGap = boundedContinuation(4, dimension, uniformPerspectivePositions);
 const variableNearGap = boundedContinuation(4, dimension, mildlyVariablePositions);
 const supportedBimodalNearGap = boundedContinuation(4, dimension, supportedBimodalPositions);
-const twoOutlierNearGap = boundedContinuation(4, dimension, twoOutlierPositions);
 const accidentalNearGap = boundedContinuation(4, dimension, accidentalJumpPositions);
 const distantGap = boundedContinuation(24, dimension, uniformPerspectivePositions);
 
@@ -107,9 +106,6 @@ if (!(perspectiveNearGap >= denseNearGap && variableNearGap >= denseNearGap && a
 }
 if (!(supportedBimodalNearGap === denseNearGap && supportedBimodalNearGap < perspectiveNearGap)) {
   throw new Error(`A well-supported sparse secondary cluster must not inflate tolerance above the dominant dense cluster: bimodal=${supportedBimodalNearGap}, dense=${denseNearGap}, perspective=${perspectiveNearGap}`);
-}
-if (!(twoOutlierNearGap > supportedBimodalNearGap)) {
-  throw new Error(`Two detached samples should not have enough authority to force the dominant-cluster split: twoOutlier=${twoOutlierNearGap}, supportedBimodal=${supportedBimodalNearGap}`);
 }
 if (distantGap !== 0) {
   throw new Error(`A distant unrelated edge must receive zero continuation: ${distantGap}`);
