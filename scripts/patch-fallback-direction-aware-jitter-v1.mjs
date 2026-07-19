@@ -9,26 +9,21 @@ if (source.includes(marker)) {
   process.exit(0);
 }
 
-const samplingAnchor = `           const secondaryGapGradientSamplingAllowance = dominantGapCandidate
-             ? Math.min(1.25, Math.max(0, denseMedianSpacing * 0.12))
-             : 0;`;
-const samplingReplacement = `${samplingAnchor}
-           const secondaryGapGradientDirectionalAllowance = secondaryGapDeltas.length
-             ? 0.4 + 0.6 * secondaryGapDirectionalConsistency
-             : 0.4;`;
+const samplingPattern = /(\s+const secondaryGapGradientSamplingAllowance = dominantGapCandidate\s*\n\s*\? Math\.min\(1\.25, Math\.max\(0, denseMedianSpacing \* 0\.12\)\)\s*\n\s*: 0;)/;
+const samplingMatch = source.match(samplingPattern);
+const scalePattern = /Math\.max\(0\.5, dimension \* 0\.003 \+ secondaryGapGradientSamplingAllowance\)/;
 
-const scaleAnchor = "Math.max(0.5, dimension * 0.003 + secondaryGapGradientSamplingAllowance)";
-const scaleReplacement = `Math.max(
-                   0.5,
-                   dimension * 0.003 +
-                     secondaryGapGradientSamplingAllowance * secondaryGapGradientDirectionalAllowance
-                 )`;
-
-if (!source.includes(samplingAnchor) || !source.includes(scaleAnchor)) {
+if (!samplingMatch || !scalePattern.test(source)) {
   throw new Error("Direction-aware sparse jitter anchors missing after cluster preparation.");
 }
 
-source = source.replace(samplingAnchor, samplingReplacement).replace(scaleAnchor, scaleReplacement);
+const indentation = samplingMatch[1].match(/\n(\s*)\?/)?.[1] ?? "           ";
+const directionalBlock = `${samplingMatch[1]}\n${indentation}const secondaryGapGradientDirectionalAllowance = secondaryGapDeltas.length\n${indentation}  ? 0.4 + 0.6 * secondaryGapDirectionalConsistency\n${indentation}  : 0.4;`;
+
+source = source.replace(samplingPattern, directionalBlock).replace(
+  scalePattern,
+  `Math.max(\n${indentation}  0.5,\n${indentation}  dimension * 0.003 +\n${indentation}    secondaryGapGradientSamplingAllowance * secondaryGapGradientDirectionalAllowance\n${indentation})`
+);
 
 if (
   !source.includes(marker) ||
