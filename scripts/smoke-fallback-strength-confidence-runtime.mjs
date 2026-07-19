@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 
 const adapterSource = await fs.readFile("src/core/maskCandidateAdapter.ts", "utf8");
 const required = [
-  "startContinuation:",
-  "endContinuation:",
+  "const cornerTolerance = Math.max(3, Math.min(18, dimension * 0.08));",
+  "const boundedContinuation = (distance: number) => Math.max(0, 1 - distance / cornerTolerance);",
   "perimeterCornerPairSupport:",
   "Math.min(top.startContinuation, left.startContinuation)",
   "Math.min(top.endContinuation, right.startContinuation)",
@@ -15,7 +15,12 @@ const required = [
 
 const missing = required.filter((snippet) => !adapterSource.includes(snippet));
 if (missing.length) {
-  throw new Error(`Corner-pair-aware nested strength ranking is incomplete: ${JSON.stringify(missing)}`);
+  throw new Error(`Gap-tolerant corner-pair ranking is incomplete: ${JSON.stringify(missing)}`);
+}
+
+function boundedContinuation(distance, dimension) {
+  const tolerance = Math.max(3, Math.min(18, dimension * 0.08));
+  return Math.max(0, 1 - distance / tolerance);
 }
 
 function cornerPairSupport(sides) {
@@ -28,33 +33,37 @@ function cornerPairSupport(sides) {
   );
 }
 
-const coherentFrame = cornerPairSupport([
-  { start: 1, end: 1 },
-  { start: 1, end: 1 },
-  { start: 1, end: 1 },
-  { start: 1, end: 1 }
+const dimension = 160;
+const nearGap = boundedContinuation(4, dimension);
+const distantGap = boundedContinuation(24, dimension);
+if (!(nearGap > 0 && nearGap < 1)) {
+  throw new Error(`A small glare or occlusion gap should retain partial continuation: ${nearGap}`);
+}
+if (distantGap !== 0) {
+  throw new Error(`A distant unrelated edge must receive zero continuation: ${distantGap}`);
+}
+
+const nearCorner = cornerPairSupport([
+  { start: nearGap, end: 0 },
+  { start: 0, end: 0 },
+  { start: nearGap, end: 0 },
+  { start: 0, end: 0 }
 ]);
-const isolatedBoundaryTouches = cornerPairSupport([
-  { start: 1, end: 0 },
-  { start: 0, end: 1 },
-  { start: 0, end: 1 },
-  { start: 1, end: 0 }
+const disconnectedEdges = cornerPairSupport([
+  { start: distantGap, end: 0 },
+  { start: 0, end: 0 },
+  { start: distantGap, end: 0 },
+  { start: 0, end: 0 }
 ]);
-const singleCorner = cornerPairSupport([
+const exactCorner = cornerPairSupport([
   { start: 1, end: 0 },
   { start: 0, end: 0 },
   { start: 1, end: 0 },
   { start: 0, end: 0 }
 ]);
 
-if (!(coherentFrame === 4)) {
-  throw new Error(`A coherent four-corner frame should receive full corner-pair support: ${coherentFrame}`);
-}
-if (!(coherentFrame > isolatedBoundaryTouches)) {
-  throw new Error(`Compatible adjoining runs must outrank disconnected boundary touches: ${coherentFrame} <= ${isolatedBoundaryTouches}`);
-}
-if (!(singleCorner > 0 && singleCorner < coherentFrame)) {
-  throw new Error(`One supported architectural corner should retain partial confidence without matching a complete frame: ${singleCorner}`);
+if (!(exactCorner > nearCorner && nearCorner > disconnectedEdges)) {
+  throw new Error(`Exact, near-gap, and disconnected corners must rank in geometric order: ${exactCorner}, ${nearCorner}, ${disconnectedEdges}`);
 }
 
-console.log("Strength-confidence smoke passed: compatible adjoining horizontal and vertical runs reward real architectural corners while disconnected boundary touches remain lower confidence.");
+console.log("Strength-confidence smoke passed: small corner gaps retain bounded architectural support while distant unrelated edges receive none.");
