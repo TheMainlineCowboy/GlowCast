@@ -12,7 +12,9 @@ const required = [
   "const secondaryGapDeltaMagnitudeVariance = secondaryGapDeltas.length >= 3",
   "const secondaryGapGradientSamplingAllowance = dominantGapCandidate",
   "denseMedianSpacing * 0.12",
-  "dimension * 0.003 + secondaryGapGradientSamplingAllowance",
+  "const secondaryGapGradientDirectionalAllowance = secondaryGapDeltas.length",
+  "0.4 + 0.6 * secondaryGapDirectionalConsistency",
+  "secondaryGapGradientSamplingAllowance * secondaryGapGradientDirectionalAllowance",
   "const secondaryGapGradientJitterAllowance = secondaryGapDeltas.length >= 3",
   "const secondaryGapGradientResidualDeviation = secondaryGapDeltas.length >= 3",
   "Math.pow(secondaryGapGradientJitterAllowance, 2)",
@@ -23,7 +25,7 @@ const required = [
   "Math.sqrt(secondaryClusterDistribution * secondaryClusterLengthSupport) *"
 ];
 const missing = required.filter((snippet) => !adapterSource.includes(snippet));
-if (missing.length) throw new Error(`Sampling-aware jitter-tolerant perspective resistance is incomplete: ${JSON.stringify(missing)}`);
+if (missing.length) throw new Error(`Direction-aware sampling jitter resistance is incomplete: ${JSON.stringify(missing)}`);
 
 function lengthSupport(dimension, span) {
   return Math.min(1, span / Math.max(dimension * 0.35, 1));
@@ -48,8 +50,9 @@ function patternPenalty(indices, gapValues, dimension, denseMedianSpacing) {
     ? gapDeltas.reduce((sum, delta) => sum + Math.pow(Math.abs(delta) - deltaMagnitudeMean, 2), 0) / gapDeltas.length
     : 0;
   const samplingAllowance = Math.min(1.25, Math.max(0, denseMedianSpacing * 0.12));
+  const directionalAllowance = gapDeltas.length ? 0.4 + 0.6 * directionalConsistency : 0.4;
   const scaleAllowance = gapDeltas.length >= 3
-    ? Math.min(2.5, Math.max(0.5, dimension * 0.003 + samplingAllowance))
+    ? Math.min(2.5, Math.max(0.5, dimension * 0.003 + samplingAllowance * directionalAllowance))
     : 0;
   const gradientJitterAllowance = gapDeltas.length >= 3
     ? Math.min(
@@ -91,6 +94,7 @@ const irregularArchitecturalEvidence = authority({ ...shared, dimension: 320, sp
 const lowResolutionJitter = authority({ ...shared, dimension: 96, span: 40, indices: [0, 2, 4, 6], gapValues: [10, 8, 7, 4], denseMedianSpacing: 2 });
 const crispHighResolutionJitter = authority({ ...shared, dimension: 640, span: 268, indices: [0, 2, 4, 6], gapValues: [40, 32, 27, 16], denseMedianSpacing: 2 });
 const sparseHighResolutionJitter = authority({ ...shared, dimension: 640, span: 268, indices: [0, 2, 4, 6], gapValues: [40, 32, 27, 16], denseMedianSpacing: 8 });
+const oscillatingSparseNoise = authority({ ...shared, dimension: 640, span: 268, indices: [0, 2, 4, 6], gapValues: [40, 31, 38, 16], denseMedianSpacing: 8 });
 const highResolutionSevereStep = authority({ ...shared, dimension: 640, span: 268, indices: [0, 2, 4, 6], gapValues: [40, 39, 38, 16], denseMedianSpacing: 8 });
 
 if (!(shortOpening > shortDecorativeRegionOnLargeOpening)) throw new Error(`The same sparse span must carry less authority on a larger architectural side: short=${shortOpening}, large=${shortDecorativeRegionOnLargeOpening}`);
@@ -104,7 +108,8 @@ if (!(steppedDecorativePattern <= irregularArchitecturalEvidence)) throw new Err
 if (!(perspectiveCompressedArchitecture <= irregularArchitecturalEvidence)) throw new Error(`Perspective relief must remain bounded below irregular architectural evidence: perspective=${perspectiveCompressedArchitecture}, irregular=${irregularArchitecturalEvidence}`);
 if (!(lowResolutionJitter >= periodicDecorativePattern * 0.8)) throw new Error(`Low-resolution natural jitter lost too much support: low=${lowResolutionJitter}, periodic=${periodicDecorativePattern}`);
 if (!(sparseHighResolutionJitter >= crispHighResolutionJitter)) throw new Error(`Sparsely sampled high-resolution edges must receive at least as much bounded jitter support as crisp edges: sparse=${sparseHighResolutionJitter}, crisp=${crispHighResolutionJitter}`);
+if (!(sparseHighResolutionJitter > oscillatingSparseNoise)) throw new Error(`Directionally consistent sparse architectural spacing must outrank oscillating sparse noise: directional=${sparseHighResolutionJitter}, oscillating=${oscillatingSparseNoise}`);
 if (!(sparseHighResolutionJitter > highResolutionSevereStep)) throw new Error(`Sampling-aware high-resolution jitter must still outrank a severe stepped pattern: sampled=${sparseHighResolutionJitter}, severe=${highResolutionSevereStep}`);
-if (!(broadlyRepresentedLargeOpening <= 1 && periodicDecorativePattern >= 0)) throw new Error("Sampling-aware jitter-tolerant smooth perspective authority must remain normalized.");
+if (!(broadlyRepresentedLargeOpening <= 1 && periodicDecorativePattern >= 0)) throw new Error("Direction-aware sampling jitter resistance must remain normalized.");
 
-console.log("Cluster authority smoke passed: bounded perspective jitter adapts to local sampling density while abrupt stepped patterns remain suppressed.");
+console.log("Cluster authority smoke passed: sparse-edge jitter relief is bounded by directional consistency while real perspective remains supported.");

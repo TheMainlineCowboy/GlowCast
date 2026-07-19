@@ -35,7 +35,7 @@ jobs:
         run: npm install --progress=false
 
       - name: Prepare source exactly once
-        run: npm run prep && node scripts/patch-fallback-edge-strength-v1.mjs && node scripts/patch-fallback-cluster-length-awareness-v1.mjs
+        run: npm run prep && node scripts/patch-fallback-edge-strength-v1.mjs && node scripts/patch-fallback-cluster-length-awareness-v1.mjs && node scripts/patch-fallback-direction-aware-jitter-v1.mjs
 
       - name: Detector connectivity smoke
         run: node scripts/smoke-detector-connectivity.mjs
@@ -63,6 +63,9 @@ jobs:
 
       - name: Length-aware cluster authority smoke
         run: node scripts/smoke-fallback-cluster-length-awareness-runtime.mjs
+
+      - name: Direction-aware jitter smoke
+        run: node scripts/smoke-fallback-direction-aware-jitter-runtime.mjs
 
       - name: Fallback adapter replacement smoke
         run: node scripts/smoke-fallback-adapter-replacement.mjs
