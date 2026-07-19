@@ -36,7 +36,7 @@ await fs.writeFile(emittedAdapterPath, emittedAdapter.replace(/from\s+["']\.\/ar
 await fs.writeFile(emittedDetectorPath, emittedDetector.replace(/from\s+["']\.\.\/edgeDetect["']/g, 'from "../edgeDetect.js"'));
 
 function axisPositions(count) {
-  return Array.from({ length: count }, (_, index) => 33 + (34 * index) / Math.max(count - 1, 1));
+  return Array.from({ length: count }, (_, index) => 35 + (30 * index) / Math.max(count - 1, 1));
 }
 
 function frameWithSideCounts(id, counts, strength = 120) {
