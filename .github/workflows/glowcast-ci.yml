@@ -58,6 +58,9 @@ jobs:
       - name: Strength-aware nested perimeter smoke
         run: node scripts/smoke-fallback-nested-continuous-coverage-runtime.mjs
 
+      - name: Strength-confidence nested perimeter smoke
+        run: node scripts/smoke-fallback-strength-confidence-runtime.mjs
+
       - name: Fallback adapter replacement smoke
         run: node scripts/smoke-fallback-adapter-replacement.mjs
 
