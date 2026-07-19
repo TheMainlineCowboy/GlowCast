@@ -55,11 +55,11 @@ source = source
   )
   .replace(
     "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0),",
-    "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0),\n          perimeterStrengthBalance: Math.min(...sideMetrics.map((metrics) => metrics.strength)),\n          perimeterStrengthConsistency: (() => {\n            const strengths = sideMetrics.map((metrics) => metrics.strength);\n            const mean = strengths.reduce((sum, strength) => sum + strength, 0) / Math.max(strengths.length, 1);\n            const variance = strengths.reduce((sum, strength) => sum + (strength - mean) ** 2, 0) / Math.max(strengths.length, 1);\n            const confidence = Math.min(...sideMetrics.map((metrics) => Math.min(1, metrics.sampleCount / 12)));\n            return confidence * (1 - Math.min(variance * 4, 1));\n          })(),\n          perimeterStrength: sideMetrics.reduce((sum, metrics) => sum + metrics.strength, 0),"
+    "perimeterDensity: sideMetrics.reduce((sum, metrics) => sum + metrics.density, 0),\n          perimeterStrengthBalance: Math.min(...sideMetrics.map((metrics) => metrics.strength)),\n          perimeterStrengthVariance: (() => {\n            const strengths = sideMetrics.map((metrics) => metrics.strength);\n            const mean = strengths.reduce((sum, strength) => sum + strength, 0) / Math.max(strengths.length, 1);\n            return strengths.reduce((sum, strength) => sum + (strength - mean) ** 2, 0) / Math.max(strengths.length, 1);\n          })(),\n          perimeterStrengthConsistency: (() => {\n            const strengths = sideMetrics.map((metrics) => metrics.strength);\n            const mean = strengths.reduce((sum, strength) => sum + strength, 0) / Math.max(strengths.length, 1);\n            const variance = strengths.reduce((sum, strength) => sum + (strength - mean) ** 2, 0) / Math.max(strengths.length, 1);\n            const confidence = Math.min(...sideMetrics.map((metrics) => Math.min(1, metrics.sampleCount / 12)));\n            return confidence * (1 - Math.min(variance * 4, 1));\n          })(),\n          perimeterStrength: sideMetrics.reduce((sum, metrics) => sum + metrics.strength, 0),"
   )
   .replace(
     "b.perimeterDensity - a.perimeterDensity ||",
-    "b.perimeterDensity - a.perimeterDensity ||\n        b.perimeterStrengthBalance - a.perimeterStrengthBalance ||\n        b.perimeterStrengthConsistency - a.perimeterStrengthConsistency ||\n        b.perimeterStrength - a.perimeterStrength ||"
+    "b.perimeterDensity - a.perimeterDensity ||\n        b.perimeterStrengthBalance - a.perimeterStrengthBalance ||\n        b.perimeterStrengthConsistency - a.perimeterStrengthConsistency ||\n        a.perimeterStrengthVariance - b.perimeterStrengthVariance ||\n        b.perimeterStrength - a.perimeterStrength ||"
   );
 
 if (
@@ -67,6 +67,7 @@ if (
   !source.includes("sampleCount: bestRun.length") ||
   !source.includes("b.perimeterStrengthBalance - a.perimeterStrengthBalance ||") ||
   !source.includes("b.perimeterStrengthConsistency - a.perimeterStrengthConsistency ||") ||
+  !source.includes("a.perimeterStrengthVariance - b.perimeterStrengthVariance ||") ||
   !source.includes("b.perimeterStrength - a.perimeterStrength ||") ||
   !source.includes("const robustStrength =")
 ) {
