@@ -13,7 +13,7 @@ const required = [
   'setSelectedZoneId(zone.id);',
   'setAutoMaskReviewHistory((history) => history.slice(0, -1));',
   'Returned the last approved automatic mask to review.',
-  'Undo Last Review',
+  'Undo Last Review ({autoMaskReviewHistory.length})',
   'disabled={autoMaskReviewHistory.length === 0}',
   'event.key.toLowerCase() === "u" && autoMaskReviewHistory.length > 0',
   'Keyboard: A approve · R/Delete reject · U undo (10 steps)'
@@ -29,4 +29,4 @@ if (source.includes("lastRejectedAutoMask") || source.includes("lastAutoMaskRevi
   throw new Error("Legacy single-step automatic-mask undo state remains in App.tsx.");
 }
 
-console.log("Multi-step automatic-mask review history source smoke passed.");
+console.log("Multi-step automatic-mask review history source smoke with visible count passed.");
