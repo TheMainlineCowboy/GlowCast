@@ -17,18 +17,19 @@ const required = [
   '{latestAutoMaskReview?.action === "approved" ? "Undo Approval" : latestAutoMaskReview?.action === "rejected" ? "Undo Rejection" : "Undo Last Review"} ({autoMaskReviewHistory.length})',
   'disabled={autoMaskReviewHistory.length === 0}',
   'event.key.toLowerCase() === "u" && autoMaskReviewHistory.length > 0',
-  'Keyboard: A approve · R/Delete reject · U undo (10 steps)'
+  'Keyboard: A approve · R/Delete reject · U undo (10 steps)',
+  'className="pendingUndoMaskPreview"',
+  'aria-label={`Next undo will reverse the last auto-mask ${latestAutoMaskReview.action}`}',
+  'border: "3px dashed #f59e0b"',
+  'Undo {latestAutoMaskReview.action === "approved" ? "approval" : "rejection"}'
 ];
 
 for (const snippet of required) {
-  if (!source.includes(snippet)) {
-    throw new Error(`Multi-step review history source smoke missing: ${snippet}`);
-  }
+  if (!source.includes(snippet)) throw new Error(`Multi-step review history source smoke missing: ${snippet}`);
 }
 
 if (source.includes("lastRejectedAutoMask") || source.includes("lastAutoMaskReview") || source.includes("undoLastAutoMaskRejection")) {
   throw new Error("Legacy single-step automatic-mask undo state remains in App.tsx.");
 }
 
-await import("./smoke-ui-auto-mask-undo-canvas-preview-source.mjs");
 console.log("Multi-step automatic-mask review history source smoke with visible action label, count, and canvas preview passed.");
