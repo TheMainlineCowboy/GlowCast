@@ -8,6 +8,13 @@ source = source.replace(
   "  const [autoMaskReviewHistory, setAutoMaskReviewHistory] = useState<Array<{ zone: ProjectZone; action: \"approved\" | \"rejected\" }>>([]);"
 );
 
+const reviewHistoryState = '  const [autoMaskReviewHistory, setAutoMaskReviewHistory] = useState<Array<{ zone: ProjectZone; action: "approved" | "rejected" }>>([]);';
+const latestReviewState = '  const latestAutoMaskReview = autoMaskReviewHistory[autoMaskReviewHistory.length - 1];';
+if (!source.includes(latestReviewState)) {
+  if (!source.includes(reviewHistoryState)) throw new Error("Review history state anchor not found.");
+  source = source.replace(reviewHistoryState, `${reviewHistoryState}\n${latestReviewState}`);
+}
+
 const approveAnchor = "    setZones((currentZones) => currentZones.map((zone) =>\n      zone.id === selectedAutoMask.id ? { ...zone, included: true } : zone\n    ));";
 if (!source.includes('setAutoMaskReviewHistory((history) => [...history.slice(-9), { zone: selectedAutoMask, action: "approved" }]);')) {
   if (!source.includes(approveAnchor)) throw new Error("Approve action anchor not found.");
@@ -46,6 +53,10 @@ source = source.replace(
   "                Undo Last Review\n",
   "                Undo Last Review ({autoMaskReviewHistory.length})\n"
 );
+source = source.replace(
+  "                Undo Last Review ({autoMaskReviewHistory.length})\n",
+  "                {latestAutoMaskReview?.action === \"approved\" ? \"Undo Approval\" : latestAutoMaskReview?.action === \"rejected\" ? \"Undo Rejection\" : \"Undo Last Review\"} ({autoMaskReviewHistory.length})\n"
+);
 
 await fs.writeFile(path, source);
-console.log("Applied multi-step automatic-mask review history patch with visible history count.");
+console.log("Applied multi-step automatic-mask review history patch with visible action label and history count.");
