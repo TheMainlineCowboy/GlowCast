@@ -59,4 +59,5 @@ source = source.replace(
 );
 
 await fs.writeFile(path, source);
-console.log("Applied multi-step automatic-mask review history patch with visible action label and history count.");
+await import("./patch-ui-auto-mask-undo-canvas-preview-v1.mjs");
+console.log("Applied multi-step automatic-mask review history with visible action label, count, and canvas preview.");
