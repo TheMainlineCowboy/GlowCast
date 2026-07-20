@@ -18,7 +18,7 @@ if (!directionalMatch || !source.includes(samplingExpression)) {
 }
 
 const indentation = directionalMatch[1].match(/\n(\s*)\?/)?.[1] ?? "           ";
-const strengthBlock = `${directionalMatch[1]}\n${indentation}const secondaryGapGradientStrengthCoherence = bestRun.length\n${indentation}  ? (() => {\n${indentation}      const normalizedStrengths = bestRun.map((sample) => Math.max(0, Math.min(sample.strength, 255)) / 255);\n${indentation}      const adjacentStrengthChanges = normalizedStrengths.slice(1).map((strength, index) => Math.abs(strength - normalizedStrengths[index]));\n${indentation}      const meanAdjacentChange = adjacentStrengthChanges.reduce((sum, change) => sum + change, 0) / Math.max(adjacentStrengthChanges.length, 1);\n${indentation}      const continuity = 1 - Math.min(1, meanAdjacentChange * 2.5);\n${indentation}      return Math.max(0.2, Math.min(1, robustStrength * (0.55 + 0.45 * continuity)));\n${indentation}    })()\n${indentation}  : 0.2;`;
+const strengthBlock = `${directionalMatch[1]}\n${indentation}const secondaryGapGradientStrengthCoherence = bestRun.length\n${indentation}  ? (() => {\n${indentation}      const normalizedStrengths = bestRun.map((sample) => Math.max(0, Math.min(sample.strength, 255)) / 255);\n${indentation}      const adjacentStrengthChanges = normalizedStrengths.slice(1).map((strength, index) => Math.abs(strength - normalizedStrengths[index]));\n${indentation}      const sortedAdjacentChanges = [...adjacentStrengthChanges].sort((a, b) => a - b);\n${indentation}      const localizedInterruptionCount = sortedAdjacentChanges.length >= 4 ? 1 : 0;\n${indentation}      const stableAdjacentChanges = sortedAdjacentChanges.slice(0, Math.max(1, sortedAdjacentChanges.length - localizedInterruptionCount));\n${indentation}      const stableMeanAdjacentChange = stableAdjacentChanges.reduce((sum, change) => sum + change, 0) / Math.max(stableAdjacentChanges.length, 1);\n${indentation}      const strongestInterruption = sortedAdjacentChanges.at(-1) ?? 0;\n${indentation}      const continuity = 1 - Math.min(1, stableMeanAdjacentChange * 2.5);\n${indentation}      const localizedInterruptionRetention = 1 - Math.min(0.25, strongestInterruption * 0.35);\n${indentation}      return Math.max(0.2, Math.min(1, robustStrength * (0.55 + 0.45 * continuity) * localizedInterruptionRetention));\n${indentation}    })()\n${indentation}  : 0.2;`;
 
 source = source.replace(directionalPattern, strengthBlock).replace(
   samplingExpression,
@@ -27,11 +27,12 @@ source = source.replace(directionalPattern, strengthBlock).replace(
 
 if (
   !source.includes(marker) ||
-  !source.includes("robustStrength * (0.55 + 0.45 * continuity)") ||
+  !source.includes("stableMeanAdjacentChange") ||
+  !source.includes("localizedInterruptionRetention") ||
   !source.includes("secondaryGapGradientDirectionalAllowance * secondaryGapGradientStrengthCoherence")
 ) {
-  throw new Error("Strength-coherent sparse jitter resistance was not applied.");
+  throw new Error("Segment-aware strength-coherent sparse jitter resistance was not applied.");
 }
 
 await fs.writeFile(path, source);
-console.log("Bounded sparse-edge jitter relief by local edge-strength coherence.");
+console.log("Bounded sparse-edge jitter relief by segment-aware local edge-strength coherence.");
