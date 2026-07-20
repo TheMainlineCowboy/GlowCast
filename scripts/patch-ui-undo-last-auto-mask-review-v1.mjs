@@ -30,6 +30,7 @@ if (oldUndoEnd < 0) throw new Error("Existing rejection undo action end not foun
 const historyUndo = `  const undoLastAutoMaskReview = () => {\n    const lastReview = autoMaskReviewHistory[autoMaskReviewHistory.length - 1];\n    if (!lastReview) return;\n    const { zone, action } = lastReview;\n    if (action === "rejected") {\n      setZones((currentZones) => currentZones.some((currentZone) => currentZone.id === zone.id)\n        ? currentZones\n        : [...currentZones, zone]);\n    } else {\n      setZones((currentZones) => currentZones.map((currentZone) =>\n        currentZone.id === zone.id ? { ...currentZone, included: false } : currentZone\n      ));\n    }\n    setSelectedTarget("zone");\n    setSelectedZoneId(zone.id);\n    setDetectMessage(action === "rejected"\n      ? "Restored the last rejected automatic mask for review."\n      : "Returned the last approved automatic mask to review.");\n    setAutoMaskReviewHistory((history) => history.slice(0, -1));\n  };`;
 source = source.slice(0, oldUndoStart) + historyUndo + source.slice(oldUndoEnd + "\n  };".length);
 
+source = source.replaceAll("!lastRejectedAutoMask", "autoMaskReviewHistory.length === 0");
 source = source.replaceAll("lastRejectedAutoMask", "autoMaskReviewHistory.length > 0");
 source = source.replaceAll("undoLastAutoMaskRejection", "undoLastAutoMaskReview");
 source = source.replace("Undo Last Rejection", "Undo Last Review");
