@@ -83,6 +83,8 @@ await runPatch("./smoke-ui-review-next-auto-mask-source.mjs", { required: true }
 await runPatch("./patch-ui-review-auto-mask-focus-v1.mjs", { required: true });
 await runPatch("./patch-ui-approve-selected-auto-mask-v1.mjs", { required: true });
 await runPatch("./patch-ui-reject-selected-auto-mask-v1.mjs", { required: true });
+await runPatch("./patch-ui-undo-auto-mask-rejection-v1.mjs", { required: true });
+await runPatch("./smoke-ui-undo-auto-mask-rejection-source.mjs", { required: true });
 await runPatch("./smoke-mullion-stronger-evidence-input-order.mjs", { required: true });
 await runPatch("./patch-fallback-duplicate-center-drift-v1.mjs", { required: true });
 await runPatch("./smoke-fallback-center-drift-behavior.mjs", { required: true });
