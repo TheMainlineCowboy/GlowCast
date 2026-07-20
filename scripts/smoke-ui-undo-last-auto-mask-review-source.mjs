@@ -14,7 +14,7 @@ const required = [
   'setAutoMaskReviewHistory((history) => history.slice(0, -1));',
   'Returned the last approved automatic mask to review.',
   'Undo Last Review',
-  'disabled={!(autoMaskReviewHistory.length > 0)}',
+  'disabled={autoMaskReviewHistory.length === 0}',
   'event.key.toLowerCase() === "u" && autoMaskReviewHistory.length > 0',
   'Keyboard: A approve · R/Delete reject · U undo (10 steps)'
 ];
