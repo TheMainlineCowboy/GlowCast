@@ -68,6 +68,8 @@ await runPatch("./patch-ui-mask-origin-counts-v1.mjs", { required: true });
 await runPatch("./patch-ui-mask-origin-labels-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-mask-review-filter-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-mask-bulk-actions-v1.mjs", { required: true });
+await runPatch("./patch-ui-remove-overlapping-auto-masks-v1.mjs", { required: true });
+await runPatch("./smoke-ui-remove-overlapping-auto-masks-source.mjs", { required: true });
 await runPatch("./patch-ui-auto-mask-review-progress-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-mask-review-state-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-mask-cap-warning-v1.mjs", { required: true });
