@@ -30,4 +30,5 @@ if (source.includes("lastRejectedAutoMask") || source.includes("lastAutoMaskRevi
   throw new Error("Legacy single-step automatic-mask undo state remains in App.tsx.");
 }
 
-console.log("Multi-step automatic-mask review history source smoke with visible action label and count passed.");
+await import("./smoke-ui-auto-mask-undo-canvas-preview-source.mjs");
+console.log("Multi-step automatic-mask review history source smoke with visible action label, count, and canvas preview passed.");
