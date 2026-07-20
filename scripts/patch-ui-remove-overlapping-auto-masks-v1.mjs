@@ -40,4 +40,5 @@ if (!source.includes("Remove Overlaps ({overlappingAutoMaskIds.size})")) {
 }
 
 await fs.writeFile(path, source);
-console.log("Applied overlapping automatic-mask cleanup and review actions.");
+await import("./patch-ui-overlap-candidate-warning-v1.mjs");
+console.log("Applied overlapping automatic-mask cleanup, review actions, and warning styling.");
