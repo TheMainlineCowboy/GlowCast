@@ -18,4 +18,5 @@ for (const marker of required) {
   if (!source.includes(marker)) throw new Error(`Missing overlapping-mask cleanup marker: ${marker}`);
 }
 
-console.log("Overlapping automatic-mask cleanup and review source smoke passed.");
+await import("./smoke-ui-overlap-candidate-warning-source.mjs");
+console.log("Overlapping automatic-mask cleanup, review, and warning source smoke passed.");
