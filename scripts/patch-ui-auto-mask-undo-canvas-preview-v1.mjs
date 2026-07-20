@@ -3,8 +3,8 @@ import fs from "node:fs/promises";
 const path = "src/App.tsx";
 let source = await fs.readFile(path, "utf8");
 
-const anchor = "          {!projectionOnly && !cornerMode && !surfacePolygonMode && zones.map((zone, index) => (";
-if (!source.includes(anchor)) throw new Error("Mask canvas render anchor not found.");
+const anchor = "          {draftRect && !projectionOnly && !cornerMode && !surfacePolygonMode && (";
+if (!source.includes(anchor)) throw new Error("Draft-zone canvas render anchor not found.");
 
 const preview = [
   "          {!projectionOnly && !cornerMode && !surfacePolygonMode && latestAutoMaskReview ? (",
