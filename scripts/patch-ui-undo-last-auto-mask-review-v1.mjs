@@ -41,8 +41,6 @@ source = source.replace("Keyboard: A approve · R/Delete reject · U undo", "Key
 source = source.replace("                Undo Last Review\n", "                Undo Last Review ({autoMaskReviewHistory.length})\n");
 source = source.replace("                Undo Last Review ({autoMaskReviewHistory.length})\n", "                {latestAutoMaskReview?.action === \"approved\" ? \"Undo Approval\" : latestAutoMaskReview?.action === \"rejected\" ? \"Undo Rejection\" : \"Undo Last Review\"} ({autoMaskReviewHistory.length})\n");
 
-const previewAnchor = "          {draftRect && !projectionOnly && !cornerMode && !surfacePolygonMode && (";
-if (!source.includes(previewAnchor)) throw new Error("Draft-zone canvas render anchor not found.");
 const preview = [
   "          {!projectionOnly && !cornerMode && !surfacePolygonMode && latestAutoMaskReview ? (",
   "            <div className=\"pendingUndoMaskPreview\" aria-label={`Next undo will reverse the last auto-mask ${latestAutoMaskReview.action}`} style={{ ...toStyle(latestAutoMaskReview.zone), position: \"absolute\", zIndex: 12, pointerEvents: \"none\", border: \"3px dashed #f59e0b\", boxShadow: \"0 0 0 3px rgba(15, 23, 42, 0.85), 0 0 24px rgba(245, 158, 11, 0.75)\" }}>",
@@ -54,7 +52,11 @@ const preview = [
   "",
   ""
 ].join("\n");
-if (!source.includes('className="pendingUndoMaskPreview"')) source = source.replace(previewAnchor, preview + previewAnchor);
+if (!source.includes('className="pendingUndoMaskPreview"')) {
+  const draftRenderStart = source.indexOf("          {draftRect");
+  if (draftRenderStart < 0) throw new Error("Draft-zone canvas render start not found.");
+  source = source.slice(0, draftRenderStart) + preview + source.slice(draftRenderStart);
+}
 
 await fs.writeFile(path, source);
 console.log("Applied multi-step automatic-mask review history with visible action label, count, and canvas preview.");
