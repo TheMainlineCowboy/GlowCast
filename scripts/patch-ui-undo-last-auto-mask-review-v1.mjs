@@ -23,12 +23,14 @@ if (!source.includes('setAutoMaskReviewHistory((history) => [...history.slice(-9
 
 source = source.replace("    setLastRejectedAutoMask(selectedAutoMask);", "    setAutoMaskReviewHistory((history) => [...history.slice(-9), { zone: selectedAutoMask, action: \"rejected\" }]);");
 
-const oldUndoStart = source.indexOf("  const undoLastAutoMaskRejection = () => {");
-if (oldUndoStart < 0) throw new Error("Existing rejection undo action not found.");
-const oldUndoEnd = source.indexOf("\n  };", oldUndoStart);
-if (oldUndoEnd < 0) throw new Error("Existing rejection undo action end not found.");
 const historyUndo = `  const undoLastAutoMaskReview = () => {\n    const lastReview = autoMaskReviewHistory[autoMaskReviewHistory.length - 1];\n    if (!lastReview) return;\n    const { zone, action } = lastReview;\n    if (action === "rejected") {\n      setZones((currentZones) => currentZones.some((currentZone) => currentZone.id === zone.id) ? currentZones : [...currentZones, zone]);\n    } else {\n      setZones((currentZones) => currentZones.map((currentZone) => currentZone.id === zone.id ? { ...currentZone, included: false } : currentZone));\n    }\n    setSelectedTarget("zone");\n    setSelectedZoneId(zone.id);\n    setDetectMessage(action === "rejected" ? "Restored the last rejected automatic mask for review." : "Returned the last approved automatic mask to review.");\n    setAutoMaskReviewHistory((history) => history.slice(0, -1));\n  };`;
-source = source.slice(0, oldUndoStart) + historyUndo + source.slice(oldUndoEnd + "\n  };".length);
+if (!source.includes("  const undoLastAutoMaskReview = () => {")) {
+  const oldUndoStart = source.indexOf("  const undoLastAutoMaskRejection = () => {");
+  if (oldUndoStart < 0) throw new Error("Existing rejection undo action not found.");
+  const oldUndoEnd = source.indexOf("\n  };", oldUndoStart);
+  if (oldUndoEnd < 0) throw new Error("Existing rejection undo action end not found.");
+  source = source.slice(0, oldUndoStart) + historyUndo + source.slice(oldUndoEnd + "\n  };".length);
+}
 
 source = source.replaceAll("!lastRejectedAutoMask", "autoMaskReviewHistory.length === 0");
 source = source.replaceAll("lastRejectedAutoMask", "autoMaskReviewHistory.length > 0");
