@@ -23,15 +23,6 @@ if (!source.includes(helperMarker)) {
 }
 
 const reviewButton = `              <button type="button" onClick={reviewNextOverlappingAutoMask} disabled={overlappingAutoMaskIds.size === 0} aria-label="Select the next automatic mask that would be removed as an overlap">\n                Review Overlaps ({overlappingAutoMaskIds.size})\n              </button>\n`;
-
-if (!source.includes("Review Overlaps ({overlappingAutoMaskIds.size})")) {
-  const removeButton = source.indexOf("Remove Overlaps ({overlappingAutoMaskIds.size})");
-  if (removeButton < 0) throw new Error("Overlapping-mask remove button anchor not found.");
-  const buttonStart = source.lastIndexOf("<button", removeButton);
-  if (buttonStart < 0) throw new Error("Overlapping-mask remove button start not found.");
-  source = source.slice(0, buttonStart) + reviewButton + source.slice(buttonStart);
-}
-
 const button = `              <button type="button" onClick={removeOverlappingAutoMasks} disabled={overlappingAutoMaskIds.size === 0} aria-label="Remove heavily overlapping automatic masks and keep the strongest candidate">\n                Remove Overlaps ({overlappingAutoMaskIds.size})\n              </button>\n`;
 
 if (!source.includes("Remove Overlaps ({overlappingAutoMaskIds.size})")) {
@@ -41,6 +32,11 @@ if (!source.includes("Remove Overlaps ({overlappingAutoMaskIds.size})")) {
   if (buttonEnd < 0) throw new Error("Automatic-mask bulk button end not found.");
   const insertionIndex = buttonEnd + "</button>".length;
   source = source.slice(0, insertionIndex) + "\n" + reviewButton.trimEnd() + "\n" + button.trimEnd() + source.slice(insertionIndex);
+} else if (!source.includes("Review Overlaps ({overlappingAutoMaskIds.size})")) {
+  const removeButton = source.indexOf("Remove Overlaps ({overlappingAutoMaskIds.size})");
+  const buttonStart = source.lastIndexOf("<button", removeButton);
+  if (buttonStart < 0) throw new Error("Overlapping-mask remove button start not found.");
+  source = source.slice(0, buttonStart) + reviewButton + source.slice(buttonStart);
 }
 
 await fs.writeFile(path, source);
