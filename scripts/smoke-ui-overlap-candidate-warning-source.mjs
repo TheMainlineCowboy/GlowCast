@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 const source = await fs.readFile("src/App.tsx", "utf8");
 
 const requiredMarkers = [
-  'overlappingAutoMaskIds.has(zone.id) ? "overlapCandidate"',
+  "overlappingAutoMaskIds.has(zone.id) ? (",
   'boxShadow: "0 0 0 2px rgba(17, 24, 39, 0.75)',
   'border: "2px solid #fef3c7"',
   'Overlap candidate — review before removal',
