@@ -42,6 +42,10 @@ source = source.replace(
   "Keyboard: A approve · R/Delete reject · U undo",
   "Keyboard: A approve · R/Delete reject · U undo (10 steps)"
 );
+source = source.replace(
+  "                Undo Last Review\n",
+  "                Undo Last Review ({autoMaskReviewHistory.length})\n"
+);
 
 await fs.writeFile(path, source);
-console.log("Applied multi-step automatic-mask review history patch.");
+console.log("Applied multi-step automatic-mask review history patch with visible history count.");
