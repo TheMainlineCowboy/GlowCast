@@ -15,11 +15,18 @@ if (!source.includes(helperMarker)) {
   const insertionIndex = bulkActionEnd + "\n  };".length;
   source = source.slice(0, insertionIndex) + "\n\n" + helper + source.slice(insertionIndex);
 } else if (!source.includes("retainedOverlappingAutoMaskIds")) {
-  const helperEndMarker = "  const reviewNextOverlappingAutoMask = () => {";
-  const helperStart = source.indexOf(helperMarker);
-  const helperEnd = source.indexOf(helperEndMarker, helperStart);
-  if (helperStart < 0 || helperEnd < 0) throw new Error("Existing overlap helper boundaries not found.");
-  source = source.slice(0, helperStart) + helper + source.slice(helperEnd + helperEndMarker.length);
+  const duplicateDeclaration = "    const duplicateIds = new Set<number>();";
+  const duplicateChoice = "          duplicateIds.add(firstPriority >= secondPriority ? second.id : first.id);";
+  const oldReturn = "    return duplicateIds;";
+  const oldAssignment = "  const overlappingAutoMaskIds = findOverlappingAutoMaskIds(zones);";
+  for (const marker of [duplicateDeclaration, duplicateChoice, oldReturn, oldAssignment]) {
+    if (!source.includes(marker)) throw new Error(`Existing overlap helper upgrade marker not found: ${marker}`);
+  }
+  source = source
+    .replace(duplicateDeclaration, `${duplicateDeclaration}\n    const retainedIds = new Set<number>();`)
+    .replace(duplicateChoice, `          const removeId = firstPriority >= secondPriority ? second.id : first.id;\n          const keepId = removeId === first.id ? second.id : first.id;\n          duplicateIds.add(removeId);\n          retainedIds.add(keepId);`)
+    .replace(oldReturn, "    return { duplicateIds, retainedIds };")
+    .replace(oldAssignment, "  const { duplicateIds: overlappingAutoMaskIds, retainedIds: retainedOverlappingAutoMaskIds } = findOverlappingAutoMaskIds(zones);");
 } else if (!source.includes("const reviewNextOverlappingAutoMask = () =>")) {
   const removalMarker = "  const removeOverlappingAutoMasks = () => {";
   const removalIndex = source.indexOf(removalMarker);
