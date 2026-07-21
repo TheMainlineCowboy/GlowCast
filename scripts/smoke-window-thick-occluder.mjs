@@ -35,6 +35,8 @@ try {
     name,
     hiddenEdgeStart = null,
     hiddenEdgeEnd = null,
+    hiddenTopStart = null,
+    hiddenTopEnd = null,
     occluderStartY = 23,
     occluderSlope = 0.52,
     occluderStrength = 0.48
@@ -43,7 +45,10 @@ try {
     const addPoint = (x, y, strength = 1) => scene.push({ x, y, strength });
 
     for (let x = frame.left; x <= frame.right; x += 1) {
-      addPoint(x, frame.top, 0.9);
+      const hidesTopEdge = hiddenTopStart !== null && hiddenTopEnd !== null && x >= hiddenTopStart && x <= hiddenTopEnd;
+      if (!hidesTopEdge) {
+        addPoint(x, frame.top, 0.9);
+      }
       addPoint(x, frame.bottom, 0.9);
     }
     for (let y = frame.top; y <= frame.bottom; y += 1) {
@@ -55,8 +60,8 @@ try {
     }
 
     // A thick foreground limb or railing crosses the opening diagonally. Harder
-    // cases also hide part of the outer-left frame, including a longer section
-    // near the top-left corner. It must remain clutter rather than a false mullion.
+    // cases also hide part of one or two outer frame edges. It must remain clutter
+    // rather than a false mullion while the coherent opening remains detectable.
     for (let offset = 0; offset <= 42; offset += 1) {
       const x = 14 + offset;
       const y = occluderStartY + Math.floor(offset * occluderSlope);
@@ -176,10 +181,20 @@ try {
     occluderSlope: 0.28,
     occluderStrength: 0.44
   });
+  await runCase({
+    name: "Two-edge thick-occluder window",
+    hiddenEdgeStart: 24,
+    hiddenEdgeEnd: 30,
+    hiddenTopStart: 31,
+    hiddenTopEnd: 38,
+    occluderStartY: 18,
+    occluderSlope: 0.3,
+    occluderStrength: 0.43
+  });
   await runOpenFragmentCase();
 
   console.log(
-    "Thick-occluder window smoke test passed: occluded frames remained whole while a genuinely open corner fragment stayed rejected."
+    "Thick-occluder window smoke test passed: singly and doubly occluded frames remained whole while a genuinely open corner fragment stayed rejected."
   );
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
