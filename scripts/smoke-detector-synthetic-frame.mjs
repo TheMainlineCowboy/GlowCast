@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 const requestedCase = process.argv[2] ?? "all";
-const validCases = new Set(["all", "broken-corner", "thin-gap", "l-fragment"]);
+const validCases = new Set(["all", "broken-corner", "thin-gap", "l-fragment", "directional-texture"]);
 
 if (!validCases.has(requestedCase)) {
   console.error(`Unknown synthetic detector smoke case: ${requestedCase}`);
@@ -117,6 +117,56 @@ try {
       process.exit(1);
     }
     console.log("Two-sided L-fragment smoke test passed: open corner fragment rejected and counted.");
+  }
+
+  if (requestedCase === "all" || requestedCase === "directional-texture") {
+    const scene = [];
+    const addPoint = (x, y) => scene.push({ x, y, strength: 1 });
+
+    // A valid balanced architectural frame in the upper-right of the scene.
+    for (let x = 68; x <= 92; x += 1) {
+      addPoint(x, 10);
+      addPoint(x, 36);
+    }
+    for (let y = 10; y <= 36; y += 1) {
+      addPoint(68, y);
+      addPoint(92, y);
+    }
+
+    // A broad connected reflection/texture component dominated by horizontal evidence.
+    for (let y = 65; y <= 89; y += 4) {
+      for (let x = 5; x <= 55; x += 1) addPoint(x, y);
+    }
+    for (let y = 65; y <= 89; y += 1) addPoint(5, y);
+
+    let diagnostics = null;
+    const candidates = getCandidates(scene, (value) => {
+      diagnostics = value;
+    });
+    const preservedFrame = candidates.find(
+      (candidate) =>
+        candidate.x >= 65 &&
+        candidate.y <= 12 &&
+        candidate.width >= 22 &&
+        candidate.height >= 24
+    );
+    const leakedTexture = candidates.find(
+      (candidate) =>
+        candidate.x <= 8 &&
+        candidate.y >= 60 &&
+        candidate.width >= 45 &&
+        candidate.height >= 20
+    );
+
+    if (!preservedFrame || leakedTexture) {
+      const failure = { requestedCase, diagnostics, candidates, preservedFrame, leakedTexture };
+      await fs.writeFile("directional-texture-diagnostic.json", `${JSON.stringify(failure, null, 2)}\n`);
+      console.error("Directional-texture regression failed. Diagnostic artifact written.");
+      console.error(JSON.stringify(failure));
+      process.exit(1);
+    }
+
+    console.log("Directional-texture smoke test passed: broad texture rejected and balanced frame preserved.");
   }
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
