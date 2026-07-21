@@ -31,7 +31,14 @@ try {
   const { detectArchitecturalCandidates } = await import(pathToFileURL(tempPath).href);
   const frame = { left: 18, right: 52, top: 12, bottom: 58 };
 
-  const runCase = async ({ name, hideOuterEdge = false }) => {
+  const runCase = async ({
+    name,
+    hiddenEdgeStart = null,
+    hiddenEdgeEnd = null,
+    occluderStartY = 23,
+    occluderSlope = 0.52,
+    occluderStrength = 0.48
+  }) => {
     const scene = [];
     const addPoint = (x, y, strength = 1) => scene.push({ x, y, strength });
 
@@ -40,20 +47,21 @@ try {
       addPoint(x, frame.bottom, 0.9);
     }
     for (let y = frame.top; y <= frame.bottom; y += 1) {
-      if (!hideOuterEdge || y < 31 || y > 35) {
+      const hidesLeftEdge = hiddenEdgeStart !== null && hiddenEdgeEnd !== null && y >= hiddenEdgeStart && y <= hiddenEdgeEnd;
+      if (!hidesLeftEdge) {
         addPoint(frame.left, y, 0.9);
       }
       addPoint(frame.right, y, 0.9);
     }
 
-    // A thick foreground limb or railing crosses the opening diagonally. In the
-    // harder case it also hides a short section of the outer-left frame edge.
-    // It should remain clutter, not become a mullion or split the real opening.
+    // A thick foreground limb or railing crosses the opening diagonally. Harder
+    // cases also hide part of the outer-left frame, including a longer section
+    // near the top-left corner. It must remain clutter rather than a false mullion.
     for (let offset = 0; offset <= 42; offset += 1) {
       const x = 14 + offset;
-      const y = (hideOuterEdge ? 30 : 23) + Math.floor(offset * (hideOuterEdge ? 0.34 : 0.52));
+      const y = occluderStartY + Math.floor(offset * occluderSlope);
       for (let thickness = -2; thickness <= 2; thickness += 1) {
-        addPoint(x, y + thickness, hideOuterEdge ? 0.46 : 0.48);
+        addPoint(x, y + thickness, occluderStrength);
       }
     }
 
@@ -98,10 +106,25 @@ try {
   };
 
   await runCase({ name: "Thick-occluder window" });
-  await runCase({ name: "Hidden-edge thick-occluder window", hideOuterEdge: true });
+  await runCase({
+    name: "Hidden-edge thick-occluder window",
+    hiddenEdgeStart: 31,
+    hiddenEdgeEnd: 35,
+    occluderStartY: 30,
+    occluderSlope: 0.34,
+    occluderStrength: 0.46
+  });
+  await runCase({
+    name: "Long corner-edge thick-occluder window",
+    hiddenEdgeStart: 13,
+    hiddenEdgeEnd: 21,
+    occluderStartY: 12,
+    occluderSlope: 0.28,
+    occluderStrength: 0.44
+  });
 
   console.log(
-    "Thick-occluder window smoke test passed: complete and partly obscured frames remained whole and unsplit."
+    "Thick-occluder window smoke test passed: complete, partly obscured, and corner-obscured frames remained whole and unsplit."
   );
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
