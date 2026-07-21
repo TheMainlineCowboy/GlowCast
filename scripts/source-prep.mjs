@@ -70,6 +70,8 @@ await runPatch("./patch-ui-auto-mask-review-filter-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-mask-bulk-actions-v1.mjs", { required: true });
 await runPatch("./patch-ui-remove-overlapping-auto-masks-v1.mjs", { required: true });
 await runPatch("./smoke-ui-remove-overlapping-auto-masks-source.mjs", { required: true });
+await runPatch("./patch-ui-overlap-review-keyboard-navigation-v1.mjs", { required: true });
+await runPatch("./smoke-ui-overlap-review-keyboard-navigation-source.mjs", { required: true });
 await runPatch("./patch-ui-auto-mask-review-progress-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-mask-review-state-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-mask-cap-warning-v1.mjs", { required: true });
