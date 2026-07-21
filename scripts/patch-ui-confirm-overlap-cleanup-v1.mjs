@@ -11,7 +11,17 @@ if (!source.includes(confirmationMarker)) {
     throw new Error("Overlap cleanup handler anchor not found.");
   }
 
-  const replacement = `  const removeOverlappingAutoMasks = () => {\n    if (overlappingAutoMaskIds.size === 0) return;\n    const confirmed = window.confirm(\n      \`Remove overlapping masks? GlowCast will keep the stronger mask from each pair. \\${overlappingAutoMaskIds.size} mask\\${overlappingAutoMaskIds.size === 1 ? "" : "s"} will be removed.\`\n    );\n    if (!confirmed) {\n      setDetectMessage("Overlap cleanup canceled. No masks were removed.");\n      return;\n    }`;
+  const replacement = [
+    "  const removeOverlappingAutoMasks = () => {",
+    "    if (overlappingAutoMaskIds.size === 0) return;",
+    "    const confirmed = window.confirm(",
+    "      `Remove overlapping masks? GlowCast will keep the stronger mask from each pair. ${overlappingAutoMaskIds.size} mask${overlappingAutoMaskIds.size === 1 ? \"\" : \"s\"} will be removed.`",
+    "    );",
+    "    if (!confirmed) {",
+    "      setDetectMessage(\"Overlap cleanup canceled. No masks were removed.\");",
+    "      return;",
+    "    }"
+  ].join("\n");
 
   source = source.replace(anchor, replacement);
 }
