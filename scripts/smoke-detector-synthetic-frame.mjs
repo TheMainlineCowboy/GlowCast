@@ -123,6 +123,20 @@ try {
     const scene = [];
     const addPoint = (x, y, strength = 1) => scene.push({ x, y, strength });
 
+    // A glare-obscured window with fragmented edges and nearby vegetation clutter.
+    for (let x = 27; x <= 55; x += 1) {
+      if (x < 38 || x > 42) addPoint(x, 9, 0.82);
+      if (x < 45 || x > 48) addPoint(x, 39, 0.9);
+    }
+    for (let y = 9; y <= 39; y += 1) {
+      if (y < 22 || y > 25) addPoint(27, y, 0.9);
+      if (y < 15 || y > 19) addPoint(55, y, 0.72);
+    }
+    for (let offset = 0; offset <= 12; offset += 1) {
+      addPoint(12 + offset, 14 + offset, 0.45);
+      if (offset % 2 === 0) addPoint(18 + offset, 31 - offset, 0.4);
+    }
+
     // A valid balanced architectural frame in the upper-right of the scene.
     for (let x = 68; x <= 92; x += 1) {
       addPoint(x, 10);
@@ -153,6 +167,14 @@ try {
     const candidates = getCandidates(scene, (value) => {
       diagnostics = value;
     });
+    const preservedGlareWindow = candidates.find(
+      (candidate) =>
+        candidate.x >= 24 &&
+        candidate.x <= 30 &&
+        candidate.y <= 12 &&
+        candidate.width >= 26 &&
+        candidate.height >= 28
+    );
     const preservedFrame = candidates.find(
       (candidate) =>
         candidate.x >= 65 &&
@@ -175,11 +197,12 @@ try {
         candidate.height >= 20
     );
 
-    if (!preservedFrame || !preservedShadowedDoorway || leakedTexture) {
+    if (!preservedGlareWindow || !preservedFrame || !preservedShadowedDoorway || leakedTexture) {
       const failure = {
         requestedCase,
         diagnostics,
         candidates,
+        preservedGlareWindow,
         preservedFrame,
         preservedShadowedDoorway,
         leakedTexture
@@ -191,7 +214,7 @@ try {
     }
 
     console.log(
-      "Directional-texture smoke test passed: broad texture rejected while balanced frame and shadowed doorway were preserved."
+      "Directional-texture smoke test passed: broad texture rejected while glare-obscured window, balanced frame, and shadowed doorway were preserved."
     );
   }
 } finally {
