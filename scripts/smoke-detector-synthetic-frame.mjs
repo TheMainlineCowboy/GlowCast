@@ -147,6 +147,18 @@ try {
       addPoint(92, y);
     }
 
+    // Two adjacent windows separated by a narrow four-cell mullion gap.
+    for (const [left, right] of [[8, 20], [25, 37]]) {
+      for (let x = left; x <= right; x += 1) {
+        addPoint(x, 43, 0.92);
+        addPoint(x, 59, 0.92);
+      }
+      for (let y = 43; y <= 59; y += 1) {
+        addPoint(left, y, 0.92);
+        addPoint(right, y, 0.92);
+      }
+    }
+
     // A partially shadowed doorway with short gaps and weaker evidence on its shaded side.
     for (let x = 70; x <= 90; x += 1) {
       if (x < 78 || x > 80) addPoint(x, 52, 1);
@@ -182,6 +194,24 @@ try {
         candidate.width >= 22 &&
         candidate.height >= 24
     );
+    const adjacentWindows = candidates.filter(
+      (candidate) =>
+        candidate.x >= 6 &&
+        candidate.x <= 39 &&
+        candidate.y >= 40 &&
+        candidate.y <= 46 &&
+        candidate.width >= 10 &&
+        candidate.width <= 15 &&
+        candidate.height >= 14
+    );
+    const mergedAdjacentWindow = candidates.find(
+      (candidate) =>
+        candidate.x <= 10 &&
+        candidate.y >= 40 &&
+        candidate.y <= 46 &&
+        candidate.width >= 27 &&
+        candidate.height >= 14
+    );
     const preservedShadowedDoorway = candidates.find(
       (candidate) =>
         candidate.x >= 67 &&
@@ -197,13 +227,22 @@ try {
         candidate.height >= 20
     );
 
-    if (!preservedGlareWindow || !preservedFrame || !preservedShadowedDoorway || leakedTexture) {
+    if (
+      !preservedGlareWindow ||
+      !preservedFrame ||
+      adjacentWindows.length !== 2 ||
+      mergedAdjacentWindow ||
+      !preservedShadowedDoorway ||
+      leakedTexture
+    ) {
       const failure = {
         requestedCase,
         diagnostics,
         candidates,
         preservedGlareWindow,
         preservedFrame,
+        adjacentWindows,
+        mergedAdjacentWindow,
         preservedShadowedDoorway,
         leakedTexture
       };
@@ -214,7 +253,7 @@ try {
     }
 
     console.log(
-      "Directional-texture smoke test passed: broad texture rejected while glare-obscured window, balanced frame, and shadowed doorway were preserved."
+      "Directional-texture smoke test passed: broad texture rejected while glare-obscured window, two adjacent mullion-separated windows, balanced frame, and shadowed doorway were preserved."
     );
   }
 } finally {
