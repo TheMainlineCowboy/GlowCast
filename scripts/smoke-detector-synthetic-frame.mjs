@@ -159,6 +159,18 @@ try {
       }
     }
 
+    // Three windows with uneven spacing; the middle frame has weaker contrast.
+    for (const [left, right, strength] of [[40, 46, 0.94], [49, 57, 0.68], [61, 67, 0.9]]) {
+      for (let x = left; x <= right; x += 1) {
+        addPoint(x, 42, strength);
+        addPoint(x, 54, strength);
+      }
+      for (let y = 42; y <= 54; y += 1) {
+        addPoint(left, y, strength);
+        addPoint(right, y, strength);
+      }
+    }
+
     // A partially shadowed doorway with short gaps and weaker evidence on its shaded side.
     for (let x = 70; x <= 90; x += 1) {
       if (x < 78 || x > 80) addPoint(x, 52, 1);
@@ -212,6 +224,27 @@ try {
         candidate.width >= 27 &&
         candidate.height >= 14
     );
+    const unevenWindowRow = candidates.filter(
+      (candidate) =>
+        candidate.x >= 38 &&
+        candidate.x <= 69 &&
+        candidate.y >= 39 &&
+        candidate.y <= 45 &&
+        candidate.width >= 5 &&
+        candidate.width <= 11 &&
+        candidate.height >= 10
+    );
+    const preservedWeakMiddleWindow = unevenWindowRow.find(
+      (candidate) => candidate.x >= 47 && candidate.x <= 51 && candidate.width >= 7
+    );
+    const mergedUnevenWindowRow = candidates.find(
+      (candidate) =>
+        candidate.x <= 42 &&
+        candidate.y >= 39 &&
+        candidate.y <= 45 &&
+        candidate.width >= 24 &&
+        candidate.height >= 10
+    );
     const preservedShadowedDoorway = candidates.find(
       (candidate) =>
         candidate.x >= 67 &&
@@ -232,6 +265,9 @@ try {
       !preservedFrame ||
       adjacentWindows.length !== 2 ||
       mergedAdjacentWindow ||
+      unevenWindowRow.length !== 3 ||
+      !preservedWeakMiddleWindow ||
+      mergedUnevenWindowRow ||
       !preservedShadowedDoorway ||
       leakedTexture
     ) {
@@ -243,6 +279,9 @@ try {
         preservedFrame,
         adjacentWindows,
         mergedAdjacentWindow,
+        unevenWindowRow,
+        preservedWeakMiddleWindow,
+        mergedUnevenWindowRow,
         preservedShadowedDoorway,
         leakedTexture
       };
@@ -253,7 +292,7 @@ try {
     }
 
     console.log(
-      "Directional-texture smoke test passed: broad texture rejected while glare-obscured window, two adjacent mullion-separated windows, balanced frame, and shadowed doorway were preserved."
+      "Directional-texture smoke test passed: broad texture rejected while glare-obscured window, two adjacent mullion-separated windows, uneven three-window row with a weak frame, balanced frame, and shadowed doorway were preserved."
     );
   }
 } finally {
