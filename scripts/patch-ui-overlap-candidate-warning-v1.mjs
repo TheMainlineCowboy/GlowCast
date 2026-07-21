@@ -21,4 +21,6 @@ if (!source.includes("Keep candidate — this stronger mask remains after cleanu
 }
 
 await fs.writeFile(path, source);
-console.log("Applied overlap keep/remove comparison badges.");
+await import("./patch-ui-overlap-review-decision-guidance-v1.mjs");
+await import("./smoke-ui-overlap-review-decision-guidance-source.mjs");
+console.log("Applied overlap keep/remove comparison badges and review guidance.");
