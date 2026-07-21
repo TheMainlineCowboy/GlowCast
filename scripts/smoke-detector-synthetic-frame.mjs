@@ -121,7 +121,7 @@ try {
 
   if (requestedCase === "all" || requestedCase === "directional-texture") {
     const scene = [];
-    const addPoint = (x, y) => scene.push({ x, y, strength: 1 });
+    const addPoint = (x, y, strength = 1) => scene.push({ x, y, strength });
 
     // A valid balanced architectural frame in the upper-right of the scene.
     for (let x = 68; x <= 92; x += 1) {
@@ -131,6 +131,16 @@ try {
     for (let y = 10; y <= 36; y += 1) {
       addPoint(68, y);
       addPoint(92, y);
+    }
+
+    // A partially shadowed doorway with short gaps and weaker evidence on its shaded side.
+    for (let x = 70; x <= 90; x += 1) {
+      if (x < 78 || x > 80) addPoint(x, 52, 1);
+      if (x < 83 || x > 85) addPoint(x, 94, 1);
+    }
+    for (let y = 52; y <= 94; y += 1) {
+      if (y < 68 || y > 70) addPoint(70, y, 1);
+      if (y < 78 || y > 80) addPoint(90, y, 0.7);
     }
 
     // A broad connected reflection/texture component dominated by horizontal evidence.
@@ -150,6 +160,13 @@ try {
         candidate.width >= 22 &&
         candidate.height >= 24
     );
+    const preservedShadowedDoorway = candidates.find(
+      (candidate) =>
+        candidate.x >= 67 &&
+        candidate.y >= 49 &&
+        candidate.width >= 18 &&
+        candidate.height >= 39
+    );
     const leakedTexture = candidates.find(
       (candidate) =>
         candidate.x <= 8 &&
@@ -158,15 +175,24 @@ try {
         candidate.height >= 20
     );
 
-    if (!preservedFrame || leakedTexture) {
-      const failure = { requestedCase, diagnostics, candidates, preservedFrame, leakedTexture };
+    if (!preservedFrame || !preservedShadowedDoorway || leakedTexture) {
+      const failure = {
+        requestedCase,
+        diagnostics,
+        candidates,
+        preservedFrame,
+        preservedShadowedDoorway,
+        leakedTexture
+      };
       await fs.writeFile("directional-texture-diagnostic.json", `${JSON.stringify(failure, null, 2)}\n`);
       console.error("Directional-texture regression failed. Diagnostic artifact written.");
       console.error(JSON.stringify(failure));
       process.exit(1);
     }
 
-    console.log("Directional-texture smoke test passed: broad texture rejected and balanced frame preserved.");
+    console.log(
+      "Directional-texture smoke test passed: broad texture rejected while balanced frame and shadowed doorway were preserved."
+    );
   }
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
