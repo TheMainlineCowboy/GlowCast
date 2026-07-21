@@ -105,6 +105,60 @@ try {
     }
   };
 
+  const runOpenFragmentCase = async () => {
+    const scene = [];
+    const addPoint = (x, y, strength = 1) => scene.push({ x, y, strength });
+
+    // Three strong sides and only short corner stubs on the fourth side form a
+    // genuinely open wall fragment. A nearby thick diagonal obstruction must not
+    // be used as invented closure for a false architectural opening.
+    for (let x = frame.left; x <= frame.right; x += 1) {
+      addPoint(x, frame.top, 0.9);
+      addPoint(x, frame.bottom, 0.9);
+    }
+    for (let y = frame.top; y <= frame.bottom; y += 1) {
+      addPoint(frame.right, y, 0.9);
+      if (y <= frame.top + 3 || y >= frame.bottom - 3) {
+        addPoint(frame.left, y, 0.9);
+      }
+    }
+
+    for (let offset = 0; offset <= 30; offset += 1) {
+      const x = 13 + offset;
+      const y = 10 + Math.floor(offset * 0.3);
+      for (let thickness = -2; thickness <= 2; thickness += 1) {
+        addPoint(x, y + thickness, 0.44);
+      }
+    }
+
+    const candidates = detectArchitecturalCandidates(scene, {
+      gridResolution: 100,
+      minDensityThreshold: 1,
+      minSizePercent: 5,
+      maxSizePercent: 70
+    });
+
+    const falseClosure = candidates.find(
+      (candidate) =>
+        candidate.x >= 16 &&
+        candidate.x <= 20 &&
+        candidate.y >= 10 &&
+        candidate.y <= 14 &&
+        candidate.width >= 31 &&
+        candidate.width <= 38 &&
+        candidate.height >= 43 &&
+        candidate.height <= 50
+    );
+
+    if (falseClosure) {
+      const failure = { name: "Open corner fragment near thick occluder", candidates, falseClosure };
+      await fs.writeFile("window-thick-occluder-diagnostic.json", `${JSON.stringify(failure, null, 2)}\n`);
+      console.error("Open corner fragment regression failed: clutter was treated as architectural closure.");
+      console.error(JSON.stringify(failure));
+      process.exit(1);
+    }
+  };
+
   await runCase({ name: "Thick-occluder window" });
   await runCase({
     name: "Hidden-edge thick-occluder window",
@@ -122,9 +176,10 @@ try {
     occluderSlope: 0.28,
     occluderStrength: 0.44
   });
+  await runOpenFragmentCase();
 
   console.log(
-    "Thick-occluder window smoke test passed: complete, partly obscured, and corner-obscured frames remained whole and unsplit."
+    "Thick-occluder window smoke test passed: occluded frames remained whole while a genuinely open corner fragment stayed rejected."
   );
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
