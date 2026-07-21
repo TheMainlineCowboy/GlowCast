@@ -12,9 +12,11 @@ const required = [
   "retainedByDuplicateId: retainedOverlapByRemovedId",
   "const selectedRetainedOverlapId = selectedZoneId === null",
   "retainedOverlapByRemovedId.get(selectedZoneId) ?? null",
+  "const overlapReviewPosition = selectedZoneId === null",
   "const reviewNextOverlappingAutoMask = () => {",
   "overlapCandidates.findIndex((zone) => zone.id === selectedZoneId)",
-  "Review Overlaps ({overlappingAutoMaskIds.size})",
+  "Pair ${overlapReviewPosition} of ${overlappingAutoMaskIds.size}",
+  "Review Overlaps (${overlappingAutoMaskIds.size})",
   "Reviewing overlap candidate ${currentIndex + 2 > overlapCandidates.length ? 1 : currentIndex + 2} of ${overlapCandidates.length}.",
   "const removeOverlappingAutoMasks = () => {",
   "Remove Overlaps ({overlappingAutoMaskIds.size})",
@@ -26,4 +28,4 @@ for (const marker of required) {
 }
 
 await import("./smoke-ui-overlap-candidate-warning-source.mjs");
-console.log("Overlapping automatic-mask cleanup, review, and pair-specific keep/remove comparison source smoke passed.");
+console.log("Overlapping automatic-mask cleanup, review progress, and pair-specific keep/remove comparison source smoke passed.");
