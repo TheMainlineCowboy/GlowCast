@@ -29,7 +29,5 @@ if (!source.includes('transition: "opacity 140ms ease, transform 140ms ease"')) 
 
 await fs.writeFile(path, source);
 await import("./patch-ui-overlap-review-decision-guidance-v1.mjs");
-await import("./patch-ui-overlap-review-progress-v1.mjs");
 await import("./smoke-ui-overlap-review-decision-guidance-source.mjs");
-await import("./smoke-ui-overlap-review-progress-source.mjs");
-console.log("Applied pair-focused overlap keep/remove comparison badges, review guidance, and pair progress.");
+console.log("Applied pair-focused overlap keep/remove comparison badges and review guidance.");
