@@ -73,8 +73,56 @@ if (source.includes(newBlock)) {
   console.log("nested-detail selection patch already applied");
 } else if (source.includes(oldBlock)) {
   source = source.replace(oldBlock, newBlock);
-  await fs.writeFile(detectorPath, source);
   console.log("applied nested-detail selection patch");
 } else {
   throw new Error("outer-frame detector selection block not found");
 }
+
+const textureMarker = "const broadDirectionalTexture";
+if (!source.includes(textureMarker)) {
+  const structuralAnchor = `    const totalStructural = component.horizontalStrength + component.verticalStrength;
+    if (totalStructural > 0) {
+      const balanceRatio =
+        Math.min(component.horizontalStrength, component.verticalStrength) /
+        Math.max(component.horizontalStrength, component.verticalStrength);
+      score += Math.floor(balanceRatio * 20);
+    }
+`;
+  const structuralReplacement = `    const totalStructural = component.horizontalStrength + component.verticalStrength;
+    const structuralBalance =
+      totalStructural > 0
+        ? Math.min(component.horizontalStrength, component.verticalStrength) /
+          Math.max(component.horizontalStrength, component.verticalStrength)
+        : 0;
+    const componentAreaPercent = wPct * hPct;
+    const broadDirectionalTexture = componentAreaPercent >= 1200 && structuralBalance < 0.08;
+
+    // Large reflections and wall texture often connect strongly in only one direction.
+    // Real architectural frames retain meaningful horizontal and vertical structure.
+    if (broadDirectionalTexture) {
+      diagnostics.rejectedConfidence += 1;
+      return;
+    }
+
+    if (totalStructural > 0) {
+      score += Math.floor(structuralBalance * 20);
+    }
+`;
+
+  if (!source.includes(structuralAnchor)) {
+    throw new Error("architectural structural-balance block not found");
+  }
+  source = source.replace(structuralAnchor, structuralReplacement);
+  console.log("applied broad directional texture rejection");
+}
+
+for (const marker of [
+  "const structuralBalance =",
+  "const componentAreaPercent = wPct * hPct;",
+  "const broadDirectionalTexture = componentAreaPercent >= 1200 && structuralBalance < 0.08;",
+  "if (broadDirectionalTexture)"
+]) {
+  if (!source.includes(marker)) throw new Error(`broad texture source marker missing: ${marker}`);
+}
+
+await fs.writeFile(detectorPath, source);
