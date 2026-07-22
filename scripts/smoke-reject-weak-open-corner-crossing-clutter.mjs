@@ -97,3 +97,5 @@ try {
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
+
+await import("./smoke-mixed-valid-open-corner-crossing-clutter.mjs");
