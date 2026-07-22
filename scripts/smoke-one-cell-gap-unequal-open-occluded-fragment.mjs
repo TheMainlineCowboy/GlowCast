@@ -117,3 +117,5 @@ try {
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
+
+await import("./smoke-mixed-one-cell-gap-unequal-valid-open-occluded.mjs");
