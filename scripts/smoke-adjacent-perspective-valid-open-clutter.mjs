@@ -23,7 +23,9 @@ try {
     validSlope,
     openSlope,
     validTaper = 0,
+    openTaper = 0,
     validOcclusion = "top-left",
+    openOcclusion = "top-left",
     diagnostic
   }) => {
     const scene = [];
@@ -55,12 +57,12 @@ try {
     const validSkip = (x, y, edge) => validOcclusion === "lower-right"
       ? (edge === "bottom" && x >= valid.right - 8) || (edge === "right" && y >= valid.bottom - 10)
       : (edge === "top" && x <= valid.left + 6) || (edge === "left" && y <= valid.top + 8);
+    const openSkip = (x, y, edge) => openOcclusion === "lower-right"
+      ? (edge === "bottom" && x >= open.right - 13) || (edge === "right" && y >= open.bottom - 20)
+      : (edge === "top" && x <= open.left + 13) || (edge === "left" && y <= open.top + 22);
 
     addPerspectiveFrame(valid, 0.58, validSlope, validTaper, validSkip);
-    addPerspectiveFrame(open, 0.55, openSlope, 0, (x, y, edge) =>
-      (edge === "top" && x <= open.left + 13) ||
-      (edge === "left" && y <= open.top + 22)
-    );
+    addPerspectiveFrame(open, 0.55, openSlope, openTaper, openSkip);
 
     // Shared foreground clutter crosses both outlines and their narrow gap.
     // It may obscure the real window, but must not lend closure to the open neighbor.
@@ -143,7 +145,18 @@ try {
     diagnostic: "keystone-lower-corner-occlusion-diagnostic.json"
   });
 
-  console.log("Adjacent perspective valid/open smoke passed: real skewed openings survived matching, opposing-slope, unequal-height, and keystone lower-corner occlusion cases while incomplete neighbors stayed rejected without merged masks.");
+  await runCase({
+    name: "Open keystone lower corner stays rejected",
+    valid: { left: 13, right: 35, top: 10, bottom: 55 },
+    open: { left: 37, right: 64, top: 14, bottom: 53 },
+    validSlope: 2,
+    openSlope: -4,
+    openTaper: 3,
+    openOcclusion: "lower-right",
+    diagnostic: "open-keystone-lower-corner-diagnostic.json"
+  });
+
+  console.log("Adjacent perspective valid/open smoke passed: real skewed openings survived matching, opposing-slope, unequal-height, and keystone lower-corner occlusion cases while incomplete neighbors, including an open keystone lower corner, stayed rejected without merged masks.");
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
