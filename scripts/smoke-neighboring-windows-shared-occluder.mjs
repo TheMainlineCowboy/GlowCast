@@ -140,8 +140,35 @@ try {
     }
   });
 
+  await runCase({
+    name: "three-window row crossed by one continuous railing",
+    windows: [
+      { left: 8, right: 24, top: 14, bottom: 48, strength: 0.91, hiddenSide: "right", hiddenSideStart: 25, hiddenSideEnd: 34 },
+      { left: 30, right: 46, top: 16, bottom: 50, strength: 0.72, hiddenSide: "left", hiddenSideStart: 27, hiddenSideEnd: 36 },
+      { left: 52, right: 68, top: 13, bottom: 47, strength: 0.87, hiddenSide: "left", hiddenSideStart: 24, hiddenSideEnd: 33 }
+    ],
+    addOccluder: (addPoint) => {
+      // One continuous foreground railing crosses all three openings and both gaps.
+      // The weaker middle frame must remain detectable, and the row must not merge.
+      for (let offset = 0; offset <= 66; offset += 1) {
+        const x = 5 + offset;
+        const y = 22 + Math.floor(offset * 0.2);
+        for (let thickness = -2; thickness <= 2; thickness += 1) {
+          addPoint(x, y + thickness, 0.38);
+        }
+      }
+      for (const [gapLeft, gapRight] of [[25, 29], [47, 51]]) {
+        for (let y = 25; y <= 39; y += 1) {
+          for (let x = gapLeft; x <= gapRight; x += 1) {
+            addPoint(x, y, 0.35);
+          }
+        }
+      }
+    }
+  });
+
   console.log(
-    "Neighboring-window shared-occluder smoke test passed: both openings remained distinct and a foreground obstruction crossing their narrow gap was not mistaken for a mullion."
+    "Neighboring-window shared-occluder smoke test passed: two- and three-opening scenes remained distinct, weaker frames survived, and foreground clutter crossing narrow gaps was not mistaken for architectural mullions."
   );
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
