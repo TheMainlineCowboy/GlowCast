@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 const detectorPath = "src/core/architecturalDetector.ts";
-const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-one-cell-gap-unequal-valid-openings-"));
+const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-one-cell-gap-unequal-occluded-opening-"));
 const tempPath = path.join(tempDir, "core", "architecturalDetector.js");
 
 execFileSync(
@@ -35,24 +35,31 @@ try {
   const tallNarrowOpening = { left: 12, right: 27, top: 16, bottom: 55 };
   const wideRaisedOpening = { left: 29, right: 52, top: 12, bottom: 47 };
 
-  const addFrame = (frame, strength) => {
+  const addFrame = (frame, strength, shouldSkip = () => false) => {
     for (let x = frame.left; x <= frame.right; x += 1) {
-      addPoint(x, frame.top, strength);
-      addPoint(x, frame.bottom, strength);
+      if (!shouldSkip(x, frame.top)) addPoint(x, frame.top, strength);
+      if (!shouldSkip(x, frame.bottom)) addPoint(x, frame.bottom, strength);
     }
     for (let y = frame.top; y <= frame.bottom; y += 1) {
-      addPoint(frame.left, y, strength);
-      addPoint(frame.right, y, strength);
+      if (!shouldSkip(frame.left, y)) addPoint(frame.left, y, strength);
+      if (!shouldSkip(frame.right, y)) addPoint(frame.right, y, strength);
     }
   };
 
-  // Two legitimate windows with different widths, heights, header levels, sill levels,
-  // and edge strengths, separated by only one empty grid column.
-  addFrame(tallNarrowOpening, 0.61);
-  addFrame(wideRaisedOpening, 0.68);
+  addFrame(tallNarrowOpening, 0.64);
 
-  // Foreground clutter crosses both frames and fills the sole gap column. The detector
-  // must preserve each frame's independent geometry instead of forcing a uniform merge.
+  // The wider, raised opening is weaker and has independently hidden sections along
+  // its top and left edges near the corner. It must remain a coherent opening.
+  addFrame(
+    wideRaisedOpening,
+    0.56,
+    (x, y) =>
+      (y === wideRaisedOpening.top && x >= wideRaisedOpening.left && x <= wideRaisedOpening.left + 6) ||
+      (x === wideRaisedOpening.left && y >= wideRaisedOpening.top && y <= wideRaisedOpening.top + 8)
+  );
+
+  // Two foreground obstructions cross both windows and occupy the sole gap column.
+  // Their weaker evidence may bridge hidden pixels but must not merge the openings.
   for (let offset = 0; offset <= 50; offset += 1) {
     const x = 8 + offset;
     const y = 20 + Math.floor(offset * 0.3);
@@ -63,7 +70,7 @@ try {
     const y = 49 - Math.floor(offset * 0.3);
     for (let thickness = -1; thickness <= 1; thickness += 1) addPoint(x, y + thickness, 0.32);
   }
-  for (let y = 22; y <= 42; y += 1) addPoint(28, y, 0.31);
+  for (let y = 18; y <= 42; y += 1) addPoint(28, y, 0.31);
 
   const candidates = detectArchitecturalCandidates(scene, {
     gridResolution: 100,
@@ -75,15 +82,15 @@ try {
   const matches = (candidate, expected) =>
     candidate.x >= expected.left - 2 &&
     candidate.x <= expected.left + 3 &&
-    candidate.y >= expected.top - 2 &&
-    candidate.y <= expected.top + 3 &&
+    candidate.y >= expected.top - 3 &&
+    candidate.y <= expected.top + 4 &&
     candidate.width >= expected.right - expected.left - 2 &&
     candidate.width <= expected.right - expected.left + 5 &&
     candidate.height >= expected.bottom - expected.top - 3 &&
     candidate.height <= expected.bottom - expected.top + 5;
 
   const tallCandidate = candidates.find((candidate) => matches(candidate, tallNarrowOpening));
-  const wideCandidate = candidates.find((candidate) => matches(candidate, wideRaisedOpening));
+  const occludedWideCandidate = candidates.find((candidate) => matches(candidate, wideRaisedOpening));
   const mergedOpening = candidates.find(
     (candidate) =>
       candidate.x <= tallNarrowOpening.left + 3 &&
@@ -92,22 +99,20 @@ try {
       candidate.y + candidate.height >= tallNarrowOpening.bottom - 3
   );
 
-  if (!tallCandidate || !wideCandidate || mergedOpening) {
-    const failure = { tallCandidate, wideCandidate, mergedOpening, candidates };
+  if (!tallCandidate || !occludedWideCandidate || mergedOpening) {
+    const failure = { tallCandidate, occludedWideCandidate, mergedOpening, candidates };
     await fs.writeFile(
-      "one-cell-gap-unequal-valid-openings-diagnostic.json",
+      "one-cell-gap-unequal-occluded-opening-diagnostic.json",
       `${JSON.stringify(failure, null, 2)}\n`
     );
-    console.error("One-cell-gap unequal-valid-openings regression failed.");
+    console.error("One-cell-gap unequal occluded-opening regression failed.");
     console.error(JSON.stringify(failure));
     process.exit(1);
   }
 
   console.log(
-    "One-cell-gap unequal-valid-openings smoke passed: both differently sized and vertically offset frames survived independently, and no broad mask crossed the shared clutter."
+    "One-cell-gap unequal occluded-opening smoke passed: the weaker corner-occluded opening survived beside the taller frame, and no broad mask crossed the shared clutter."
   );
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
-
-await import("./smoke-one-cell-gap-unequal-occluded-opening.mjs");
