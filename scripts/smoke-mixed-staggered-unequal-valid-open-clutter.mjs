@@ -112,7 +112,73 @@ try {
     process.exit(1);
   }
 
-  console.log("Mixed staggered unequal smoke passed: real openings survived at different heights, a perspective-skewed frame with an obscured corner remained detectable, the matching open fragment stayed rejected, and shared clutter produced no merged mask.");
+  // Negative perspective companion: a similarly skewed outline has a much longer
+  // genuinely open corner. Foreground clutter crosses the missing perimeter, but
+  // must not be borrowed as closure evidence.
+  const negativeScene = [];
+  const addNegativePoint = (x, y, strength = 1) => negativeScene.push({ x, y, strength });
+  const negativeValid = { left: 48, right: 66, top: 13, bottom: 49 };
+  const perspectiveOpen = { left: 12, right: 31, top: 12, bottom: 50 };
+
+  const addNegativeFrame = (frame, strength) => {
+    for (let x = frame.left; x <= frame.right; x += 1) {
+      addNegativePoint(x, frame.top, strength);
+      addNegativePoint(x, frame.bottom, strength);
+    }
+    for (let y = frame.top; y <= frame.bottom; y += 1) {
+      addNegativePoint(frame.left, y, strength);
+      addNegativePoint(frame.right, y, strength);
+    }
+  };
+
+  const addNegativePerspectiveOpen = (frame, strength) => {
+    const height = frame.bottom - frame.top;
+    for (let y = frame.top; y <= frame.bottom; y += 1) {
+      const shift = Math.floor(((y - frame.top) / height) * 3);
+      const leftX = frame.left + shift;
+      const rightX = frame.right + shift;
+      if (y > frame.top + 20) addNegativePoint(leftX, y, strength);
+      addNegativePoint(rightX, y, strength);
+    }
+    for (let x = frame.left; x <= frame.right; x += 1) {
+      const offset = Math.round((x - frame.left) / (frame.right - frame.left));
+      if (x > frame.left + 12) addNegativePoint(x, frame.top + offset, strength);
+      addNegativePoint(x + 3, frame.bottom + offset, strength);
+    }
+  };
+
+  addNegativeFrame(negativeValid, 0.62);
+  addNegativePerspectiveOpen(perspectiveOpen, 0.55);
+  for (let offset = 0; offset <= 58; offset += 1) {
+    const x = 7 + offset;
+    const y = 18 + Math.floor(offset * 0.34);
+    for (let thickness = -2; thickness <= 2; thickness += 1) {
+      addNegativePoint(x, y + thickness, 0.33);
+    }
+  }
+  for (let offset = 0; offset <= 54; offset += 1) {
+    const x = 10 + offset;
+    const y = 48 - Math.floor(offset * 0.27);
+    for (let thickness = -1; thickness <= 1; thickness += 1) {
+      addNegativePoint(x, y + thickness, 0.31);
+    }
+  }
+
+  const negativeCandidates = detectArchitecturalCandidates(negativeScene, {
+    gridResolution: 80, minDensityThreshold: 1, minSizePercent: 5, maxSizePercent: 70
+  });
+  const negativeValidCandidate = negativeCandidates.find((candidate) => matches(candidate, negativeValid));
+  const perspectiveFalseOpening = negativeCandidates.find((candidate) => matches(candidate, perspectiveOpen));
+
+  if (!negativeValidCandidate || perspectiveFalseOpening) {
+    const failure = { negativeValidCandidate, perspectiveFalseOpening, negativeCandidates };
+    await fs.writeFile("perspective-open-occluded-corner-diagnostic.json", `${JSON.stringify(failure, null, 2)}\n`);
+    console.error("Perspective open-corner rejection regression failed.");
+    console.error(JSON.stringify(failure));
+    process.exit(1);
+  }
+
+  console.log("Mixed staggered unequal smoke passed: real openings survived at different heights, a perspective-skewed frame with an obscured corner remained detectable, the matching open fragments—including the perspective-skewed negative companion—stayed rejected, and shared clutter produced no merged mask.");
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
