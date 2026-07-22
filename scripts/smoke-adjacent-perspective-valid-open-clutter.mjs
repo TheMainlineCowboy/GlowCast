@@ -49,7 +49,7 @@ try {
       (edge === "left" && y <= open.top + 22)
     );
 
-    // Shared foreground clutter crosses both outlines and their one-cell gap.
+    // Shared foreground clutter crosses both outlines and their narrow gap.
     // It may obscure the real window, but must not lend closure to the open neighbor.
     for (let offset = 0; offset <= 52; offset += 1) {
       const x = 13 + offset;
@@ -61,7 +61,10 @@ try {
       const y = 49 - Math.floor(offset * 0.27);
       for (let thickness = -1; thickness <= 1; thickness += 1) addPoint(x, y + thickness, 0.31);
     }
-    for (let y = 20; y <= 45; y += 1) addPoint(39, y, 0.3);
+    const gapX = Math.round((valid.right + open.left) / 2);
+    for (let y = Math.max(valid.top, open.top) + 6; y <= Math.min(valid.bottom, open.bottom) - 6; y += 1) {
+      addPoint(gapX, y, 0.3);
+    }
 
     const candidates = detectArchitecturalCandidates(scene, {
       gridResolution: 80, minDensityThreshold: 1, minSizePercent: 5, maxSizePercent: 70
@@ -107,7 +110,16 @@ try {
     diagnostic: "adjacent-opposing-perspective-slopes-diagnostic.json"
   });
 
-  console.log("Adjacent perspective valid/open smoke passed: the real skewed opening survived, matching open neighbors stayed rejected across matching and opposing perspective slopes, and shared clutter produced no merged mask.");
+  await runCase({
+    name: "Unequal-height asymmetric perspective valid/open",
+    valid: { left: 15, right: 35, top: 8, bottom: 57 },
+    open: { left: 37, right: 62, top: 18, bottom: 49 },
+    validSlope: 5,
+    openSlope: -2,
+    diagnostic: "unequal-height-asymmetric-perspective-diagnostic.json"
+  });
+
+  console.log("Adjacent perspective valid/open smoke passed: real skewed openings survived while matching, opposing-slope, and unequal-height incomplete neighbors stayed rejected without merged masks.");
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
