@@ -16,17 +16,28 @@ execFileSync(process.execPath, [
 try {
   const { detectArchitecturalCandidates } = await import(pathToFileURL(tempPath).href);
 
-  const runCase = async ({ name, valid, open, validSlope, openSlope, diagnostic }) => {
+  const runCase = async ({
+    name,
+    valid,
+    open,
+    validSlope,
+    openSlope,
+    validTaper = 0,
+    validOcclusion = "top-left",
+    diagnostic
+  }) => {
     const scene = [];
     const addPoint = (x, y, strength = 1) => scene.push({ x, y, strength });
 
-    const addPerspectiveFrame = (frame, strength, slope, skip = () => false) => {
+    const addPerspectiveFrame = (frame, strength, slope, taper = 0, skip = () => false) => {
       const height = frame.bottom - frame.top;
       const drift = Math.abs(slope);
       for (let y = frame.top; y <= frame.bottom; y += 1) {
-        const shift = Math.floor(((y - frame.top) / height) * drift) * Math.sign(slope);
-        const leftX = frame.left + shift;
-        const rightX = frame.right + shift;
+        const progress = (y - frame.top) / height;
+        const shift = Math.floor(progress * drift) * Math.sign(slope);
+        const inset = Math.round(progress * taper);
+        const leftX = frame.left + shift + inset;
+        const rightX = frame.right + shift - inset;
         if (!skip(leftX, y, "left")) addPoint(leftX, y, strength);
         if (!skip(rightX, y, "right")) addPoint(rightX, y, strength);
       }
@@ -34,17 +45,19 @@ try {
         const progress = (x - frame.left) / (frame.right - frame.left);
         const edgeShift = Math.round(progress * drift) * Math.sign(slope);
         if (!skip(x, frame.top + Math.round(progress), "top")) addPoint(x, frame.top + Math.round(progress), strength);
+        const bottomInset = Math.round(taper * Math.min(progress, 1 - progress) * 2);
         if (!skip(x + edgeShift, frame.bottom + Math.round(progress), "bottom")) {
-          addPoint(x + edgeShift, frame.bottom + Math.round(progress), strength);
+          addPoint(x + edgeShift + Math.sign(0.5 - progress) * bottomInset, frame.bottom + Math.round(progress), strength);
         }
       }
     };
 
-    addPerspectiveFrame(valid, 0.58, validSlope, (x, y, edge) =>
-      (edge === "top" && x <= valid.left + 6) ||
-      (edge === "left" && y <= valid.top + 8)
-    );
-    addPerspectiveFrame(open, 0.55, openSlope, (x, y, edge) =>
+    const validSkip = (x, y, edge) => validOcclusion === "lower-right"
+      ? (edge === "bottom" && x >= valid.right - 8) || (edge === "right" && y >= valid.bottom - 10)
+      : (edge === "top" && x <= valid.left + 6) || (edge === "left" && y <= valid.top + 8);
+
+    addPerspectiveFrame(valid, 0.58, validSlope, validTaper, validSkip);
+    addPerspectiveFrame(open, 0.55, openSlope, 0, (x, y, edge) =>
       (edge === "top" && x <= open.left + 13) ||
       (edge === "left" && y <= open.top + 22)
     );
@@ -70,9 +83,9 @@ try {
       gridResolution: 80, minDensityThreshold: 1, minSizePercent: 5, maxSizePercent: 70
     });
     const matches = (candidate, expected) =>
-      candidate.x >= expected.left - 5 && candidate.x <= expected.left + 5 &&
+      candidate.x >= expected.left - 5 && candidate.x <= expected.left + 7 &&
       candidate.y >= expected.top - 3 && candidate.y <= expected.top + 4 &&
-      candidate.width >= expected.right - expected.left - 3 && candidate.width <= expected.right - expected.left + 10 &&
+      candidate.width >= expected.right - expected.left - 7 && candidate.width <= expected.right - expected.left + 12 &&
       candidate.height >= expected.bottom - expected.top - 3 && candidate.height <= expected.bottom - expected.top + 6;
 
     const validCandidate = candidates.find((candidate) => matches(candidate, valid));
@@ -119,7 +132,18 @@ try {
     diagnostic: "unequal-height-asymmetric-perspective-diagnostic.json"
   });
 
-  console.log("Adjacent perspective valid/open smoke passed: real skewed openings survived while matching, opposing-slope, and unequal-height incomplete neighbors stayed rejected without merged masks.");
+  await runCase({
+    name: "Keystone perspective with lower-corner occlusion",
+    valid: { left: 14, right: 39, top: 8, bottom: 58 },
+    open: { left: 41, right: 64, top: 17, bottom: 50 },
+    validSlope: 4,
+    openSlope: -2,
+    validTaper: 3,
+    validOcclusion: "lower-right",
+    diagnostic: "keystone-lower-corner-occlusion-diagnostic.json"
+  });
+
+  console.log("Adjacent perspective valid/open smoke passed: real skewed openings survived matching, opposing-slope, unequal-height, and keystone lower-corner occlusion cases while incomplete neighbors stayed rejected without merged masks.");
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
