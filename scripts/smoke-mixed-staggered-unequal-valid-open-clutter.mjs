@@ -33,18 +33,23 @@ try {
     }
   };
 
-  const addPerspectiveFrame = (frame, strength) => {
+  const addPerspectiveFrame = (frame, strength, skip = () => false) => {
     const height = frame.bottom - frame.top;
     for (let y = frame.top; y <= frame.bottom; y += 1) {
       const shift = Math.floor(((y - frame.top) / height) * 3);
-      addPoint(frame.left + shift, y, strength);
-      addPoint(frame.right + shift, y, strength);
+      const leftX = frame.left + shift;
+      const rightX = frame.right + shift;
+      if (!skip(leftX, y, "left")) addPoint(leftX, y, strength);
+      if (!skip(rightX, y, "right")) addPoint(rightX, y, strength);
     }
     for (let x = frame.left; x <= frame.right; x += 1) {
-      const topOffset = Math.round(((x - frame.left) / (frame.right - frame.left)) * 1);
-      const bottomOffset = Math.round(((x - frame.left) / (frame.right - frame.left)) * 1);
-      addPoint(x, frame.top + topOffset, strength);
-      addPoint(x + 3, frame.bottom + bottomOffset, strength);
+      const topOffset = Math.round((x - frame.left) / (frame.right - frame.left));
+      const bottomOffset = Math.round((x - frame.left) / (frame.right - frame.left));
+      const topY = frame.top + topOffset;
+      const bottomX = x + 3;
+      const bottomY = frame.bottom + bottomOffset;
+      if (!skip(x, topY, "top")) addPoint(x, topY, strength);
+      if (!skip(bottomX, bottomY, "bottom")) addPoint(bottomX, bottomY, strength);
     }
   };
 
@@ -57,10 +62,14 @@ try {
     (y === midOpen.top && x <= midOpen.left + 13) ||
     (x === midOpen.left && y <= midOpen.top + 22)
   );
-  addPerspectiveFrame(perspectiveValid, 0.58);
+  addPerspectiveFrame(perspectiveValid, 0.58, (x, y, edge) =>
+    (edge === "top" && x <= perspectiveValid.left + 6) ||
+    (edge === "left" && y <= perspectiveValid.top + 8)
+  );
 
-  // Shared diagonal clutter crosses all outlines and both one-cell gaps. Because the
-  // openings occupy different vertical bands, closure evidence must remain local.
+  // Shared diagonal clutter crosses all outlines and both one-cell gaps. It also
+  // crosses the missing perspective corner, so the detector must reconstruct the
+  // angled architectural perimeter without borrowing closure from the obstruction.
   for (let offset = 0; offset <= 84; offset += 1) {
     const x = 4 + offset;
     const y = 18 + Math.floor(offset * 0.31);
@@ -103,7 +112,7 @@ try {
     process.exit(1);
   }
 
-  console.log("Mixed staggered unequal smoke passed: real openings survived at different heights, a perspective-skewed frame remained detectable, the matching open fragment stayed rejected, and shared clutter produced no merged mask.");
+  console.log("Mixed staggered unequal smoke passed: real openings survived at different heights, a perspective-skewed frame with an obscured corner remained detectable, the matching open fragment stayed rejected, and shared clutter produced no merged mask.");
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
