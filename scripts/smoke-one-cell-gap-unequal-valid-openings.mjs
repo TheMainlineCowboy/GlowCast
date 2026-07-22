@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 const detectorPath = "src/core/architecturalDetector.ts";
-const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-one-cell-gap-two-valid-openings-"));
+const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-one-cell-gap-unequal-valid-openings-"));
 const tempPath = path.join(tempDir, "core", "architecturalDetector.js");
 
 execFileSync(
@@ -32,38 +32,38 @@ try {
   const scene = [];
   const addPoint = (x, y, strength = 1) => scene.push({ x, y, strength });
 
-  const leftOpening = { left: 12, right: 30, top: 17, bottom: 53 };
-  const rightOpening = { left: 32, right: 50, top: 17, bottom: 53 };
-  const weakStrength = 0.62;
+  const tallNarrowOpening = { left: 12, right: 27, top: 16, bottom: 55 };
+  const wideRaisedOpening = { left: 29, right: 52, top: 12, bottom: 47 };
 
-  const addWeakFrame = (frame) => {
+  const addFrame = (frame, strength) => {
     for (let x = frame.left; x <= frame.right; x += 1) {
-      addPoint(x, frame.top, weakStrength);
-      addPoint(x, frame.bottom, weakStrength);
+      addPoint(x, frame.top, strength);
+      addPoint(x, frame.bottom, strength);
     }
     for (let y = frame.top; y <= frame.bottom; y += 1) {
-      addPoint(frame.left, y, weakStrength);
-      addPoint(frame.right, y, weakStrength);
+      addPoint(frame.left, y, strength);
+      addPoint(frame.right, y, strength);
     }
   };
 
-  // Two legitimate weak windows separated by only one empty grid column.
-  addWeakFrame(leftOpening);
-  addWeakFrame(rightOpening);
+  // Two legitimate windows with different widths, heights, header levels, sill levels,
+  // and edge strengths, separated by only one empty grid column.
+  addFrame(tallNarrowOpening, 0.61);
+  addFrame(wideRaisedOpening, 0.68);
 
-  // Shared foreground clutter crosses both openings and occupies the sole gap column.
-  // It must not collapse the two valid frames into one broad automatic mask.
-  for (let offset = 0; offset <= 49; offset += 1) {
+  // Foreground clutter crosses both frames and fills the sole gap column. The detector
+  // must preserve each frame's independent geometry instead of forcing a uniform merge.
+  for (let offset = 0; offset <= 50; offset += 1) {
     const x = 8 + offset;
-    const y = 21 + Math.floor(offset * 0.31);
+    const y = 20 + Math.floor(offset * 0.3);
     for (let thickness = -2; thickness <= 2; thickness += 1) addPoint(x, y + thickness, 0.34);
   }
-  for (let offset = 0; offset <= 42; offset += 1) {
+  for (let offset = 0; offset <= 43; offset += 1) {
     const x = 12 + offset;
-    const y = 47 - Math.floor(offset * 0.28);
+    const y = 49 - Math.floor(offset * 0.3);
     for (let thickness = -1; thickness <= 1; thickness += 1) addPoint(x, y + thickness, 0.32);
   }
-  for (let y = 24; y <= 41; y += 1) addPoint(31, y, 0.31);
+  for (let y = 22; y <= 42; y += 1) addPoint(28, y, 0.31);
 
   const candidates = detectArchitecturalCandidates(scene, {
     gridResolution: 100,
@@ -82,32 +82,30 @@ try {
     candidate.height >= expected.bottom - expected.top - 3 &&
     candidate.height <= expected.bottom - expected.top + 5;
 
-  const leftCandidate = candidates.find((candidate) => matches(candidate, leftOpening));
-  const rightCandidate = candidates.find((candidate) => matches(candidate, rightOpening));
+  const tallCandidate = candidates.find((candidate) => matches(candidate, tallNarrowOpening));
+  const wideCandidate = candidates.find((candidate) => matches(candidate, wideRaisedOpening));
   const mergedOpening = candidates.find(
     (candidate) =>
-      candidate.x <= leftOpening.left + 3 &&
-      candidate.x + candidate.width >= rightOpening.right - 3 &&
-      candidate.y <= leftOpening.top + 3 &&
-      candidate.y + candidate.height >= leftOpening.bottom - 3
+      candidate.x <= tallNarrowOpening.left + 3 &&
+      candidate.x + candidate.width >= wideRaisedOpening.right - 3 &&
+      candidate.y <= wideRaisedOpening.top + 3 &&
+      candidate.y + candidate.height >= tallNarrowOpening.bottom - 3
   );
 
-  if (!leftCandidate || !rightCandidate || mergedOpening) {
-    const failure = { leftCandidate, rightCandidate, mergedOpening, candidates };
+  if (!tallCandidate || !wideCandidate || mergedOpening) {
+    const failure = { tallCandidate, wideCandidate, mergedOpening, candidates };
     await fs.writeFile(
-      "one-cell-gap-two-valid-openings-diagnostic.json",
+      "one-cell-gap-unequal-valid-openings-diagnostic.json",
       `${JSON.stringify(failure, null, 2)}\n`
     );
-    console.error("One-cell-gap two-valid-openings regression failed.");
+    console.error("One-cell-gap unequal-valid-openings regression failed.");
     console.error(JSON.stringify(failure));
     process.exit(1);
   }
 
   console.log(
-    "One-cell-gap two-valid-openings smoke passed: both tightly spaced architectural frames survived as distinct candidates and no broad mask crossed the shared clutter."
+    "One-cell-gap unequal-valid-openings smoke passed: both differently sized and vertically offset frames survived independently, and no broad mask crossed the shared clutter."
   );
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
-
-await import("./smoke-one-cell-gap-unequal-valid-openings.mjs");
