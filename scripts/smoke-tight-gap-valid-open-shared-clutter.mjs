@@ -112,3 +112,5 @@ try {
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
+
+await import("./smoke-one-cell-gap-valid-open-shared-clutter.mjs");
