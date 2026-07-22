@@ -20,6 +20,7 @@ try {
   const lowValid = { left: 8, right: 22, top: 25, bottom: 61 };
   const highOccluded = { left: 24, right: 44, top: 10, bottom: 43 };
   const midOpen = { left: 46, right: 66, top: 18, bottom: 53 };
+  const perspectiveValid = { left: 70, right: 86, top: 12, bottom: 47 };
 
   const addFrame = (frame, strength, skip = () => false) => {
     for (let x = frame.left; x <= frame.right; x += 1) {
@@ -32,6 +33,21 @@ try {
     }
   };
 
+  const addPerspectiveFrame = (frame, strength) => {
+    const height = frame.bottom - frame.top;
+    for (let y = frame.top; y <= frame.bottom; y += 1) {
+      const shift = Math.floor(((y - frame.top) / height) * 3);
+      addPoint(frame.left + shift, y, strength);
+      addPoint(frame.right + shift, y, strength);
+    }
+    for (let x = frame.left; x <= frame.right; x += 1) {
+      const topOffset = Math.round(((x - frame.left) / (frame.right - frame.left)) * 1);
+      const bottomOffset = Math.round(((x - frame.left) / (frame.right - frame.left)) * 1);
+      addPoint(x, frame.top + topOffset, strength);
+      addPoint(x + 3, frame.bottom + bottomOffset, strength);
+    }
+  };
+
   addFrame(lowValid, 0.64);
   addFrame(highOccluded, 0.55, (x, y) =>
     (y === highOccluded.top && x <= highOccluded.left + 7) ||
@@ -41,15 +57,16 @@ try {
     (y === midOpen.top && x <= midOpen.left + 13) ||
     (x === midOpen.left && y <= midOpen.top + 22)
   );
+  addPerspectiveFrame(perspectiveValid, 0.58);
 
   // Shared diagonal clutter crosses all outlines and both one-cell gaps. Because the
   // openings occupy different vertical bands, closure evidence must remain local.
-  for (let offset = 0; offset <= 66; offset += 1) {
+  for (let offset = 0; offset <= 84; offset += 1) {
     const x = 4 + offset;
     const y = 18 + Math.floor(offset * 0.31);
     for (let thickness = -2; thickness <= 2; thickness += 1) addPoint(x, y + thickness, 0.33);
   }
-  for (let offset = 0; offset <= 58; offset += 1) {
+  for (let offset = 0; offset <= 78; offset += 1) {
     const x = 8 + offset;
     const y = 54 - Math.floor(offset * 0.29);
     for (let thickness = -1; thickness <= 1; thickness += 1) addPoint(x, y + thickness, 0.31);
@@ -57,34 +74,36 @@ try {
   for (let y = 20; y <= 45; y += 1) {
     addPoint(23, y, 0.3);
     addPoint(45, y, 0.3);
+    addPoint(68, y, 0.3);
   }
 
   const candidates = detectArchitecturalCandidates(scene, {
     gridResolution: 100, minDensityThreshold: 1, minSizePercent: 5, maxSizePercent: 70
   });
   const matches = (candidate, expected) =>
-    candidate.x >= expected.left - 2 && candidate.x <= expected.left + 3 &&
+    candidate.x >= expected.left - 2 && candidate.x <= expected.left + 4 &&
     candidate.y >= expected.top - 3 && candidate.y <= expected.top + 4 &&
-    candidate.width >= expected.right - expected.left - 2 && candidate.width <= expected.right - expected.left + 5 &&
-    candidate.height >= expected.bottom - expected.top - 3 && candidate.height <= expected.bottom - expected.top + 5;
+    candidate.width >= expected.right - expected.left - 2 && candidate.width <= expected.right - expected.left + 8 &&
+    candidate.height >= expected.bottom - expected.top - 3 && candidate.height <= expected.bottom - expected.top + 6;
 
   const lowCandidate = candidates.find((candidate) => matches(candidate, lowValid));
   const highCandidate = candidates.find((candidate) => matches(candidate, highOccluded));
+  const perspectiveCandidate = candidates.find((candidate) => matches(candidate, perspectiveValid));
   const falseOpening = candidates.find((candidate) => matches(candidate, midOpen));
   const mergedOpening = candidates.find((candidate) =>
     candidate.x <= lowValid.left + 3 && candidate.x + candidate.width >= midOpen.right - 3 &&
     candidate.y <= highOccluded.top + 3 && candidate.y + candidate.height >= lowValid.bottom - 3
   );
 
-  if (!lowCandidate || !highCandidate || falseOpening || mergedOpening) {
-    const failure = { lowCandidate, highCandidate, falseOpening, mergedOpening, candidates };
+  if (!lowCandidate || !highCandidate || !perspectiveCandidate || falseOpening || mergedOpening) {
+    const failure = { lowCandidate, highCandidate, perspectiveCandidate, falseOpening, mergedOpening, candidates };
     await fs.writeFile("mixed-staggered-unequal-valid-open-clutter-diagnostic.json", `${JSON.stringify(failure, null, 2)}\n`);
     console.error("Mixed staggered unequal valid/open regression failed.");
     console.error(JSON.stringify(failure));
     process.exit(1);
   }
 
-  console.log("Mixed staggered unequal smoke passed: both real openings survived at different heights, the matching open fragment stayed rejected, and shared clutter produced no merged mask.");
+  console.log("Mixed staggered unequal smoke passed: real openings survived at different heights, a perspective-skewed frame remained detectable, the matching open fragment stayed rejected, and shared clutter produced no merged mask.");
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
