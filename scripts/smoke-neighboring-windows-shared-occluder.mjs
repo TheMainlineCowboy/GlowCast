@@ -167,8 +167,42 @@ try {
     }
   });
 
+  await runCase({
+    name: "three uneven-strength windows crossed by intersecting foreground clutter",
+    windows: [
+      { left: 7, right: 23, top: 13, bottom: 49, strength: 0.93, hiddenSide: "right", hiddenSideStart: 22, hiddenSideEnd: 37 },
+      { left: 29, right: 45, top: 16, bottom: 51, strength: 0.64, hiddenSide: "left", hiddenSideStart: 24, hiddenSideEnd: 40 },
+      { left: 51, right: 69, top: 12, bottom: 47, strength: 0.81, hiddenSide: "left", hiddenSideStart: 20, hiddenSideEnd: 35 }
+    ],
+    addOccluder: (addPoint) => {
+      // Two foreground elements cross each other over the row and pass through both gaps.
+      // The low-contrast middle opening must survive without any broad merged candidate.
+      for (let offset = 0; offset <= 68; offset += 1) {
+        const x = 4 + offset;
+        const y = 20 + Math.floor(offset * 0.24);
+        for (let thickness = -2; thickness <= 2; thickness += 1) {
+          addPoint(x, y + thickness, 0.36);
+        }
+      }
+      for (let offset = 0; offset <= 54; offset += 1) {
+        const x = 12 + offset;
+        const y = 43 - Math.floor(offset * 0.3);
+        for (let thickness = -1; thickness <= 1; thickness += 1) {
+          addPoint(x, y + thickness, 0.34);
+        }
+      }
+      for (const [gapLeft, gapRight] of [[24, 28], [46, 50]]) {
+        for (let y = 24; y <= 40; y += 1) {
+          for (let x = gapLeft; x <= gapRight; x += 1) {
+            addPoint(x, y, 0.33);
+          }
+        }
+      }
+    }
+  });
+
   console.log(
-    "Neighboring-window shared-occluder smoke test passed: two- and three-opening scenes remained distinct, weaker frames survived, and foreground clutter crossing narrow gaps was not mistaken for architectural mullions."
+    "Neighboring-window shared-occluder smoke test passed: two- and three-opening scenes remained distinct, weaker frames survived, and one or two foreground obstructions crossing narrow gaps were not mistaken for architectural mullions."
   );
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
