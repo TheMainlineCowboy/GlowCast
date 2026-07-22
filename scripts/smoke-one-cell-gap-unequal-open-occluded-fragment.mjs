@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 const detectorPath = "src/core/architecturalDetector.ts";
-const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-one-cell-gap-unequal-occluded-opening-"));
+const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "glowcast-one-cell-gap-unequal-open-occluded-fragment-"));
 const tempPath = path.join(tempDir, "core", "architecturalDetector.js");
 
 execFileSync(
@@ -33,7 +33,7 @@ try {
   const addPoint = (x, y, strength = 1) => scene.push({ x, y, strength });
 
   const tallNarrowOpening = { left: 12, right: 27, top: 16, bottom: 55 };
-  const wideRaisedOpening = { left: 29, right: 52, top: 12, bottom: 47 };
+  const weakOpenFragment = { left: 29, right: 52, top: 12, bottom: 47 };
 
   const addFrame = (frame, strength, shouldSkip = () => false) => {
     for (let x = frame.left; x <= frame.right; x += 1) {
@@ -48,18 +48,19 @@ try {
 
   addFrame(tallNarrowOpening, 0.64);
 
-  // The wider, raised opening is weaker and has independently hidden sections along
-  // its top and left edges near the corner. It must remain a coherent opening.
+  // Negative companion to the valid corner-occluded opening: this similarly sized,
+  // similarly weak neighbor is genuinely open along most of its top-left perimeter.
+  // Shared foreground clutter must not be borrowed as replacement frame evidence.
   addFrame(
-    wideRaisedOpening,
+    weakOpenFragment,
     0.56,
     (x, y) =>
-      (y === wideRaisedOpening.top && x >= wideRaisedOpening.left && x <= wideRaisedOpening.left + 6) ||
-      (x === wideRaisedOpening.left && y >= wideRaisedOpening.top && y <= wideRaisedOpening.top + 8)
+      (y === weakOpenFragment.top && x >= weakOpenFragment.left && x <= weakOpenFragment.left + 12) ||
+      (x === weakOpenFragment.left && y >= weakOpenFragment.top && y <= weakOpenFragment.top + 20)
   );
 
-  // Two foreground obstructions cross both windows and occupy the sole gap column.
-  // Their weaker evidence may bridge hidden pixels but must not merge the openings.
+  // Match the positive case: two crossing obstructions plus evidence in the sole gap
+  // column. They may cross the outlines, but must not close the incomplete neighbor.
   for (let offset = 0; offset <= 50; offset += 1) {
     const x = 8 + offset;
     const y = 20 + Math.floor(offset * 0.3);
@@ -90,31 +91,29 @@ try {
     candidate.height <= expected.bottom - expected.top + 5;
 
   const tallCandidate = candidates.find((candidate) => matches(candidate, tallNarrowOpening));
-  const occludedWideCandidate = candidates.find((candidate) => matches(candidate, wideRaisedOpening));
+  const falseOpening = candidates.find((candidate) => matches(candidate, weakOpenFragment));
   const mergedOpening = candidates.find(
     (candidate) =>
       candidate.x <= tallNarrowOpening.left + 3 &&
-      candidate.x + candidate.width >= wideRaisedOpening.right - 3 &&
-      candidate.y <= wideRaisedOpening.top + 3 &&
+      candidate.x + candidate.width >= weakOpenFragment.right - 3 &&
+      candidate.y <= weakOpenFragment.top + 3 &&
       candidate.y + candidate.height >= tallNarrowOpening.bottom - 3
   );
 
-  if (!tallCandidate || !occludedWideCandidate || mergedOpening) {
-    const failure = { tallCandidate, occludedWideCandidate, mergedOpening, candidates };
+  if (!tallCandidate || falseOpening || mergedOpening) {
+    const failure = { tallCandidate, falseOpening, mergedOpening, candidates };
     await fs.writeFile(
-      "one-cell-gap-unequal-occluded-opening-diagnostic.json",
+      "one-cell-gap-unequal-open-occluded-fragment-diagnostic.json",
       `${JSON.stringify(failure, null, 2)}\n`
     );
-    console.error("One-cell-gap unequal occluded-opening regression failed.");
+    console.error("One-cell-gap unequal open-fragment regression failed.");
     console.error(JSON.stringify(failure));
     process.exit(1);
   }
 
   console.log(
-    "One-cell-gap unequal occluded-opening smoke passed: the weaker corner-occluded opening survived beside the taller frame, and no broad mask crossed the shared clutter."
+    "One-cell-gap unequal open-fragment smoke passed: the valid tall opening survived, the weak incomplete neighbor stayed rejected, and shared clutter created no merged mask."
   );
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
-
-await import("./smoke-one-cell-gap-unequal-open-occluded-fragment.mjs");
