@@ -109,3 +109,5 @@ try {
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
+
+await import("./smoke-one-cell-gap-unequal-valid-openings.mjs");
