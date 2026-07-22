@@ -62,9 +62,22 @@ try {
     const scene = [];
     const addPoint = (x, y, strength = 1) => scene.push({ x, y, strength });
 
-    for (const { left, right, top, bottom, strength, hiddenSide, hiddenSideStart, hiddenSideEnd } of windows) {
+    for (const {
+      left,
+      right,
+      top,
+      bottom,
+      strength,
+      hiddenSide,
+      hiddenSideStart,
+      hiddenSideEnd,
+      hiddenTopStart,
+      hiddenTopEnd
+    } of windows) {
       for (let x = left; x <= right; x += 1) {
-        addPoint(x, top, strength);
+        if (hiddenTopStart === undefined || hiddenTopEnd === undefined || x < hiddenTopStart || x > hiddenTopEnd) {
+          addPoint(x, top, strength);
+        }
         addPoint(x, bottom, strength);
       }
       for (let y = top; y <= bottom; y += 1) {
@@ -123,8 +136,6 @@ try {
       { left: 35, right: 53, top: 14, bottom: 48, strength: 0.84, hiddenSide: "left", hiddenSideStart: 25, hiddenSideEnd: 35 }
     ],
     addOccluder: (addPoint) => {
-      // This thick foreground element crosses both windows and fills the narrow gap
-      // between them. It must not be treated as a shared architectural mullion.
       for (let offset = 0; offset <= 50; offset += 1) {
         const x = 8 + offset;
         const y = 22 + Math.floor(offset * 0.24);
@@ -148,8 +159,6 @@ try {
       { left: 52, right: 68, top: 13, bottom: 47, strength: 0.87, hiddenSide: "left", hiddenSideStart: 24, hiddenSideEnd: 33 }
     ],
     addOccluder: (addPoint) => {
-      // One continuous foreground railing crosses all three openings and both gaps.
-      // The weaker middle frame must remain detectable, and the row must not merge.
       for (let offset = 0; offset <= 66; offset += 1) {
         const x = 5 + offset;
         const y = 22 + Math.floor(offset * 0.2);
@@ -175,8 +184,6 @@ try {
       { left: 51, right: 69, top: 12, bottom: 47, strength: 0.81, hiddenSide: "left", hiddenSideStart: 20, hiddenSideEnd: 35 }
     ],
     addOccluder: (addPoint) => {
-      // Two foreground elements cross each other over the row and pass through both gaps.
-      // The low-contrast middle opening must survive without any broad merged candidate.
       for (let offset = 0; offset <= 68; offset += 1) {
         const x = 4 + offset;
         const y = 20 + Math.floor(offset * 0.24);
@@ -201,8 +208,53 @@ try {
     }
   });
 
+  await runCase({
+    name: "weak middle window with corner occlusion crossed by both obstructions",
+    windows: [
+      { left: 7, right: 23, top: 13, bottom: 49, strength: 0.92, hiddenSide: "right", hiddenSideStart: 22, hiddenSideEnd: 37 },
+      {
+        left: 29,
+        right: 45,
+        top: 16,
+        bottom: 51,
+        strength: 0.62,
+        hiddenSide: "left",
+        hiddenSideStart: 16,
+        hiddenSideEnd: 29,
+        hiddenTopStart: 29,
+        hiddenTopEnd: 36
+      },
+      { left: 51, right: 69, top: 12, bottom: 47, strength: 0.8, hiddenSide: "left", hiddenSideStart: 20, hiddenSideEnd: 35 }
+    ],
+    addOccluder: (addPoint) => {
+      // Both foreground elements pass over the weak middle frame's partly hidden
+      // top-left corner. The detector must reconstruct that opening without merging the row.
+      for (let offset = 0; offset <= 68; offset += 1) {
+        const x = 4 + offset;
+        const y = 18 + Math.floor(offset * 0.25);
+        for (let thickness = -2; thickness <= 2; thickness += 1) {
+          addPoint(x, y + thickness, 0.35);
+        }
+      }
+      for (let offset = 0; offset <= 54; offset += 1) {
+        const x = 12 + offset;
+        const y = 42 - Math.floor(offset * 0.31);
+        for (let thickness = -1; thickness <= 1; thickness += 1) {
+          addPoint(x, y + thickness, 0.33);
+        }
+      }
+      for (const [gapLeft, gapRight] of [[24, 28], [46, 50]]) {
+        for (let y = 23; y <= 40; y += 1) {
+          for (let x = gapLeft; x <= gapRight; x += 1) {
+            addPoint(x, y, 0.32);
+          }
+        }
+      }
+    }
+  });
+
   console.log(
-    "Neighboring-window shared-occluder smoke test passed: two- and three-opening scenes remained distinct, weaker frames survived, and one or two foreground obstructions crossing narrow gaps were not mistaken for architectural mullions."
+    "Neighboring-window shared-occluder smoke test passed: two- and three-opening scenes remained distinct, weaker and corner-occluded frames survived, and intersecting foreground clutter was not mistaken for architectural mullions."
   );
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
