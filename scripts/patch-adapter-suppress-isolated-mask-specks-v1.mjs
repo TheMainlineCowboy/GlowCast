@@ -43,14 +43,25 @@ const helper = `function suppressIsolatedMaskSpecks(candidates: MaskCandidateOut
 
 source = source.slice(0, cleanStart) + helper + source.slice(cleanStart);
 
-const returnAnchor = "  return candidates.map((candidate) => ({\n    ...candidate,\n    points: cleanMaskOutline(candidate.points, candidate.box, bounds)\n  }));";
-const replacement = "  const cleaned = candidates.map((candidate) => ({\n    ...candidate,\n    points: cleanMaskOutline(candidate.points, candidate.box, bounds)\n  }));\n  return suppressIsolatedMaskSpecks(cleaned, bounds);";
+const buildStart = source.indexOf("export function buildMaskCandidatesFromEdges(");
+if (buildStart < 0) throw new Error("Unable to locate mask candidate builder");
 
-if (!source.includes(returnAnchor)) {
-  throw new Error("Unable to locate cleaned mask candidate return pipeline");
+const buildSource = source.slice(buildStart);
+const returnMatches = [...buildSource.matchAll(/^  return (.+);$/gm)];
+const finalReturn = returnMatches.at(-1);
+if (!finalReturn || finalReturn.index === undefined) {
+  throw new Error("Unable to locate final cleaned mask candidate return pipeline");
 }
 
-source = source.replace(returnAnchor, replacement);
+const returnExpression = finalReturn[1];
+if (!returnExpression.includes("cleanMaskCandidateOutlines(")) {
+  throw new Error("Expected outline cleanup to wrap the final mask candidate pipeline");
+}
+
+const absoluteReturnStart = buildStart + finalReturn.index;
+const originalReturn = finalReturn[0];
+const filteredReturn = `  return suppressIsolatedMaskSpecks(${returnExpression}, bounds);`;
+source = source.slice(0, absoluteReturnStart) + filteredReturn + source.slice(absoluteReturnStart + originalReturn.length);
 
 await fs.writeFile(adapterPath, source);
 console.log("applied isolated automatic-mask speck suppression");
