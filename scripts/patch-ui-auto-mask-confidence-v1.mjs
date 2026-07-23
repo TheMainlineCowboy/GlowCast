@@ -40,13 +40,13 @@ source = source.replace(
   `$1\n  const selectedAutoMaskConfidence = getAutoMaskConfidence(selectedZone, projectionArea);`
 );
 
-const headingPattern = /(\s*<strong>\s*\{selectedTarget\s*===\s*["']surface["']\s*\?\s*["']Projection Surface["']\s*:\s*`Zone \$\{zones\.findIndex\(\(zone\) => zone\.id === selectedZoneId\) \+ 1\}`\}\s*<\/strong>)/m;
-if (!headingPattern.test(source)) {
-  throw new Error("Unable to locate zone editor heading for confidence categories.");
+const statusAnchor = " · Best candidates first";
+if (!source.includes(statusAnchor)) {
+  throw new Error("Unable to locate automatic-mask review status for confidence categories.");
 }
 source = source.replace(
-  headingPattern,
-  `$1\n              {selectedAutoMaskConfidence && (\n                <small className={\`autoMaskConfidence confidence\${selectedAutoMaskConfidence}\`}>\n                  Auto mask confidence: {selectedAutoMaskConfidence}\n                </small>\n              )}`
+  statusAnchor,
+  ` · Best candidates first{selectedAutoMaskConfidence && <> · Auto mask confidence: {selectedAutoMaskConfidence}</>}`
 );
 
 await fs.writeFile(path, source);
