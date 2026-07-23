@@ -50,30 +50,34 @@ try {
   addFrame(rightValid, 0.55, -4, 3, (x, y, edge) =>
     (edge === "left" && y >= 24 && y <= 37) || (edge === "top" && x <= 55));
 
-  // Dense interior trim makes the incomplete center silhouette visually richer than
-  // either valid outer frame. These sash- and muntin-like details must not be
-  // mistaken for a coherent exterior architectural perimeter.
-  for (let y = 22; y <= 53; y += 1) {
-    addPoint(38 - Math.round((y - 22) * 0.04), y, 0.84);
-    addPoint(44 - Math.round((y - 22) * 0.05), y, 0.8);
+  // The incomplete center silhouette uses a visually strong diagonal brace plus
+  // offset sash bars. Its interior pattern intentionally does not match either
+  // valid window, so pattern complexity cannot substitute for outer closure.
+  for (let y = 21; y <= 54; y += 1) {
+    addPoint(35 + Math.round((y - 21) * 0.38), y, 0.86);
+    addPoint(45 - Math.round((y - 21) * 0.2), y, 0.81);
   }
-  for (let x = 31; x <= 48; x += 1) {
-    addPoint(x, 31 + Math.round((x - 31) * 0.08), 0.82);
-    addPoint(x, 45 - Math.round((x - 31) * 0.06), 0.78);
+  for (let x = 31; x <= 49; x += 1) {
+    addPoint(x, 29 + Math.round((x - 31) * 0.1), 0.83);
+    addPoint(x, 47 - Math.round((x - 31) * 0.08), 0.79);
   }
 
-  // Real windows can also contain dense trim. Give both coherent outer frames
-  // their own sash and muntin detail so the detector must judge exterior closure,
-  // not merely the presence or absence of interior edge complexity.
+  // Give each coherent outer frame a distinctly different real-world sash layout:
+  // the left uses an asymmetric two-over-one arrangement, while the right uses a
+  // single offset vertical divider and a high transom. The detector must preserve
+  // both despite their mismatched interiors and reject the richer open center.
   for (let y = 17; y <= 50; y += 1) {
-    addPoint(19 + Math.round((y - 17) * 0.1), y, 0.68);
-    addPoint(60 - Math.round((y - 17) * 0.08), y, 0.66);
+    addPoint(18 + Math.round((y - 17) * 0.11), y, 0.68);
+    if (y <= 33) addPoint(24 + Math.round((y - 17) * 0.07), y, 0.64);
   }
-  for (let x = 12; x <= 27; x += 1) {
-    addPoint(x, 32 + Math.round((x - 12) * 0.12), 0.64);
+  for (let x = 12; x <= 28; x += 1) {
+    addPoint(x, 31 + Math.round((x - 12) * 0.12), 0.65);
   }
-  for (let x = 53; x <= 67; x += 1) {
-    addPoint(x, 34 - Math.round((x - 53) * 0.1), 0.63);
+  for (let y = 16; y <= 49; y += 1) {
+    addPoint(62 - Math.round((y - 16) * 0.09), y, 0.67);
+  }
+  for (let x = 53; x <= 68; x += 1) {
+    addPoint(x, 25 - Math.round((x - 53) * 0.06), 0.65);
   }
 
   for (let offset = 0; offset <= 63; offset += 1) {
@@ -111,7 +115,7 @@ try {
     process.exit(1);
   }
 
-  console.log("Strong open-center perspective smoke passed: coherent trimmed outer frames survived while the visually stronger incomplete center silhouette, dense interior trim, and broad merged masks stayed rejected.");
+  console.log("Strong open-center perspective smoke passed: coherent windows with mismatched sash layouts survived while the stronger incomplete center silhouette, unrelated interior detail, and broad merged masks stayed rejected.");
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
