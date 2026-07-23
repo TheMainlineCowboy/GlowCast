@@ -1,5 +1,8 @@
 import fs from "node:fs/promises";
 
+await import("./patch-adapter-clean-mask-outlines-v1.mjs");
+await import("./patch-adapter-suppress-isolated-mask-specks-v1.mjs");
+
 const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
