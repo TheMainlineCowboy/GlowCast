@@ -77,6 +77,8 @@ await runPatch("./smoke-ui-overlap-review-keyboard-navigation-source.mjs", { req
 await runPatch("./patch-ui-auto-mask-review-progress-v1.mjs", { required: true });
 await runPatch("./patch-ui-best-candidates-first-indicator-v1.mjs", { required: true });
 await runPatch("./smoke-ui-best-candidates-first-indicator-source.mjs", { required: true });
+await runPatch("./patch-ui-auto-mask-confidence-v1.mjs", { required: true });
+await runPatch("./smoke-ui-auto-mask-confidence-source.mjs", { required: true });
 await runPatch("./patch-ui-auto-mask-review-state-v1.mjs", { required: true });
 await runPatch("./patch-ui-auto-mask-cap-warning-v1.mjs", { required: true });
 await runPatch("./smoke-ui-auto-mask-cap-warning-source.mjs", { required: true });
