@@ -50,6 +50,18 @@ try {
   addFrame(rightValid, 0.55, -4, 3, (x, y, edge) =>
     (edge === "left" && y >= 24 && y <= 37) || (edge === "top" && x <= 55));
 
+  // Dense interior trim makes the incomplete center silhouette visually richer than
+  // either valid outer frame. These sash- and muntin-like details must not be
+  // mistaken for a coherent exterior architectural perimeter.
+  for (let y = 22; y <= 53; y += 1) {
+    addPoint(38 - Math.round((y - 22) * 0.04), y, 0.84);
+    addPoint(44 - Math.round((y - 22) * 0.05), y, 0.8);
+  }
+  for (let x = 31; x <= 48; x += 1) {
+    addPoint(x, 31 + Math.round((x - 31) * 0.08), 0.82);
+    addPoint(x, 45 - Math.round((x - 31) * 0.06), 0.78);
+  }
+
   for (let offset = 0; offset <= 63; offset += 1) {
     const x = 7 + offset;
     const y = 20 + Math.floor(offset * 0.28);
@@ -85,7 +97,7 @@ try {
     process.exit(1);
   }
 
-  console.log("Strong open-center perspective smoke passed: coherent weaker outer frames survived while the visually stronger incomplete center silhouette and broad merged masks stayed rejected.");
+  console.log("Strong open-center perspective smoke passed: coherent weaker outer frames survived while the visually stronger incomplete center silhouette, dense interior trim, and broad merged masks stayed rejected.");
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
