@@ -50,22 +50,24 @@ try {
   addFrame(rightValid, 0.55, -4, 3, (x, y, edge) =>
     (edge === "left" && y >= 24 && y <= 37) || (edge === "top" && x <= 55));
 
-  // The incomplete center silhouette uses a visually strong diagonal brace plus
-  // offset sash bars. Its interior pattern intentionally does not match either
-  // valid window, so pattern complexity cannot substitute for outer closure.
+  // The incomplete center silhouette deliberately borrows recognizable pieces from
+  // both neighboring sash layouts: an upper two-over-one divider similar to the left
+  // window and a lower offset divider similar to the right. Pattern alignment must
+  // not transfer closure evidence into its missing exterior perimeter.
   for (let y = 21; y <= 54; y += 1) {
     addPoint(35 + Math.round((y - 21) * 0.38), y, 0.86);
-    addPoint(45 - Math.round((y - 21) * 0.2), y, 0.81);
+    if (y <= 35) addPoint(42 - Math.round((y - 21) * 0.08), y, 0.82);
+    if (y >= 34) addPoint(45 - Math.round((y - 34) * 0.14), y, 0.81);
   }
   for (let x = 31; x <= 49; x += 1) {
-    addPoint(x, 29 + Math.round((x - 31) * 0.1), 0.83);
-    addPoint(x, 47 - Math.round((x - 31) * 0.08), 0.79);
+    addPoint(x, 30 + Math.round((x - 31) * 0.1), 0.83);
+    addPoint(x, 46 - Math.round((x - 31) * 0.08), 0.79);
   }
 
   // Give each coherent outer frame a distinctly different real-world sash layout:
   // the left uses an asymmetric two-over-one arrangement, while the right uses a
   // single offset vertical divider and a high transom. The detector must preserve
-  // both despite their mismatched interiors and reject the richer open center.
+  // both even though the open center partially matches each interior pattern.
   for (let y = 17; y <= 50; y += 1) {
     addPoint(18 + Math.round((y - 17) * 0.11), y, 0.68);
     if (y <= 33) addPoint(24 + Math.round((y - 17) * 0.07), y, 0.64);
@@ -115,7 +117,7 @@ try {
     process.exit(1);
   }
 
-  console.log("Strong open-center perspective smoke passed: coherent windows with mismatched sash layouts survived while the stronger incomplete center silhouette, unrelated interior detail, and broad merged masks stayed rejected.");
+  console.log("Strong open-center perspective smoke passed: coherent windows survived while the stronger incomplete center silhouette, partially matching sash patterns, and broad merged masks stayed rejected.");
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
