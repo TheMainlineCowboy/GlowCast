@@ -182,7 +182,20 @@ try {
     diagnostic: "mixed-keystone-overlapping-spans-diagnostic.json"
   });
 
-  console.log("Adjacent perspective valid/open smoke passed: real skewed openings survived matching, opposing-slope, unequal-height, and varied-keystone lower-corner occlusion cases while incomplete neighbors, including open, mixed, and overlapping-span keystone lower corners, stayed rejected without merged masks.");
+  await runCase({
+    name: "Mixed keystone silhouettes with horizontal and vertical overlap",
+    valid: { left: 10, right: 42, top: 7, bottom: 58 },
+    open: { left: 38, right: 67, top: 15, bottom: 62 },
+    validSlope: 5,
+    openSlope: -3,
+    validTaper: 5,
+    openTaper: 2,
+    validOcclusion: "lower-right",
+    openOcclusion: "lower-right",
+    diagnostic: "mixed-keystone-horizontal-overlap-diagnostic.json"
+  });
+
+  console.log("Adjacent perspective valid/open smoke passed: real skewed openings survived matching, opposing-slope, unequal-height, and varied-keystone lower-corner occlusion cases while incomplete neighbors, including open, mixed, overlapping-span, and partially silhouette-overlapping keystone lower corners, stayed rejected without merged masks.");
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
