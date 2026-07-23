@@ -13,6 +13,13 @@ function requireText(name, source, text) {
   }
 }
 
+function rejectText(name, source, text) {
+  if (source.includes(text)) {
+    console.error(`UI auto-detect wiring smoke failed: unexpected ${name}.`);
+    process.exit(1);
+  }
+}
+
 requireText("source-prep resilient runner", sourcePrep, "async function runPatch(path, { required = false } = {})");
 requireText("source-prep optional patch warning", sourcePrep, "Optional patch skipped");
 requireText("source-prep required patch error", sourcePrep, "Required source prep patch failed");
@@ -21,8 +28,8 @@ requireText("React Vite plugin", viteConfig, "react()");
 requireText("Cloudflare build SHA input", viteConfig, "CF_PAGES_COMMIT_SHA");
 requireText("build stamp transform", viteConfig, "glowcast-build-stamp");
 requireText("build stamp replacement", viteConfig, 'replaceAll("__GLOWCAST_BUILD__", buildSha)');
-requireText("visible build stamp", indexHtml, "glowcast-build-stamp");
-requireText("build stamp placeholder", indexHtml, "__GLOWCAST_BUILD__");
+rejectText("developer-only build badge", indexHtml, "glowcast-build-stamp");
+rejectText("visible build placeholder", indexHtml, "__GLOWCAST_BUILD__");
 
 requireText("prepared app runner import", app, 'import { runCandidateDetection } from "./core/runCandidateDetection";');
 requireText("prepared app auto detect function", app, "async function runLocalAutoMaskDetection()");
@@ -43,4 +50,4 @@ requireText("aspect rejection debug value", patch, "rejectedAspect");
 requireText("confidence rejection debug value", patch, "rejectedConfidence");
 requireText("boundary penalty debug value", patch, "boundaryPenalized");
 
-console.log("UI auto-detect wiring smoke passed: prepared App.tsx and visible build stamp are wired.");
+console.log("UI auto-detect wiring smoke passed: prepared App.tsx is wired and the developer-only build badge remains absent.");
