@@ -156,7 +156,20 @@ try {
     diagnostic: "open-keystone-lower-corner-diagnostic.json"
   });
 
-  console.log("Adjacent perspective valid/open smoke passed: real skewed openings survived matching, opposing-slope, unequal-height, and keystone lower-corner occlusion cases while incomplete neighbors, including an open keystone lower corner, stayed rejected without merged masks.");
+  await runCase({
+    name: "Mixed valid and open keystone lower corners",
+    valid: { left: 12, right: 37, top: 8, bottom: 58 },
+    open: { left: 39, right: 66, top: 13, bottom: 54 },
+    validSlope: 4,
+    openSlope: -4,
+    validTaper: 3,
+    openTaper: 3,
+    validOcclusion: "lower-right",
+    openOcclusion: "lower-right",
+    diagnostic: "mixed-keystone-lower-corners-diagnostic.json"
+  });
+
+  console.log("Adjacent perspective valid/open smoke passed: real skewed openings survived matching, opposing-slope, unequal-height, and keystone lower-corner occlusion cases while incomplete neighbors, including open and mixed keystone lower corners, stayed rejected without merged masks.");
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
