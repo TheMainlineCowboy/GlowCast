@@ -65,15 +65,25 @@ function cleanMaskCandidateOutlines(candidates: MaskCandidateOutput[], bounds: S
 
 source = source.slice(0, groupStart) + helper + source.slice(groupStart);
 
-const returnPattern = /return groupNearbySatellites\(addFallbackCandidates\(accepted, edgePoints, bounds\), bounds\)\.slice\(0, 10\);/;
-if (!returnPattern.test(source)) {
+const buildStart = source.indexOf("export function buildMaskCandidatesFromEdges(");
+if (buildStart < 0) throw new Error("Unable to locate mask candidate builder");
+
+const buildSource = source.slice(buildStart);
+const returnMatches = [...buildSource.matchAll(/^  return (.+);$/gm)];
+const finalReturn = returnMatches.at(-1);
+if (!finalReturn || finalReturn.index === undefined) {
   throw new Error("Unable to locate final mask candidate return pipeline");
 }
 
-source = source.replace(
-  returnPattern,
-  "return cleanMaskCandidateOutlines(groupNearbySatellites(addFallbackCandidates(accepted, edgePoints, bounds), bounds), bounds).slice(0, 10);"
-);
+const returnExpression = finalReturn[1];
+if (returnExpression.includes("cleanMaskCandidateOutlines(")) {
+  throw new Error("Mask cleanup return pipeline was partially applied without its helper marker");
+}
+
+const absoluteReturnStart = buildStart + finalReturn.index;
+const originalReturn = finalReturn[0];
+const cleanedReturn = `  return cleanMaskCandidateOutlines(${returnExpression}, bounds);`;
+source = source.slice(0, absoluteReturnStart) + cleanedReturn + source.slice(absoluteReturnStart + originalReturn.length);
 
 await fs.writeFile(adapterPath, source);
 console.log("applied clean mask outline patch");
