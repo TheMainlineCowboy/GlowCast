@@ -62,6 +62,20 @@ try {
     addPoint(x, 45 - Math.round((x - 31) * 0.06), 0.78);
   }
 
+  // Real windows can also contain dense trim. Give both coherent outer frames
+  // their own sash and muntin detail so the detector must judge exterior closure,
+  // not merely the presence or absence of interior edge complexity.
+  for (let y = 17; y <= 50; y += 1) {
+    addPoint(19 + Math.round((y - 17) * 0.1), y, 0.68);
+    addPoint(60 - Math.round((y - 17) * 0.08), y, 0.66);
+  }
+  for (let x = 12; x <= 27; x += 1) {
+    addPoint(x, 32 + Math.round((x - 12) * 0.12), 0.64);
+  }
+  for (let x = 53; x <= 67; x += 1) {
+    addPoint(x, 34 - Math.round((x - 53) * 0.1), 0.63);
+  }
+
   for (let offset = 0; offset <= 63; offset += 1) {
     const x = 7 + offset;
     const y = 20 + Math.floor(offset * 0.28);
@@ -97,7 +111,7 @@ try {
     process.exit(1);
   }
 
-  console.log("Strong open-center perspective smoke passed: coherent weaker outer frames survived while the visually stronger incomplete center silhouette, dense interior trim, and broad merged masks stayed rejected.");
+  console.log("Strong open-center perspective smoke passed: coherent trimmed outer frames survived while the visually stronger incomplete center silhouette, dense interior trim, and broad merged masks stayed rejected.");
 } finally {
   await fs.rm(tempDir, { force: true, recursive: true });
 }
