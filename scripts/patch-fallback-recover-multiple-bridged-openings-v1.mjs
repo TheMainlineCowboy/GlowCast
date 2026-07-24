@@ -15,7 +15,7 @@ const replacement = `function recoverSparseBridgeComponents(points: EdgePoint[],
   const boundsArea = Math.max(bounds.width * bounds.height, 1);
   const recoveryGap = 0.12;
 
-  const describeGroup = (group: EdgePoint[]): { points: EdgePoint[]; box: SimpleBox } | null => {
+  const describeGroup = (group: EdgePoint[], trimHorizontal: boolean): { points: EdgePoint[]; box: SimpleBox } | null => {
     if (group.length < 24) return null;
     let minX = Number.POSITIVE_INFINITY;
     let minY = Number.POSITIVE_INFINITY;
@@ -27,8 +27,43 @@ const replacement = `function recoverSparseBridgeComponents(points: EdgePoint[],
       maxX = Math.max(maxX, point.x);
       maxY = Math.max(maxY, point.y);
     }
+
+    // A one-pixel bridge tail can stretch the raw bounding box beyond the real frame.
+    // Trim the split-axis ends to coordinates with substantial cross-axis support so
+    // the actual architectural border remains on the recovered box boundary.
+    if (trimHorizontal) {
+      const support = new Map<number, Set<number>>();
+      for (const point of group) {
+        const key = Math.round(point.x);
+        const values = support.get(key) ?? new Set<number>();
+        values.add(Math.round(point.y));
+        support.set(key, values);
+      }
+      const threshold = Math.max(4, Math.ceil((maxY - minY) * 0.18));
+      const structural = [...support.entries()].filter(([, values]) => values.size >= threshold).map(([coordinate]) => coordinate);
+      if (structural.length >= 2) {
+        minX = Math.max(minX, Math.min(...structural));
+        maxX = Math.min(maxX, Math.max(...structural));
+      }
+    } else {
+      const support = new Map<number, Set<number>>();
+      for (const point of group) {
+        const key = Math.round(point.y);
+        const values = support.get(key) ?? new Set<number>();
+        values.add(Math.round(point.x));
+        support.set(key, values);
+      }
+      const threshold = Math.max(4, Math.ceil((maxX - minX) * 0.18));
+      const structural = [...support.entries()].filter(([, values]) => values.size >= threshold).map(([coordinate]) => coordinate);
+      if (structural.length >= 2) {
+        minY = Math.max(minY, Math.min(...structural));
+        maxY = Math.min(maxY, Math.max(...structural));
+      }
+    }
+
+    const trimmedPoints = group.filter((point) => point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY);
     return {
-      points: group,
+      points: trimmedPoints,
       box: clampBox(
         { x: minX, y: minY, width: Math.max(0, maxX - minX), height: Math.max(0, maxY - minY) },
         bounds
@@ -55,7 +90,7 @@ const replacement = `function recoverSparseBridgeComponents(points: EdgePoint[],
       })
     ];
 
-    const described = groups.map(describeGroup);
+    const described = groups.map((candidate) => describeGroup(candidate, split.horizontal));
     if (!described[0] || !described[1]) return null;
     const first = described[0];
     const second = described[1];
@@ -113,9 +148,9 @@ const replacement = `function recoverSparseBridgeComponents(points: EdgePoint[],
 
 source = source.slice(0, start) + replacement + source.slice(end);
 
-if (!source.includes("const initialSplit = splitGroup(points, box);") || !source.includes("current.depth < 2") || !source.includes("terminal.length + queue.length + nested.length <= 5")) {
+if (!source.includes("const initialSplit = splitGroup(points, box);") || !source.includes("current.depth < 2") || !source.includes("substantial cross-axis support") || !source.includes("terminal.length + queue.length + nested.length <= 5")) {
   throw new Error("Multi-opening sparse-bridge recovery was not fully applied");
 }
 
 await fs.writeFile(adapterPath, source);
-console.log("Recovered multiple architectural openings from clutter-connected fallback components.");
+console.log("Recovered multiple architectural openings from clutter-connected fallback components while trimming sparse bridge tails.");
