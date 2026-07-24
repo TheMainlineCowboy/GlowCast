@@ -65,4 +65,6 @@ await import("./patch-fallback-recover-offset-diagonal-bridges-v1.mjs");
 await import("./smoke-fallback-recover-offset-diagonal-bridges-runtime.mjs");
 await import("./patch-fallback-recover-multiple-bridged-openings-v1.mjs");
 await import("./smoke-fallback-recover-multiple-bridged-openings-runtime.mjs");
-console.log("Rejected unrecoverable thin bridges and recovered qualifying architectural openings from centered, offset, diagonal, and multi-opening sparse bridge clutter.");
+await import("./patch-fallback-adaptive-sparse-gap-recovery-v1.mjs");
+await import("./smoke-fallback-adaptive-sparse-gap-recovery-runtime.mjs");
+console.log("Rejected unrecoverable thin bridges and recovered qualifying architectural openings across centered, offset, diagonal, multi-opening, and uneven sparse-gap clutter.");
