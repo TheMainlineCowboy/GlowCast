@@ -50,7 +50,12 @@ const replacement = `function suppressGroupedDuplicates(candidates: MaskCandidat
       );
       const areaRatio = Math.min(candidateArea, existingArea) / Math.max(candidateArea, existingArea, 1);
 
-      return overlap >= 0.84 || (overlap >= 0.68 && sizeSimilar && areaRatio >= 0.62 && centerDistance <= centerTolerance);
+      // High overlap alone is not enough: nested frames and offset architectural
+      // outlines can overlap heavily while still representing distinct useful masks.
+      // Require comparable dimensions and aligned centers before collapsing either
+      // the very-high-overlap case or the broader near-duplicate case.
+      const geometryAligned = sizeSimilar && areaRatio >= 0.62 && centerDistance <= centerTolerance;
+      return geometryAligned && overlap >= 0.68;
     });
 
     if (!duplicatesExisting) kept.push(candidate);
@@ -62,4 +67,4 @@ const replacement = `function suppressGroupedDuplicates(candidates: MaskCandidat
 
 source = source.slice(0, start) + replacement + source.slice(end);
 await fs.writeFile(path, source);
-console.log("Collapsed strongly overlapping, center-aligned automatic-mask duplicates before review.");
+console.log("Collapsed only strongly overlapping, size-matched, center-aligned automatic-mask duplicates before review.");
