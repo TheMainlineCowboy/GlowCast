@@ -53,10 +53,27 @@ if (!source.includes("data-auto-mask-confidence-overlay")) {
   }
 
   const indent = shapeMatch.groups.indent;
-  const overlay = `${indent}{selectedTarget === "zone" && selectedZoneId === zone.id && selectedAutoMaskConfidence ? (\n${indent}  <b\n${indent}    data-auto-mask-confidence-overlay\n${indent}    title={\`GlowCast confidence: \${selectedAutoMaskConfidence}\`}\n${indent}    style={{\n${indent}      position: "absolute",\n${indent}      top: 8,\n${indent}      right: 8,\n${indent}      zIndex: 12,\n${indent}      padding: "4px 8px",\n${indent}      borderRadius: 999,\n${indent}      background: selectedAutoMaskConfidence === "Strong" ? "rgba(20,83,45,.92)" : selectedAutoMaskConfidence === "Weak" ? "rgba(127,29,29,.92)" : "rgba(120,53,15,.92)",\n${indent}      color: "white",\n${indent}      fontSize: 11,\n${indent}      fontWeight: 800,\n${indent}      letterSpacing: ".04em",\n${indent}      boxShadow: "0 2px 10px rgba(0,0,0,.45)",\n${indent}      pointerEvents: "none"\n${indent}    }}\n${indent}  >\n${indent}    {selectedAutoMaskConfidence}\n${indent}  </b>\n${indent}) : null}\n\n${shapeMatch[0]}`;
+  const overlay = `${indent}{selectedTarget === "zone" && selectedZoneId === zone.id && selectedAutoMaskConfidence ? (\n${indent}  <b\n${indent}    data-auto-mask-confidence-overlay\n${indent}    data-auto-mask-review-state={zone.included ? "accepted" : "pending"}\n${indent}    title={\`GlowCast confidence: \${selectedAutoMaskConfidence}. Review state: \${zone.included ? "Accepted" : "Pending review"}.\`}\n${indent}    style={{\n${indent}      position: "absolute",\n${indent}      top: 8,\n${indent}      right: 8,\n${indent}      zIndex: 12,\n${indent}      display: "inline-flex",\n${indent}      alignItems: "center",\n${indent}      gap: 6,\n${indent}      padding: "4px 8px",\n${indent}      borderRadius: 999,\n${indent}      background: zone.included ? "rgba(20,83,45,.94)" : "rgba(120,53,15,.94)",\n${indent}      color: "white",\n${indent}      fontSize: 11,\n${indent}      fontWeight: 800,\n${indent}      letterSpacing: ".04em",\n${indent}      boxShadow: "0 2px 10px rgba(0,0,0,.45)",\n${indent}      pointerEvents: "none"\n${indent}    }}\n${indent}  >\n${indent}    <span>{zone.included ? "Accepted" : "Pending review"}</span>\n${indent}    <span aria-hidden="true">·</span>\n${indent}    <span>{selectedAutoMaskConfidence}</span>\n${indent}  </b>\n${indent}) : null}\n\n${shapeMatch[0]}`;
 
   source = source.replace(shapeAnchor, overlay);
+} else if (!source.includes("data-auto-mask-review-state")) {
+  source = source.replace(
+    "data-auto-mask-confidence-overlay\n",
+    'data-auto-mask-confidence-overlay\n                    data-auto-mask-review-state={zone.included ? "accepted" : "pending"}\n'
+  );
+  source = source.replace(
+    'title={`GlowCast confidence: ${selectedAutoMaskConfidence}`}',
+    'title={`GlowCast confidence: ${selectedAutoMaskConfidence}. Review state: ${zone.included ? "Accepted" : "Pending review"}.`}'
+  );
+  source = source.replace(
+    'background: selectedAutoMaskConfidence === "Strong" ? "rgba(20,83,45,.92)" : selectedAutoMaskConfidence === "Weak" ? "rgba(127,29,29,.92)" : "rgba(120,53,15,.92)",',
+    'background: zone.included ? "rgba(20,83,45,.94)" : "rgba(120,53,15,.94)",'
+  );
+  source = source.replace(
+    '{selectedAutoMaskConfidence}\n',
+    '<span>{zone.included ? "Accepted" : "Pending review"}</span>\n                    <span aria-hidden="true">·</span>\n                    <span>{selectedAutoMaskConfidence}</span>\n'
+  );
 }
 
 await fs.writeFile(path, source);
-console.log("Added automatic-mask confidence categories and selected-mask overlay badge.");
+console.log("Added automatic-mask confidence categories and selected-mask review-state overlay badge.");
