@@ -107,8 +107,6 @@ await runPatch("./smoke-fallback-center-drift-behavior.mjs", { required: true })
 await runPatch("./patch-fallback-duplicate-footprint-retention-v1.mjs", { required: true });
 await runPatch("./smoke-fallback-footprint-retention-behavior.mjs", { required: true });
 
-// Keep the user-facing mask cleanup pipeline explicit and ordered. These helpers
-// must exist before any final return wrappers refer to them.
 await runPatch("./patch-adapter-clean-mask-outlines-v1.mjs", { required: true });
 await runPatch("./patch-adapter-suppress-isolated-mask-specks-v1.mjs", { required: true });
 await runPatch("./patch-adapter-rank-strong-masks-first-v1.mjs", { required: true });
@@ -159,6 +157,6 @@ if (start >= 0 && end > start) {
 }
 
 await fs.writeFile(edgePath, edge);
-await runPatch("./patch-adapter-stable-mask-identities-v1.mjs", { required: true });
-await runPatch("./smoke-stable-auto-mask-identities-runtime.mjs", { required: true });
+await runPatch("./patch-adapter-stable-mask-identities-v1.mjs?final=1", { required: true });
+await runPatch("./smoke-stable-auto-mask-identities-runtime.mjs?final=1", { required: true });
 console.log("source prep complete");
