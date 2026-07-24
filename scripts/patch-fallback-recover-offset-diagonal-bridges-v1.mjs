@@ -31,15 +31,19 @@ const replacement = `function findSparseBridgeSplit(points: EdgePoint[], box: Si
   }
 
   const counts = bins.map((bin) => bin.size);
+  const robustBandSupport = (values: number[]): number => {
+    const ranked = [...values].sort((a, b) => b - a);
+    return ranked.length >= 2 ? ranked[1] : ranked[0] ?? 0;
+  };
   const sparseCandidates: Array<{ index: number; score: number }> = [];
   for (let index = 2; index <= binCount - 3; index += 1) {
     const leftCounts = counts.slice(0, index);
     const rightCounts = counts.slice(index + 1);
     const leftSupport = leftCounts.reduce((sum, count) => sum + count, 0);
     const rightSupport = rightCounts.reduce((sum, count) => sum + count, 0);
-    const leftPeak = Math.max(...leftCounts);
-    const rightPeak = Math.max(...rightCounts);
-    const structuralFloor = Math.min(leftPeak, rightPeak);
+    const leftStructural = robustBandSupport(leftCounts);
+    const rightStructural = robustBandSupport(rightCounts);
+    const structuralFloor = Math.min(leftStructural, rightStructural);
     if (leftSupport < 24 || rightSupport < 24 || structuralFloor < 8) continue;
 
     const sparseLimit = Math.max(4, structuralFloor * 0.34);
@@ -136,7 +140,7 @@ function recoverSparseBridgeComponents(points: EdgePoint[], box: SimpleBox, boun
 
 source = source.slice(0, start) + replacement + source.slice(end);
 
-if (!source.includes("function findSparseBridgeSplit(") || !source.includes("const recoveryGap = 0.12;") || !source.includes("Center recovery across the whole sparse run")) {
+if (!source.includes("function findSparseBridgeSplit(") || !source.includes("const recoveryGap = 0.12;") || !source.includes("robustBandSupport") || !source.includes("Center recovery across the whole sparse run")) {
   throw new Error("Offset/diagonal sparse-bridge recovery was not fully applied");
 }
 
