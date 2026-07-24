@@ -7,7 +7,10 @@ const required = [
   'return "Strong";',
   'return "Review";',
   "Auto mask confidence: {selectedAutoMaskConfidence}",
-  "selectedAutoMaskConfidence = getAutoMaskConfidence(selectedZone, projectionArea)"
+  "selectedAutoMaskConfidence = getAutoMaskConfidence(selectedZone, projectionArea)",
+  "data-auto-mask-confidence-overlay",
+  'selectedTarget === "zone" && selectedZoneId === zone.id && selectedAutoMaskConfidence',
+  "GlowCast confidence:"
 ];
 
 const missing = required.filter((snippet) => !source.includes(snippet));
@@ -15,4 +18,4 @@ if (missing.length) {
   throw new Error(`Automatic-mask confidence smoke failed; missing: ${missing.join(", ")}`);
 }
 
-console.log("Automatic-mask confidence source smoke passed.");
+console.log("Automatic-mask confidence source and selected-mask overlay smoke passed.");
