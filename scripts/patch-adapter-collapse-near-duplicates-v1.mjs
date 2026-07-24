@@ -4,12 +4,11 @@ const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
 const marker = "function suppressGroupedDuplicates(candidates: MaskCandidateOutput[]): MaskCandidateOutput[] {";
-const nextMarker = "\nfunction groupNearbySatellites(";
 const start = source.indexOf(marker);
-const end = source.indexOf(nextMarker, start);
+const end = start >= 0 ? source.indexOf("\nfunction ", start + marker.length) : -1;
 
 if (start < 0 || end < 0) {
-  throw new Error("Unable to locate grouped duplicate suppression function after source preparation.");
+  throw new Error("Unable to isolate grouped duplicate suppression function after source preparation.");
 }
 
 const replacement = `function suppressGroupedDuplicates(candidates: MaskCandidateOutput[]): MaskCandidateOutput[] {
@@ -52,8 +51,7 @@ const replacement = `function suppressGroupedDuplicates(candidates: MaskCandidat
 
       // High overlap alone is not enough: nested frames and offset architectural
       // outlines can overlap heavily while still representing distinct useful masks.
-      // Require comparable dimensions and aligned centers before collapsing either
-      // the very-high-overlap case or the broader near-duplicate case.
+      // Require comparable dimensions and aligned centers before collapsing them.
       const geometryAligned = sizeSimilar && areaRatio >= 0.62 && centerDistance <= centerTolerance;
       return geometryAligned && overlap >= 0.68;
     });
@@ -67,4 +65,4 @@ const replacement = `function suppressGroupedDuplicates(candidates: MaskCandidat
 
 source = source.slice(0, start) + replacement + source.slice(end);
 await fs.writeFile(path, source);
-console.log("Collapsed only strongly overlapping, size-matched, center-aligned automatic-mask duplicates before review.");
+console.log("Collapsed only strongly overlapping, size-matched, center-aligned automatic-mask duplicates before review without replacing adjacent cleanup helpers.");
