@@ -1,5 +1,14 @@
 import fs from "node:fs/promises";
 
+// Finalize the user-facing mask pipeline immediately before stable identities.
+// Query strings force fresh ESM instances even when an earlier prep stage imported
+// the same patch modules; each patch is idempotent and repairs partial prepared state.
+await import("./patch-adapter-clean-mask-outlines-v1.mjs?stable-final=1");
+await import("./patch-adapter-suppress-isolated-mask-specks-v1.mjs?stable-final=1");
+await import("./patch-adapter-rank-strong-masks-first-v1.mjs?stable-final=1");
+await import("./patch-adapter-collapse-near-duplicates-v1.mjs?stable-final=1");
+await import("./smoke-collapse-near-duplicate-auto-masks-source.mjs?stable-final=1");
+
 const adapterPath = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(adapterPath, "utf8");
 
