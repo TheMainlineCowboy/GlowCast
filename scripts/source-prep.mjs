@@ -115,6 +115,8 @@ await runPatch("./patch-adapter-collapse-near-duplicates-v1.mjs", { required: tr
 await runPatch("./smoke-collapse-near-duplicate-auto-masks-source.mjs", { required: true });
 await runPatch("./patch-adapter-reject-broad-multi-opening-masks-v1.mjs", { required: true });
 await runPatch("./smoke-reject-broad-multi-opening-masks-source.mjs", { required: true });
+await runPatch("./patch-fallback-reject-thin-bridge-components-v1.mjs", { required: true });
+await runPatch("./smoke-fallback-thin-bridge-runtime.mjs", { required: true });
 await runPatch("./patch-fallback-duplicate-growth-cap-v1.mjs", { required: true });
 
 const edgePath = "src/edgeDetect.ts";
