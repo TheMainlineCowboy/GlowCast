@@ -27,8 +27,8 @@ if (!source.includes(marker)) {
     if (position < -0.02 || position > 1.02) continue;
     const bucket = Math.min(2, Math.max(0, Math.floor(position * 3)));
     const key = horizontal
-      ? `${Math.round(point.x)},${Math.round(point.y)}`
-      : `${Math.round(point.y)},${Math.round(point.x)}`;
+      ? String(Math.round(point.x)) + "," + String(Math.round(point.y))
+      : String(Math.round(point.y)) + "," + String(Math.round(point.x));
     thirds[bucket].add(key);
   }
 
