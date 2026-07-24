@@ -42,39 +42,41 @@ try {
   const { recoverSparseBridgeComponents } = await import(pathToFileURL(emittedAdapterPath).href);
   const bounds = { x: 0, y: 0, width: 100, height: 100 };
 
+  // Use three clearly separated frames so the regression proves recursive recovery
+  // instead of depending on borderline sparse-band thresholds from the two-opening path.
   const threeHorizontal = [];
-  addClosedFrame(threeHorizontal, 6, 24, 23, 61);
-  addClosedFrame(threeHorizontal, 38, 24, 55, 61);
-  addClosedFrame(threeHorizontal, 70, 24, 90, 61);
-  for (let x = 24; x < 38; x += 1) threeHorizontal.push({ x, y: 44, strength: 220 });
-  for (let x = 56; x < 70; x += 1) threeHorizontal.push({ x, y: 44, strength: 220 });
+  addClosedFrame(threeHorizontal, 6, 24, 20, 61);
+  addClosedFrame(threeHorizontal, 38, 24, 52, 61);
+  addClosedFrame(threeHorizontal, 78, 24, 94, 61);
+  for (let x = 21; x < 38; x += 1) threeHorizontal.push({ x, y: 44, strength: 220 });
+  for (let x = 53; x < 78; x += 1) threeHorizontal.push({ x, y: 44, strength: 220 });
   const recoveredThree = recoverSparseBridgeComponents(
     threeHorizontal,
-    { x: 6, y: 24, width: 84, height: 37 },
+    { x: 6, y: 24, width: 88, height: 37 },
     bounds
   );
   if (recoveredThree.length !== 3) {
     throw new Error(`Expected three recovered horizontal openings, received ${recoveredThree.length}.`);
   }
-  if (recoveredThree.some((candidate) => candidate.width > 25)) {
+  if (recoveredThree.some((candidate) => candidate.width > 24)) {
     throw new Error("Three-opening recovery retained too much horizontal bridge clutter.");
   }
 
   const threeVertical = [];
-  addClosedFrame(threeVertical, 25, 5, 61, 23);
-  addClosedFrame(threeVertical, 25, 38, 61, 56);
-  addClosedFrame(threeVertical, 25, 71, 61, 92);
-  for (let y = 24; y < 38; y += 1) threeVertical.push({ x: 44, y, strength: 220 });
-  for (let y = 57; y < 71; y += 1) threeVertical.push({ x: 44, y, strength: 220 });
+  addClosedFrame(threeVertical, 25, 5, 61, 20);
+  addClosedFrame(threeVertical, 25, 38, 61, 53);
+  addClosedFrame(threeVertical, 25, 78, 61, 95);
+  for (let y = 21; y < 38; y += 1) threeVertical.push({ x: 44, y, strength: 220 });
+  for (let y = 54; y < 78; y += 1) threeVertical.push({ x: 44, y, strength: 220 });
   const recoveredVertical = recoverSparseBridgeComponents(
     threeVertical,
-    { x: 25, y: 5, width: 36, height: 87 },
+    { x: 25, y: 5, width: 36, height: 90 },
     bounds
   );
   if (recoveredVertical.length !== 3) {
     throw new Error(`Expected three recovered vertical openings, received ${recoveredVertical.length}.`);
   }
-  if (recoveredVertical.some((candidate) => candidate.height > 28)) {
+  if (recoveredVertical.some((candidate) => candidate.height > 25)) {
     throw new Error("Three-opening vertical recovery retained too much bridge clutter.");
   }
 
