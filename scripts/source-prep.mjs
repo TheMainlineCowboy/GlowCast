@@ -6,6 +6,10 @@ async function runPatch(path, { required = false } = {}) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (required) {
+      await fs.writeFile(
+        "synthetic-frame-diagnostic.json",
+        `${JSON.stringify({ stage: "source-prep", patch: path, message }, null, 2)}\n`
+      );
       throw new Error(`Required source prep patch failed: ${path}: ${message}`, { cause: error });
     }
     console.warn(`[source-prep] Optional patch skipped: ${path}: ${message}`);
