@@ -51,7 +51,10 @@ const replacement = `function findSparseBridgeSplit(points: EdgePoint[], box: Si
     const structuralFloor = Math.min(leftStructural, rightStructural);
     if (leftSupport < 18 || rightSupport < 18 || structuralFloor < 7) continue;
 
-    const sparseLimit = Math.max(4, structuralFloor * 0.48);
+    // Noisy façade gaps can retain a moderate amount of edge energy. Keep the split
+    // conservative by requiring strong support on both sides, but allow the sparse
+    // band itself to carry up to roughly 72% of that local structural floor.
+    const sparseLimit = Math.max(4, structuralFloor * 0.72);
     if (counts[index] > sparseLimit) continue;
 
     const localBalance = Math.abs(leftSupport - rightSupport) / Math.max(leftSupport + rightSupport, 1);
@@ -79,7 +82,7 @@ source = source.slice(0, start) + replacement + source.slice(end);
 if (
   !source.includes("const binCount = 15;") ||
   !source.includes("const leftWindow = counts.slice") ||
-  !source.includes("structuralFloor * 0.48") ||
+  !source.includes("structuralFloor * 0.72") ||
   !source.includes("Wide and narrow separations can now")
 ) {
   throw new Error("Adaptive sparse-gap recovery was not fully applied");
