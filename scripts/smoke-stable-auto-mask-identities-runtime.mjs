@@ -28,17 +28,26 @@ await fs.writeFile(
 await fs.copyFile(detectorPath, path.join(coreDir, "architecturalDetector.ts"));
 await fs.copyFile(edgeDetectPath, path.join(sourceRoot, "edgeDetect.ts"));
 
-execFileSync(process.execPath, [
-  "node_modules/typescript/bin/tsc",
-  sourcePath,
-  "--ignoreConfig",
-  "--rootDir", sourceRoot,
-  "--outDir", outDir,
-  "--module", "ES2020",
-  "--target", "ES2020",
-  "--moduleResolution", "Bundler",
-  "--skipLibCheck"
-], { stdio: "inherit" });
+try {
+  execFileSync(process.execPath, [
+    "node_modules/typescript/bin/tsc",
+    sourcePath,
+    "--ignoreConfig",
+    "--rootDir", sourceRoot,
+    "--outDir", outDir,
+    "--module", "ES2020",
+    "--target", "ES2020",
+    "--moduleResolution", "Bundler",
+    "--skipLibCheck"
+  ], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+} catch (error) {
+  const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : "";
+  const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : "";
+  throw new Error(
+    `Stable auto-mask runtime TypeScript compile failed.${stdout ? `\nstdout:\n${stdout}` : ""}${stderr ? `\nstderr:\n${stderr}` : ""}`,
+    { cause: error }
+  );
+}
 
 const emittedAdapterPath = path.join(outDir, "core", "maskCandidateAdapter.js");
 const emittedDetectorPath = path.join(outDir, "core", "architecturalDetector.js");
