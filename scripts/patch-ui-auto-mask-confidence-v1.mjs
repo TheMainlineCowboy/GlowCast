@@ -46,17 +46,16 @@ if (!source.includes("Auto mask confidence:")) {
 }
 
 if (!source.includes("data-auto-mask-confidence-overlay")) {
-  const zoneNumberPattern = /(?<indent>^[ \t]*)<span>\{index\s*\+\s*1\}<\/span>/m;
-  const zoneNumberMatch = source.match(zoneNumberPattern);
-  if (!zoneNumberMatch || !zoneNumberMatch.groups) {
-    throw new Error("Unable to locate zone number badge for confidence overlay.");
+  const shapeAnchor = /(?<indent>^[ \t]*)\{zone\.shape\s*===\s*["']triangle["']\s*\?\s*\(/m;
+  const shapeMatch = source.match(shapeAnchor);
+  if (!shapeMatch || !shapeMatch.groups) {
+    throw new Error("Unable to locate mask shape rendering block for confidence overlay.");
   }
 
-  const indent = zoneNumberMatch.groups.indent;
-  const zoneNumberBadge = zoneNumberMatch[0].trimStart();
-  const overlay = `${indent}${zoneNumberBadge}\n${indent}{selectedTarget === "zone" && selectedZoneId === zone.id && selectedAutoMaskConfidence ? (\n${indent}  <b\n${indent}    data-auto-mask-confidence-overlay\n${indent}    title={\`GlowCast confidence: \${selectedAutoMaskConfidence}\`}\n${indent}    style={{\n${indent}      position: "absolute",\n${indent}      top: 8,\n${indent}      right: 8,\n${indent}      zIndex: 12,\n${indent}      padding: "4px 8px",\n${indent}      borderRadius: 999,\n${indent}      background: selectedAutoMaskConfidence === "Strong" ? "rgba(20,83,45,.92)" : selectedAutoMaskConfidence === "Weak" ? "rgba(127,29,29,.92)" : "rgba(120,53,15,.92)",\n${indent}      color: "white",\n${indent}      fontSize: 11,\n${indent}      fontWeight: 800,\n${indent}      letterSpacing: ".04em",\n${indent}      boxShadow: "0 2px 10px rgba(0,0,0,.45)",\n${indent}      pointerEvents: "none"\n${indent}    }}\n${indent}  >\n${indent}    {selectedAutoMaskConfidence}\n${indent}  </b>\n${indent}) : null}`;
+  const indent = shapeMatch.groups.indent;
+  const overlay = `${indent}{selectedTarget === "zone" && selectedZoneId === zone.id && selectedAutoMaskConfidence ? (\n${indent}  <b\n${indent}    data-auto-mask-confidence-overlay\n${indent}    title={\`GlowCast confidence: \${selectedAutoMaskConfidence}\`}\n${indent}    style={{\n${indent}      position: "absolute",\n${indent}      top: 8,\n${indent}      right: 8,\n${indent}      zIndex: 12,\n${indent}      padding: "4px 8px",\n${indent}      borderRadius: 999,\n${indent}      background: selectedAutoMaskConfidence === "Strong" ? "rgba(20,83,45,.92)" : selectedAutoMaskConfidence === "Weak" ? "rgba(127,29,29,.92)" : "rgba(120,53,15,.92)",\n${indent}      color: "white",\n${indent}      fontSize: 11,\n${indent}      fontWeight: 800,\n${indent}      letterSpacing: ".04em",\n${indent}      boxShadow: "0 2px 10px rgba(0,0,0,.45)",\n${indent}      pointerEvents: "none"\n${indent}    }}\n${indent}  >\n${indent}    {selectedAutoMaskConfidence}\n${indent}  </b>\n${indent}) : null}\n\n${shapeMatch[0]}`;
 
-  source = source.replace(zoneNumberPattern, overlay);
+  source = source.replace(shapeAnchor, overlay);
 }
 
 await fs.writeFile(path, source);
