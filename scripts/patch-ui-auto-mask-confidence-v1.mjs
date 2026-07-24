@@ -46,15 +46,17 @@ if (!source.includes("Auto mask confidence:")) {
 }
 
 if (!source.includes("data-auto-mask-confidence-overlay")) {
-  const zoneNumberAnchor = "              <span>{index + 1}</span>";
-  if (!source.includes(zoneNumberAnchor)) {
+  const zoneNumberPattern = /(?<indent>^[ \t]*)<span>\{index\s*\+\s*1\}<\/span>/m;
+  const zoneNumberMatch = source.match(zoneNumberPattern);
+  if (!zoneNumberMatch || !zoneNumberMatch.groups) {
     throw new Error("Unable to locate zone number badge for confidence overlay.");
   }
 
-  source = source.replace(
-    zoneNumberAnchor,
-    `${zoneNumberAnchor}\n              {selectedTarget === "zone" && selectedZoneId === zone.id && selectedAutoMaskConfidence ? (\n                <b\n                  data-auto-mask-confidence-overlay\n                  title={\`GlowCast confidence: \${selectedAutoMaskConfidence}\`}\n                  style={{\n                    position: "absolute",\n                    top: 8,\n                    right: 8,\n                    zIndex: 12,\n                    padding: "4px 8px",\n                    borderRadius: 999,\n                    background: selectedAutoMaskConfidence === "Strong" ? "rgba(20,83,45,.92)" : selectedAutoMaskConfidence === "Weak" ? "rgba(127,29,29,.92)" : "rgba(120,53,15,.92)",\n                    color: "white",\n                    fontSize: 11,\n                    fontWeight: 800,\n                    letterSpacing: ".04em",\n                    boxShadow: "0 2px 10px rgba(0,0,0,.45)",\n                    pointerEvents: "none"\n                  }}\n                >\n                  {selectedAutoMaskConfidence}\n                </b>\n              ) : null}`
-  );
+  const indent = zoneNumberMatch.groups.indent;
+  const zoneNumberBadge = zoneNumberMatch[0].trimStart();
+  const overlay = `${indent}${zoneNumberBadge}\n${indent}{selectedTarget === "zone" && selectedZoneId === zone.id && selectedAutoMaskConfidence ? (\n${indent}  <b\n${indent}    data-auto-mask-confidence-overlay\n${indent}    title={\`GlowCast confidence: \${selectedAutoMaskConfidence}\`}\n${indent}    style={{\n${indent}      position: "absolute",\n${indent}      top: 8,\n${indent}      right: 8,\n${indent}      zIndex: 12,\n${indent}      padding: "4px 8px",\n${indent}      borderRadius: 999,\n${indent}      background: selectedAutoMaskConfidence === "Strong" ? "rgba(20,83,45,.92)" : selectedAutoMaskConfidence === "Weak" ? "rgba(127,29,29,.92)" : "rgba(120,53,15,.92)",\n${indent}      color: "white",\n${indent}      fontSize: 11,\n${indent}      fontWeight: 800,\n${indent}      letterSpacing: ".04em",\n${indent}      boxShadow: "0 2px 10px rgba(0,0,0,.45)",\n${indent}      pointerEvents: "none"\n${indent}    }}\n${indent}  >\n${indent}    {selectedAutoMaskConfidence}\n${indent}  </b>\n${indent}) : null}`;
+
+  source = source.replace(zoneNumberPattern, overlay);
 }
 
 await fs.writeFile(path, source);
