@@ -1,29 +1,22 @@
 import fs from "node:fs/promises";
 
-await import("./patch-adapter-clean-mask-outlines-v1.mjs");
-await import("./patch-adapter-suppress-isolated-mask-specks-v1.mjs");
-await import("./patch-adapter-rank-strong-masks-first-v1.mjs");
-await import("./smoke-rank-strong-masks-first-source.mjs");
-
 const path = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(path, "utf8");
 
 const marker = "const fallbackGrowthRatio = fallbackArea / Math.max(existingArea, 1);";
 const scaledBalanceMarker = "const maxExpansionImbalance = fallbackGrowthRatio > 1.45 ? 0.18 : 0.28;";
 const balancedMarker = "const balancedFallbackExpansion = horizontalExpansionImbalance <= maxExpansionImbalance && verticalExpansionImbalance <= maxExpansionImbalance;";
+
 if (source.includes(marker) && source.includes(scaledBalanceMarker) && source.includes(balancedMarker)) {
   console.log("Fallback duplicate growth and growth-scaled balanced-expansion gates already applied.");
-  process.exit(0);
-}
+} else {
+  const stableAnchor = "      const preservesExistingFootprint = existingFootprintRetention >= 0.9;";
+  const anchorIndex = source.indexOf(stableAnchor);
+  if (anchorIndex < 0) {
+    throw new Error("Fallback duplicate growth-cap footprint anchor not found.");
+  }
 
-const anchor = `      const preservesExistingFootprint = existingFootprintRetention >= 0.9;
-      if (
-        !extremeFallbackAspect &&
-        shapeConsistentFallback &&
-        centerConsistentFallback &&
-        preservesExistingFootprint &&`;
-
-const replacement = `      const preservesExistingFootprint = existingFootprintRetention >= 0.9;
+  const declarations = `${stableAnchor}
       const fallbackGrowthRatio = fallbackArea / Math.max(existingArea, 1);
       const boundedFallbackGrowth = fallbackGrowthRatio <= 1.8;
       const leftExpansion = Math.max(0, existing.box.x - box.x);
@@ -33,30 +26,32 @@ const replacement = `      const preservesExistingFootprint = existingFootprintR
       const horizontalExpansionImbalance = Math.abs(leftExpansion - rightExpansion) / Math.max(existing.box.width, 1);
       const verticalExpansionImbalance = Math.abs(topExpansion - bottomExpansion) / Math.max(existing.box.height, 1);
       const maxExpansionImbalance = fallbackGrowthRatio > 1.45 ? 0.18 : 0.28;
-      const balancedFallbackExpansion = horizontalExpansionImbalance <= maxExpansionImbalance && verticalExpansionImbalance <= maxExpansionImbalance;
-      if (
-        !extremeFallbackAspect &&
-        shapeConsistentFallback &&
-        centerConsistentFallback &&
-        preservesExistingFootprint &&
+      const balancedFallbackExpansion = horizontalExpansionImbalance <= maxExpansionImbalance && verticalExpansionImbalance <= maxExpansionImbalance;`;
+
+  source = source.slice(0, anchorIndex) + declarations + source.slice(anchorIndex + stableAnchor.length);
+
+  const gateSearchStart = anchorIndex + declarations.length;
+  const gateMarker = "        preservesExistingFootprint &&";
+  const gateIndex = source.indexOf(gateMarker, gateSearchStart);
+  if (gateIndex < 0) {
+    throw new Error("Fallback duplicate growth-cap decision gate not found after footprint anchor.");
+  }
+
+  const strengthenedGate = `${gateMarker}
         boundedFallbackGrowth &&
         balancedFallbackExpansion &&`;
+  source = source.slice(0, gateIndex) + strengthenedGate + source.slice(gateIndex + gateMarker.length);
 
-if (!source.includes(anchor)) {
-  throw new Error("Fallback duplicate growth-cap anchor not found.");
+  if (
+    !source.includes(marker) ||
+    !source.includes("boundedFallbackGrowth &&") ||
+    !source.includes(scaledBalanceMarker) ||
+    !source.includes(balancedMarker) ||
+    !source.includes("balancedFallbackExpansion &&")
+  ) {
+    throw new Error("Fallback duplicate growth and growth-scaled balanced-expansion gates were not applied.");
+  }
+
+  await fs.writeFile(path, source);
+  console.log("Prevented larger fallback repairs from using the same one-sided expansion tolerance as small repairs.");
 }
-
-source = source.replace(anchor, replacement);
-
-if (
-  !source.includes(marker) ||
-  !source.includes("boundedFallbackGrowth &&") ||
-  !source.includes(scaledBalanceMarker) ||
-  !source.includes(balancedMarker) ||
-  !source.includes("balancedFallbackExpansion &&")
-) {
-  throw new Error("Fallback duplicate growth and growth-scaled balanced-expansion gates were not applied.");
-}
-
-await fs.writeFile(path, source);
-console.log("Prevented larger fallback repairs from using the same one-sided expansion tolerance as small repairs.");

@@ -2,17 +2,14 @@ import fs from "node:fs/promises";
 
 const adapterPath = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(adapterPath, "utf8");
+let changed = false;
 
 const marker = "function suppressIsolatedMaskSpecks(";
-if (source.includes(marker)) {
-  console.log("isolated mask speck suppression patch already applied");
-  process.exit(0);
-}
+if (!source.includes(marker)) {
+  const cleanStart = source.indexOf("function cleanMaskCandidateOutlines(");
+  if (cleanStart < 0) throw new Error("Clean mask outline helper must be applied before isolated-speck suppression");
 
-const cleanStart = source.indexOf("function cleanMaskCandidateOutlines(");
-if (cleanStart < 0) throw new Error("Clean mask outline helper must be applied before isolated-speck suppression");
-
-const helper = `function suppressIsolatedMaskSpecks(candidates: MaskCandidateOutput[], bounds: SimpleBox): MaskCandidateOutput[] {
+  const helper = `function suppressIsolatedMaskSpecks(candidates: MaskCandidateOutput[], bounds: SimpleBox): MaskCandidateOutput[] {
   if (candidates.length < 2) return candidates;
 
   const boundsArea = Math.max(bounds.width * bounds.height, 1);
@@ -41,27 +38,36 @@ const helper = `function suppressIsolatedMaskSpecks(candidates: MaskCandidateOut
 
 `;
 
-source = source.slice(0, cleanStart) + helper + source.slice(cleanStart);
+  source = source.slice(0, cleanStart) + helper + source.slice(cleanStart);
+  changed = true;
+}
 
 const buildStart = source.indexOf("export function buildMaskCandidatesFromEdges(");
 if (buildStart < 0) throw new Error("Unable to locate mask candidate builder");
-
 const buildSource = source.slice(buildStart);
 const returnMatches = [...buildSource.matchAll(/^  return (.+);$/gm)];
 const finalReturn = returnMatches.at(-1);
-if (!finalReturn || finalReturn.index === undefined) {
-  throw new Error("Unable to locate final cleaned mask candidate return pipeline");
-}
+if (!finalReturn || finalReturn.index === undefined) throw new Error("Unable to locate final cleaned mask candidate return pipeline");
 
 const returnExpression = finalReturn[1];
-if (!returnExpression.includes("cleanMaskCandidateOutlines(")) {
-  throw new Error("Expected outline cleanup to wrap the final mask candidate pipeline");
+if (!returnExpression.includes("suppressIsolatedMaskSpecks(")) {
+  if (!returnExpression.includes("cleanMaskCandidateOutlines(")) {
+    throw new Error("Expected outline cleanup to wrap the final mask candidate pipeline");
+  }
+  const absoluteReturnStart = buildStart + finalReturn.index;
+  const originalReturn = finalReturn[0];
+  const filteredReturn = `  return suppressIsolatedMaskSpecks(${returnExpression}, bounds);`;
+  source = source.slice(0, absoluteReturnStart) + filteredReturn + source.slice(absoluteReturnStart + originalReturn.length);
+  changed = true;
 }
 
-const absoluteReturnStart = buildStart + finalReturn.index;
-const originalReturn = finalReturn[0];
-const filteredReturn = `  return suppressIsolatedMaskSpecks(${returnExpression}, bounds);`;
-source = source.slice(0, absoluteReturnStart) + filteredReturn + source.slice(absoluteReturnStart + originalReturn.length);
+if (!source.includes(marker) || !source.includes("suppressIsolatedMaskSpecks(")) {
+  throw new Error("Isolated-speck suppression helper and return wrapper were not both established");
+}
 
-await fs.writeFile(adapterPath, source);
-console.log("applied isolated automatic-mask speck suppression");
+if (changed) {
+  await fs.writeFile(adapterPath, source);
+  console.log("applied or repaired isolated automatic-mask speck suppression");
+} else {
+  console.log("isolated automatic-mask speck suppression already complete");
+}

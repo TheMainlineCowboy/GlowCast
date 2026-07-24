@@ -1,5 +1,15 @@
 import fs from "node:fs/promises";
 
+// Finalize the user-facing mask pipeline immediately before stable identities.
+// A per-run nonce forces fresh ESM instances even if an earlier prep phase imported
+// these modules; each patch is idempotent and repairs partial prepared state.
+const finalizerNonce = Date.now().toString(36);
+await import(`./patch-adapter-clean-mask-outlines-v1.mjs?stable-final=${finalizerNonce}`);
+await import(`./patch-adapter-suppress-isolated-mask-specks-v1.mjs?stable-final=${finalizerNonce}`);
+await import(`./patch-adapter-rank-strong-masks-first-v1.mjs?stable-final=${finalizerNonce}`);
+await import(`./patch-adapter-collapse-near-duplicates-v1.mjs?stable-final=${finalizerNonce}`);
+await import(`./smoke-collapse-near-duplicate-auto-masks-source.mjs?stable-final=${finalizerNonce}`);
+
 const adapterPath = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(adapterPath, "utf8");
 

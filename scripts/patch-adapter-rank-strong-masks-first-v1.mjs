@@ -2,19 +2,16 @@ import fs from "node:fs/promises";
 
 const adapterPath = "src/core/maskCandidateAdapter.ts";
 let source = await fs.readFile(adapterPath, "utf8");
+let changed = false;
 
 const marker = "function rankArchitecturalMasks(";
-if (source.includes(marker)) {
-  console.log("architectural mask ranking patch already applied");
-  process.exit(0);
-}
+if (!source.includes(marker)) {
+  const insertAt = source.indexOf("function suppressIsolatedMaskSpecks(");
+  if (insertAt < 0) {
+    throw new Error("Isolated-speck suppression must be applied before architectural mask ranking");
+  }
 
-const insertAt = source.indexOf("function suppressIsolatedMaskSpecks(");
-if (insertAt < 0) {
-  throw new Error("Isolated-speck suppression must be applied before architectural mask ranking");
-}
-
-const helper = `function polygonArea(points: SimplePoint[]): number {
+  const helper = `function polygonArea(points: SimplePoint[]): number {
   if (points.length < 3) return 0;
   let area = 0;
   for (let i = 0; i < points.length; i += 1) {
@@ -49,27 +46,36 @@ function rankArchitecturalMasks(candidates: MaskCandidateOutput[], bounds: Simpl
 
 `;
 
-source = source.slice(0, insertAt) + helper + source.slice(insertAt);
+  source = source.slice(0, insertAt) + helper + source.slice(insertAt);
+  changed = true;
+}
 
 const buildStart = source.indexOf("export function buildMaskCandidatesFromEdges(");
 if (buildStart < 0) throw new Error("Unable to locate mask candidate builder");
-
 const buildSource = source.slice(buildStart);
 const returnMatches = [...buildSource.matchAll(/^  return (.+);$/gm)];
 const finalReturn = returnMatches.at(-1);
-if (!finalReturn || finalReturn.index === undefined) {
-  throw new Error("Unable to locate final mask candidate return pipeline");
-}
+if (!finalReturn || finalReturn.index === undefined) throw new Error("Unable to locate final mask candidate return pipeline");
 
 const returnExpression = finalReturn[1];
-if (!returnExpression.includes("suppressIsolatedMaskSpecks(")) {
-  throw new Error("Expected isolated-speck suppression to wrap the final mask pipeline");
+if (!returnExpression.includes("rankArchitecturalMasks(")) {
+  if (!returnExpression.includes("suppressIsolatedMaskSpecks(")) {
+    throw new Error("Expected isolated-speck suppression to wrap the final mask pipeline");
+  }
+  const absoluteReturnStart = buildStart + finalReturn.index;
+  const originalReturn = finalReturn[0];
+  const rankedReturn = `  return rankArchitecturalMasks(${returnExpression}, bounds);`;
+  source = source.slice(0, absoluteReturnStart) + rankedReturn + source.slice(absoluteReturnStart + originalReturn.length);
+  changed = true;
 }
 
-const absoluteReturnStart = buildStart + finalReturn.index;
-const originalReturn = finalReturn[0];
-const rankedReturn = `  return rankArchitecturalMasks(${returnExpression}, bounds);`;
-source = source.slice(0, absoluteReturnStart) + rankedReturn + source.slice(absoluteReturnStart + originalReturn.length);
+if (!source.includes(marker) || !source.includes("rankArchitecturalMasks(")) {
+  throw new Error("Architectural ranking helper and return wrapper were not both established");
+}
 
-await fs.writeFile(adapterPath, source);
-console.log("ranked strongest architectural masks first");
+if (changed) {
+  await fs.writeFile(adapterPath, source);
+  console.log("applied or repaired strongest-first architectural mask ranking");
+} else {
+  console.log("strongest-first architectural mask ranking already complete");
+}
