@@ -113,6 +113,8 @@ await runPatch("./patch-adapter-rank-strong-masks-first-v1.mjs", { required: tru
 await runPatch("./smoke-rank-strong-masks-first-source.mjs", { required: true });
 await runPatch("./patch-adapter-collapse-near-duplicates-v1.mjs", { required: true });
 await runPatch("./smoke-collapse-near-duplicate-auto-masks-source.mjs", { required: true });
+await runPatch("./patch-adapter-reject-broad-multi-opening-masks-v1.mjs", { required: true });
+await runPatch("./smoke-reject-broad-multi-opening-masks-source.mjs", { required: true });
 await runPatch("./patch-fallback-duplicate-growth-cap-v1.mjs", { required: true });
 
 const edgePath = "src/edgeDetect.ts";
