@@ -31,8 +31,7 @@ const replacement = `function findSparseBridgeSplit(points: EdgePoint[], box: Si
   }
 
   const counts = bins.map((bin) => bin.size);
-  let bestIndex = -1;
-  let bestScore = Number.POSITIVE_INFINITY;
+  const sparseCandidates: Array<{ index: number; score: number }> = [];
   for (let index = 2; index <= binCount - 3; index += 1) {
     const leftCounts = counts.slice(0, index);
     const rightCounts = counts.slice(index + 1);
@@ -48,15 +47,21 @@ const replacement = `function findSparseBridgeSplit(points: EdgePoint[], box: Si
 
     const supportBalance = Math.abs(leftSupport - rightSupport) / Math.max(leftSupport + rightSupport, 1);
     const sparsity = counts[index] / Math.max(structuralFloor, 1);
-    const score = sparsity + supportBalance * 0.22;
-    if (score < bestScore) {
-      bestScore = score;
-      bestIndex = index;
-    }
+    sparseCandidates.push({ index, score: sparsity + supportBalance * 0.22 });
   }
 
-  if (bestIndex < 0) return null;
-  return { horizontal, position: (bestIndex + 0.5) / binCount };
+  if (!sparseCandidates.length) return null;
+  const best = sparseCandidates.reduce((current, candidate) => candidate.score < current.score ? candidate : current);
+  const candidateIndexes = new Set(sparseCandidates.map((candidate) => candidate.index));
+  let runStart = best.index;
+  let runEnd = best.index;
+  while (candidateIndexes.has(runStart - 1)) runStart -= 1;
+  while (candidateIndexes.has(runEnd + 1)) runEnd += 1;
+
+  // Center recovery across the whole sparse run rather than a single low-density bin.
+  // This avoids leaving diagonal bridge tails attached when the gap spans multiple bins.
+  const position = (runStart + runEnd + 1) / (2 * binCount);
+  return { horizontal, position };
 }
 
 function recoverSparseBridgeComponents(points: EdgePoint[], box: SimpleBox, bounds: SimpleBox): FallbackComponent[] {
@@ -131,7 +136,7 @@ function recoverSparseBridgeComponents(points: EdgePoint[], box: SimpleBox, boun
 
 source = source.slice(0, start) + replacement + source.slice(end);
 
-if (!source.includes("function findSparseBridgeSplit(") || !source.includes("const recoveryGap = 0.12;")) {
+if (!source.includes("function findSparseBridgeSplit(") || !source.includes("const recoveryGap = 0.12;") || !source.includes("Center recovery across the whole sparse run")) {
   throw new Error("Offset/diagonal sparse-bridge recovery was not fully applied");
 }
 
