@@ -13,7 +13,10 @@ if (start < 0 || end < 0) {
 
 const replacement = `function recoverSparseBridgeComponents(points: EdgePoint[], box: SimpleBox, bounds: SimpleBox): FallbackComponent[] {
   const boundsArea = Math.max(bounds.width * bounds.height, 1);
-  const recoveryGap = 0.12;
+  // Keep enough of each side of a locally detected sparse run for narrow openings to
+  // retain their real border. Bridge tails are trimmed structurally by describeGroup,
+  // so recovery no longer needs the old coarse 12%-per-side exclusion zone.
+  const recoveryGap = 0.055;
 
   const describeGroup = (group: EdgePoint[], trimHorizontal: boolean): { points: EdgePoint[]; box: SimpleBox } | null => {
     if (group.length < 24) return null;
@@ -148,7 +151,7 @@ const replacement = `function recoverSparseBridgeComponents(points: EdgePoint[],
 
 source = source.slice(0, start) + replacement + source.slice(end);
 
-if (!source.includes("const initialSplit = splitGroup(points, box);") || !source.includes("current.depth < 2") || !source.includes("substantial cross-axis support") || !source.includes("terminal.length + queue.length + nested.length <= 5")) {
+if (!source.includes("const recoveryGap = 0.055;") || !source.includes("const initialSplit = splitGroup(points, box);") || !source.includes("current.depth < 2") || !source.includes("substantial cross-axis support") || !source.includes("terminal.length + queue.length + nested.length <= 5")) {
   throw new Error("Multi-opening sparse-bridge recovery was not fully applied");
 }
 
