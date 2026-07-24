@@ -27,8 +27,8 @@ if (!source.includes(marker)) {
     if (position < -0.02 || position > 1.02) continue;
     const bucket = Math.min(2, Math.max(0, Math.floor(position * 3)));
     const key = horizontal
-      ? \`${'${Math.round(point.x)}'},${'${Math.round(point.y)}'}\`
-      : \`${'${Math.round(point.y)}'},${'${Math.round(point.x)}'}\`;
+      ? `${Math.round(point.x)},${Math.round(point.y)}`
+      : `${Math.round(point.y)},${Math.round(point.x)}`;
     thirds[bucket].add(key);
   }
 
@@ -59,4 +59,6 @@ if (!source.includes(marker) || !source.includes(gate)) {
 }
 
 await fs.writeFile(adapterPath, source);
-console.log("Rejected large fallback components formed by two dense regions joined by a sparse middle bridge.");
+await import("./patch-fallback-recover-thin-bridge-openings-v1.mjs");
+await import("./smoke-fallback-recover-thin-bridge-openings-runtime.mjs");
+console.log("Rejected unrecoverable thin bridges and recovered qualifying architectural openings from sparse bridge clutter.");
