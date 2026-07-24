@@ -12,9 +12,16 @@ const required = [
   "data-auto-mask-review-state",
   'zone.included ? "accepted" : "pending"',
   'zone.included ? "Accepted" : "Pending review"',
-  'Review state:',
+  "Review state:",
   'selectedTarget === "zone" && selectedZoneId === zone.id && selectedAutoMaskConfidence',
-  "GlowCast confidence:"
+  "GlowCast confidence:",
+  "function isNearbyMaskCandidate(",
+  "normalizedDistance <= 0.34",
+  "data-nearby-strong-auto-mask",
+  'selectedAutoMaskConfidence !== "Strong"',
+  'getAutoMaskConfidence(zone, projectionArea) === "Strong"',
+  "isNearbyMaskCandidate(zone, selectedZone, projectionArea)",
+  "Strong alternative"
 ];
 
 const missing = required.filter((snippet) => !source.includes(snippet));
@@ -22,4 +29,4 @@ if (missing.length) {
   throw new Error(`Automatic-mask confidence smoke failed; missing: ${missing.join(", ")}`);
 }
 
-console.log("Automatic-mask confidence and selected-mask review-state overlay smoke passed.");
+console.log("Automatic-mask confidence, review-state, and nearby strong-candidate comparison overlay smoke passed.");
