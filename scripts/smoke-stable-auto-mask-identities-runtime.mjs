@@ -86,3 +86,6 @@ try {
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
+
+await import("./patch-adapter-collapse-near-duplicates-v1.mjs");
+await import("./smoke-collapse-near-duplicate-auto-masks-source.mjs");
