@@ -18,13 +18,13 @@ if (!source.includes(marker)) {
       const position = horizontal
         ? (point.x - box.x) / Math.max(box.width, 0.01)
         : (point.y - box.y) / Math.max(box.height, 0.01);
-      return position <= 0.46;
+      return position <= 0.36;
     }),
     points.filter((point) => {
       const position = horizontal
         ? (point.x - box.x) / Math.max(box.width, 0.01)
         : (point.y - box.y) / Math.max(box.height, 0.01);
-      return position >= 0.54;
+      return position >= 0.64;
     })
   ];
 
